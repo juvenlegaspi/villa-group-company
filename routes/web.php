@@ -9,6 +9,8 @@ use App\Http\Controllers\VesselController;
 use App\Http\Controllers\VoyageLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TechDefectController;
+use App\Http\Controllers\VesselCertificateController;
+
 
 Route::get('/', function () {
     return redirect('/login');
@@ -58,16 +60,24 @@ Route::get('/dashboard', function () {
 
     $totalUsers = User::count();
     $totalDepartments = Department::count();
-    $totalAdmins = User::where('role', 'admin')->count();
-    $totalStaff = User::where('role', 'staff')->count();
+    $totalAdmins = User::where('role','admin')->count();
+    $totalStaff = User::where('role','staff')->count();
     $recentUsers = User::latest()->take(5)->get();
+
+    // ADD THESE
+    $totalVessels = \App\Models\Vessel::count();
+    $totalVoyageLogs = \App\Models\VoyageLog::count();
+    $totalDefects = \App\Models\TechDefect::count();
 
     return view('dashboard', compact(
         'totalUsers',
         'totalDepartments',
         'totalAdmins',
         'totalStaff',
-        'recentUsers'
+        'recentUsers',
+        'totalVessels',
+        'totalVoyageLogs',
+        'totalDefects'
     ));
 
 })->middleware('auth');
@@ -93,8 +103,8 @@ Route::get('/departments/{id}', function ($id) {
 })->middleware(['auth']);
 
 
-
-Route::get('/shipping/vessels', [VesselController::class, 'index'])->middleware('auth');
+Route::get('/shipping/tech-defects/dashboard', [TechDefectController::class,'dashboard'])->name('tech-defects.dashboard');
+Route::get('/shipping/vessels', [VesselController::class, 'index'])->name('vessels.index')->middleware('auth');
 Route::get('/shipping/vessels/create', [VesselController::class, 'create'])->middleware('auth');
 Route::post('/shipping/vessels', [VesselController::class, 'store'])->middleware('auth');
 Route::get('/shipping/vessels/{id}', [VesselController::class, 'show'])->middleware('auth');
@@ -128,8 +138,54 @@ Route::put('/shipping/tech-defects/{id}', [TechDefectController::class,'update']
 //[TechDefectController::class,'show'])->name('tech-defects.show');
 
 Route::get('/shipping/tech-defects/{id}', [App\Http\Controllers\TechDefectController::class,'show'])->name('tech-defects.show');
-
 Route::post('/shipping/tech-defects/{id}/third-party', [TechDefectController::class,'storeThirdParty'])->name('thirdparty.store');
-
 Route::post('/shipping/tech-defects/{id}/third-party', [App\Http\Controllers\ThirdPartyController::class,'store'])->name('third-party.store');
+Route::post('/third-party/{id}', [App\Http\Controllers\ThirdPartyController::class,'store'])->name('third-party.store');
+
+Route::prefix('shipping')->group(function(){
+    Route::get('/voyage-logs', [VoyageLogController::class,'index']);
+    Route::get('/voyage-logs/create/{vessel}', [VoyageLogController::class,'create']);
+    Route::post('/voyage-logs/store', [VoyageLogController::class,'store']);
+    Route::get('/voyage-logs/{id}', [VoyageLogController::class,'show']);
+    Route::post('/voyage-logs/{id}/add-detail', [VoyageLogController::class,'addDetail']);
+    Route::post('/voyage-logs/{id}/start', [VoyageLogController::class,'startTrail']);
+    Route::post('/voyage-logs/{detail}/end', [VoyageLogController::class,'endTrail']);
+    Route::post('/voyage-logs/{detail}/complete', [VoyageLogController::class,'completeTrail']);
+   // Route::post('/shipping/voyage-logs/{id}/complete-voyage', [VoyageLogController::class,'completeVoyage']);
+    //Route::post('/shipping/voyage-logs/{detail}/update-trail', [VoyageLogController::class,'updateTrail']);
+    Route::get('/shipping/voyage-logs/dashboard', [VoyageLogController::class, 'dashboard'])->name('voyage-logs.dashboard');
+    Route::get('/shipping/vessels/{vesselId}/logs', [VoyageLogController::class, 'index']);
+    
+});
+Route::get('/shipping/voyage-logs/{id}/pdf', [VoyageLogController::class,'exportPdf']);
+Route::post('/shipping/voyage-logs/{id}/complete-voyage', [VoyageLogController::class,'completeVoyage']);
+Route::post('/shipping/voyage-logs/{detail}/update-trail', [VoyageLogController::class,'updateTrail']);
+Route::post('/shipping/voyage-logs/{detailId}/update-trail', [VoyageLogController::class, 'updateTrail'])
+    ->name('voyage-logs.update-trail');
+Route::resource('vessel-certificates', VesselCertificateController::class);
+Route::get('/vessel-certificates/{id}', [VesselCertificateController::class,'vesselCertificates'])
+    ->name('vessel.certificates');
+Route::get('/vessel-certificates/{id}', [VesselCertificateController::class,'show'])
+    ->name('vessel.certificates.show');
+
+Route::get('/vessel-certificates/add/{vessel}', 
+[VesselCertificateController::class,'create'])
+->name('vessel-certificates.add');
+
+Route::get('/vessel-certificates/{id}/edit', [VesselCertificateController::class, 'edit'])
+    ->name('vessel-certificates.edit');
+
+Route::post('/vessel-certificates/{id}/update', [VesselCertificateController::class, 'update'])
+    ->name('vessel-certificates.update');
+
+Route::get('/shipping/vessel-certificates/dashboard', [VesselCertificateController::class,'dashboard'])->name('vessel-certificates.dashboard');
+
+
+
+
+
+
+
+
+
 

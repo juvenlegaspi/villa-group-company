@@ -8,7 +8,7 @@ class ThirdPartySupport extends Model
 {
     protected $fillable = [
         'tech_defect_id',
-        'technician',
+        'reason_for_support',
         'spares_required',
         'tools_required',
         'status'

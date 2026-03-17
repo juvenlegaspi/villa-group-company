@@ -12,10 +12,20 @@ class Vessel extends Model
         'vessel_name',
         'imo_number',
         'call_sign',
+        'vessel_type',
+        'dwt',
+        'fuel_type',
+        'service_speed',
+        'charter_type',
+        'vessel_status'
     ];
     public function voyageLogs()
     {
         return $this->hasMany(VoyageLog::class);
+    }
+    public function certificates()
+    {
+        return $this->hasMany(VesselCertificate::class);
     }
 }
 

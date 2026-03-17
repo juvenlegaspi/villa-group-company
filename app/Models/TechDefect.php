@@ -34,4 +34,12 @@ class TechDefect extends Model
     {
         return $this->hasOne(ThirdPartySupport::class);
     }
+    public function supports()
+    {
+        return $this->hasMany(\App\Models\ThirdPartySupport::class,'tech_defect_id');
+    }
+    public function techDefect()
+    {
+        return $this->belongsTo(\App\Models\TechDefect::class, 'tech_defect_id');
+    }
 }

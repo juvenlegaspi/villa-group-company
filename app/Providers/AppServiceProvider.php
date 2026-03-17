@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use App\Models\Department;
+use Illuminate\Pagination\Paginator;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
         //
         view()->composer('*', function ($view) {
         $view->with('allDepartments', Department::all());
+        Paginator::useBootstrap();
     });
     }
 }

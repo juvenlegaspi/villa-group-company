@@ -18,15 +18,29 @@
             <option value="COMPLETED">Completed</option>
         </select>
     </form>
-    <table class="table table-bordered">
+    <form method="GET" action="{{ route('tech-defects.index') }}" class="mb-3">
+        <div class="row">
+            <div class="col-md-4">
+                <input type="text" name="search" value="{{ request('search') }}" class="form-control" placeholder="Search ID or Vessel">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary"> Search </button>
+            </div>
+            <div class="col-md-2">
+                <a href="{{ route('tech-defects.index') }}" class="btn btn-secondary"> Reset </a>
+            </div>
+        </div>
+    </form>
+    <table class="table table-bordered" id="reportTable">
     <thead class="table-light">
         <tr>
             <th>ID</th>
             <th>Status</th>
+            <th>3rd Party</th>
+            <th>Date Created</th>
             <th>Date Identified</th>
+            <th>Date Completed</th>
             <th>Vessel</th>
-            <th>Port</th>
-            <th>System</th>
             <th>Defect Description</th>
             <th>Severity</th>
         </tr>
@@ -35,7 +49,7 @@
             @foreach($reports as $r)
                 <tr>
                     <td>
-                        <a href="{{route('tech-defects.show',$r->id)}}"> TD-{{$r->id}} </a>
+                        <a href="{{route('tech-defects.show',$r->id)}}"> TDR-{{ $r->created_at->format('Y') }}-{{ str_pad($r->id,4,'0',STR_PAD_LEFT) }} </a>
                     </td>
                     <td>
                         @if($r->status == 'Open')
@@ -50,17 +64,44 @@
                             <span class="badge bg-success">Complete</span>
                         @endif
                     </td>
-                    <td>{{$r->date_identified}}</td>
-                    <td>{{$r->vessel->vessel_name ?? ''}}</td>
-                    <td>{{$r->port_location}}</td>
-                    <td>{{$r->system_affected}}</td>
-                    <td>{{$r->defect_description}}</td>
-                    <td>{{$r->severity_level}}</td>
+                    <td>
+                        @if($r->supports->count() == 0)
+                            <span class="badge bg-secondary"> N/A </span>
+                        @else
+                            @php
+                                $pending = $r->supports->where('status','Pending')->count();
+                            @endphp
+                            @if($pending > 0)
+                                <span class="badge bg-warning"> Ongoing </span>
+                            @else
+                                <span class="badge bg-success"> Done </span>
+                            @endif
+                        @endif
+                    </td>
+                    <td>{{ $r->created_at->format('Y-m-d') }}</td>
+                    <td>{{ $r->date_identified }}</td>
+                    <td>
+                        @if($r->date_completed)
+                            {{ \Carbon\Carbon::parse($r->date_completed)->format('Y-m-d') }}
+                        @else
+                            <span class="text-muted">-</span>
+                        @endif
+                    </td>
+                    <td>{{ $r->vessel->vessel_name ?? '' }}</td>
+                    <td>{{ Str::limit($r->defect_description,40) }}</td>
+                    <td>{{ $r->severity_level }}</td>
                 </tr>
             @endforeach
 
         </tbody>
     </table>
-
+    <div class="mt-3">
+        {{ $reports->links() }}
+    </div>
 </div>
+<script>
+    $(document).ready(function(){
+    $('#reportTable').DataTable({ pageLength:10 });
+    });
+</script>
 @endsection
