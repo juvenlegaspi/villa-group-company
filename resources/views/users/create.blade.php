@@ -72,7 +72,7 @@
                             <option value="">Select Role</option>
                             <option value="it">IT</option>
                             <option value="manager">Manager</option>
-                            <option value="staff">Captain</option>
+                            <option value="captain">Captain</option>
                             <option value="staff">Staff</option>
                             <option value="r&d">R & D</option>
                             <option value="hr">HR</option>

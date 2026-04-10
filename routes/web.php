@@ -97,6 +97,10 @@ Route::get('/dashboard', function () {
 
 })->middleware('auth');
 
+Route::get('/dashboard', [DashboardController::class, 'main'])->name('dashboard');
+
+Route::get('/dashboard/{division}', [DashboardController::class, 'division'])->name('division.dashboard');
+
 Route::get('/departments/{id}', function ($id) {
     $department = Department::findOrFail($id);
     $users = User::where('department_id', $id)->get();
@@ -206,14 +210,6 @@ Route::prefix('shipping')->group(function () {
     Route::post('/dry-docking/{id}/details/store', [DryDockingHeaderController::class, 'storeDetails']);
 });
 
-Route::get('/test-email', function () {
-    Mail::raw('TEST EMAIL WORKING', function ($message) {
-        $message->to('User001.rdvillagroup@outlook.com')
-                ->subject('Test Email');
-    });
-
-    return 'Email sent!';
-});
 
 
 

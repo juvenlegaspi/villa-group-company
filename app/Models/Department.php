@@ -10,7 +10,7 @@ class Department extends Model
     //
 
     public function users()
-{
-    return $this->hasMany(User::class, 'department');
-}
+    {
+        return $this->hasMany(User::class, 'department');
+    }
 }
