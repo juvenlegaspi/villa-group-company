@@ -67,11 +67,12 @@
                 <div class="col-md-4">
                     <label class="fw-bold">Role</label>
                     <select name="role" class="form-control">
-                        <option value="it" {{ $user->role == 'admin' ? 'selected' : '' }}>IT</option>
+                        <option value="it" {{ $user->role == 'it' ? 'selected' : '' }}>IT</option>
                         <option value="manager" {{ $user->role == 'manager' ? 'selected' : '' }}>Manager</option>
+                        <option value="manager" {{ $user->role == 'captian' ? 'selected' : '' }}>Captain</option>
                         <option value="staff" {{ $user->role == 'staff' ? 'selected' : '' }}>Staff</option>
+                        <option value="r&d" {{ $user->role == 'r&d' ? 'selected' : '' }}>R & D</option>
                         <option value="hr" {{ $user->role == 'hr' ? 'selected' : '' }}>HR</option>
-                        <option value="r&d" {{ $user->role == 'r&d' ? 'selected' : '' }}>R&D</option>
                     </select>
                 </div>
 
