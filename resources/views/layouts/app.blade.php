@@ -217,6 +217,7 @@
                 <div id="sidebar" class="sidebar">
                     @php
                         $isAdmin = auth()->user()->is_admin == 1;
+                        $isOwner = auth()->user()->role == 'owner';
                     @endphp
                     <div class="sidebar-header">
                         <h4>Villa Group of Companies</h4>
@@ -230,63 +231,65 @@
                         <span>Dashboard</span>
                     </a>
                     <!-- USERS -->
-                    @if($isAdmin)
-                        <a href="/users" class="{{ request()->is('users*') ? 'active' : '' }}">
-                            <i class="bi bi-people"></i>
-                            <span>Users</span>
-                        </a>
-                    @endif
-                    <!-- DIVISIONS -->
-                    <div class="sidebar-title">Divisions</div>
-                    <div class="ms-1">
-                        @foreach($allDepartments as $dept)
-                            @php
-                                $user = auth()->user();
-                                $isAllowedDept = $isAdmin || $user->department_id == $dept->id;
-                                $isShipping = str_contains(strtolower($dept->name), 'shipping');
-                            @endphp
-                            @if($isAllowedDept)
-                                @if($isShipping)
-                                    <!-- HEADER -->
-                                    <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $dept->id }}')">
-                                        <span>{{ $dept->name }}</span>
-                                        <i class="bi bi-chevron-down"></i>
-                                    </div>
-                                    <!-- DROPDOWN -->
-                                    <div id="menu{{ $dept->id }}" class="sidebar-dropdown {{ request()->is('shipping/*') ? 'show' : '' }}">
-                                        <a href="{{ url('/shipping/vessels') }}"
-                                            class="{{ request()->is('shipping/vessels') ? 'active-menu' : '' }}">
-                                            <i class="bi bi-ship"></i>
-                                            <span>Vessels</span>
+                    @if(!$isOwner)
+                        @if($isAdmin)
+                            <a href="/users" class="{{ request()->is('users*') ? 'active' : '' }}">
+                                <i class="bi bi-people"></i>
+                                <span>Users</span>
+                            </a>
+                        @endif
+                        <!-- DIVISIONS -->
+                        <div class="sidebar-title">Divisions</div>
+                        <div class="ms-1">
+                            @foreach($allDepartments as $dept)
+                                @php
+                                    $user = auth()->user();
+                                    $isAllowedDept = $isAdmin || $user->department_id == $dept->id;
+                                    $isShipping = str_contains(strtolower($dept->name), 'shipping');
+                                @endphp
+                                @if($isAllowedDept)
+                                    @if($isShipping)
+                                        <!-- HEADER -->
+                                        <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $dept->id }}')">
+                                            <span>{{ $dept->name }}</span>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </div>
+                                        <!-- DROPDOWN -->
+                                        <div id="menu{{ $dept->id }}" class="sidebar-dropdown {{ request()->is('shipping/*') ? 'show' : '' }}">
+                                            <a href="{{ url('/shipping/vessels') }}"
+                                                class="{{ request()->is('shipping/vessels') ? 'active-menu' : '' }}">
+                                                <i class="bi bi-ship"></i>
+                                                <span>Vessels</span>
+                                            </a>
+                                            <a href="{{ url('/shipping/tech-defects') }}"
+                                                class="{{ request()->is('shipping/tech-defects') ? 'active-menu' : '' }}">
+                                                <i class="bi bi-tools"></i>
+                                                <span>Tech & Defects</span>
+                                            </a>
+                                            <a href="{{ route('vessel-certificates.index') }}"
+                                                class="{{ request()->is('vessel-certificates*') ? 'active-menu' : '' }}">
+                                                <i class="bi bi-file-earmark-text"></i>
+                                                <span>Certificates</span>
+                                            </a>
+                                            @if($isAdmin)
+                                            <a href="{{ url('/shipping/dry-docking') }}"
+                                                class="{{ request()->is('shipping/dry-docking') ? 'active-menu' : '' }}">
+                                                <i class="bi bi-tools"></i>
+                                                <span>Dry Docking</span>
+                                            </a>
+                                            @endif
+                                        </div>
+                                    @else
+                                        <!-- NORMAL -->
+                                        <a href="{{ url('/departments/'.$dept->id) }}">
+                                            <i class="bi bi-building"></i>
+                                            <span>{{ $dept->name }}</span>
                                         </a>
-                                        <a href="{{ url('/shipping/tech-defects') }}"
-                                            class="{{ request()->is('shipping/tech-defects') ? 'active-menu' : '' }}">
-                                            <i class="bi bi-tools"></i>
-                                            <span>Tech & Defects</span>
-                                        </a>
-                                        <a href="{{ route('vessel-certificates.index') }}"
-                                            class="{{ request()->is('vessel-certificates*') ? 'active-menu' : '' }}">
-                                            <i class="bi bi-file-earmark-text"></i>
-                                            <span>Certificates</span>
-                                        </a>
-                                        @if($isAdmin)
-                                        <a href="{{ url('/shipping/dry-docking') }}"
-                                            class="{{ request()->is('shipping/dry-docking') ? 'active-menu' : '' }}">
-                                            <i class="bi bi-tools"></i>
-                                            <span>Dry Docking</span>
-                                        </a>
-                                        @endif
-                                    </div>
-                                @else
-                                    <!-- NORMAL -->
-                                    <a href="{{ url('/departments/'.$dept->id) }}">
-                                        <i class="bi bi-building"></i>
-                                        <span>{{ $dept->name }}</span>
-                                    </a>
+                                    @endif
                                 @endif
-                            @endif
-                        @endforeach
-                    </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
                 <!-- MAIN -->
                 <div class="main-content">

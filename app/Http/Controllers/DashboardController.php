@@ -51,4 +51,35 @@ class DashboardController extends Controller
             'expiringCertificates'
         ));
     }
+    public function divisionDashboard($division)
+{
+    $division = strtolower($division);
+
+    // COMMON DATA
+    $totalVessels = \App\Models\Vessel::count();
+    $totalLogs = \App\Models\VoyageLogHeader::count();
+    $anchored = \App\Models\VoyageLog::where('voyage_status', 'anchored')->count();
+    $sailing = \App\Models\VoyageLog::where('voyage_status', 'sailing')->count();
+    $totalCrew = \App\Models\VoyageLog::sum('crew_on_board');
+    $totalDefects = \App\Models\TechDefect::count();
+    $expiredCertificates = \App\Models\VesselCertificate::where('expiry_date', '<', now())->count();
+    $expiringCertificates = \App\Models\VesselCertificate::whereBetween('expiry_date', [now(), now()->addDays(30)])->count();
+
+    if ($division == 'vsli') {
+        return view('dashboard.vsli', compact(
+            'totalVessels',
+            'totalLogs',
+            'anchored',
+            'sailing',
+            'totalCrew',
+            'totalDefects',
+            'expiredCertificates',
+            'expiringCertificates'
+        ));
+    }
+
+    return view('dashboard.coming-soon', [
+        'division' => $division
+    ]);
+}
 }

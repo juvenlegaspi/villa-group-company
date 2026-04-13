@@ -99,7 +99,8 @@ Route::get('/dashboard', function () {
 
 Route::get('/dashboard', [DashboardController::class, 'main'])->name('dashboard');
 
-Route::get('/dashboard/{division}', [DashboardController::class, 'division'])->name('division.dashboard');
+Route::get('/division/{division}', [DashboardController::class, 'divisionDashboard'])
+    ->name('division.dashboard');
 
 Route::get('/departments/{id}', function ($id) {
     $department = Department::findOrFail($id);
@@ -209,8 +210,6 @@ Route::prefix('shipping')->group(function () {
     Route::get('/dry-docking/{id}/details', [DryDockingHeaderController::class, 'details']);
     Route::post('/dry-docking/{id}/details/store', [DryDockingHeaderController::class, 'storeDetails']);
 });
-
-
 
 
 
