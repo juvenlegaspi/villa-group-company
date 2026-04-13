@@ -38,7 +38,7 @@ class UserController extends Controller
             'email' => 'required|email|unique:users',
             'cell_number' => 'required',
             'department_id' => 'required|exists:departments,id',
-            'role' => 'required|in:it,manager,captain,staff,r&d,hr',
+            'role' => 'required|in:it,manager,captain,staff,r&d,hr,owner',
         ]);
 
         User::create([

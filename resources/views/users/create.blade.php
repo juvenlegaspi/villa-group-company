@@ -76,6 +76,7 @@
                             <option value="staff">Staff</option>
                             <option value="r&d">R & D</option>
                             <option value="hr">HR</option>
+                            <option value="owner">Owner</option>
                         </select>
                     </div>
 

@@ -73,6 +73,7 @@
                         <option value="staff" {{ $user->role == 'staff' ? 'selected' : '' }}>Staff</option>
                         <option value="r&d" {{ $user->role == 'r&d' ? 'selected' : '' }}>R & D</option>
                         <option value="hr" {{ $user->role == 'hr' ? 'selected' : '' }}>HR</option>
+                        <option value="owner" {{ $user->role == 'owner' ? 'selected' : '' }}>Owner</option>
                     </select>
                 </div>
 
