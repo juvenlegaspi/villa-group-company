@@ -12,6 +12,7 @@ use App\Http\Controllers\TechDefectController;
 use App\Http\Controllers\VesselCertificateController;
 use App\Http\Controllers\DryDockingHeaderController;
 use Illuminate\Support\Facades\Mail;
+use App\Http\Controllers\CertificateNotificationController;
 
 Route::get('/', function () {
     return redirect('/login');
@@ -210,6 +211,8 @@ Route::prefix('shipping')->group(function () {
     Route::get('/dry-docking/{id}/details', [DryDockingHeaderController::class, 'details']);
     Route::post('/dry-docking/{id}/details/store', [DryDockingHeaderController::class, 'storeDetails']);
 });
+
+Route::get('/send-certificate-alerts', [CertificateNotificationController::class, 'sendAlerts']);
 
 
 
