@@ -124,6 +124,96 @@
             margin-bottom: 20px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
+        .division-card {
+                        transition: 0.3s;
+                        border-radius: 12px;
+                    }
+                    .division-card:hover {
+                        transform: translateY(-5px);
+                        background: #f8fafc;
+                    }
+                    /* ===== DIVISION CARD MODERN ===== */
+                    .division-card-modern {
+                        background: linear-gradient(135deg, #1e3c72, #2a5298);
+                        border-radius: 16px;
+                        padding: 30px 20px;
+                        text-align: center;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+                        position: relative;
+                        overflow: hidden;
+                    }
+                    .division-card-modern:hover {
+                        transform: translateY(-8px) scale(1.02);
+                        box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+                    }
+                    /* glowing effect */
+                    .division-card-modern::before {
+                        content: '';
+                        position: absolute;
+                        width: 150%;
+                        height: 150%;
+                        background: rgba(255,255,255,0.1);
+                        top: -50%;
+                        left: -50%;
+                        transform: rotate(25deg);
+                        transition: 0.5s;
+                    }
+
+                    .division-card-modern:hover::before {
+                        top: -20%;
+                        left: -20%;
+                    }
+
+                    /* icon */
+                    .division-icon {
+                        font-size: 40px;
+                        background: rgba(255,255,255,0.2);
+                        width: 70px;
+                        height: 70px;
+                        margin: auto;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+
+                    /* text */
+                    .division-card-modern h5 {
+                        font-weight: 600;
+                    }
+
+                    .division-card-modern p {
+                        opacity: 0.8;
+                    }
+                    /* ===== COLORS PER DIVISION ===== */
+                    .division-blue {
+                        background: linear-gradient(135deg, #1e3c72, #2a5298);
+                    }
+
+                    .division-purple {
+                        background: linear-gradient(135deg, #6a11cb, #2575fc);
+                    }
+
+                    .division-green {
+                        background: linear-gradient(135deg, #11998e, #38ef7d);
+                    }
+
+                    .division-orange {
+                        background: linear-gradient(135deg, #f7971e, #ffd200);
+                    }
+
+                    .division-dark {
+                        background: linear-gradient(135deg, #232526, #414345);
+                    }
+
+                    .division-pink {
+                        background: linear-gradient(135deg, #ff758c, #ff7eb3);
+                    }
+
+                    .division-teal {
+                        background: linear-gradient(135deg, #136a8a, #267871);
+                    }
     </style>
 </head>
 <body>
