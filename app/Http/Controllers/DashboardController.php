@@ -18,18 +18,65 @@ class DashboardController extends Controller
     }
 
     public function divisionDashboard($division)
-    {
-        $division = strtolower($division);
+{
+    $division = strtolower(trim($division));
+
+    // 🔥 mapping gikan DB → system key
+    $map = [
+        'villa shipping' => 'vsli',
+        'yatira construction' => 'yatira',
+        'mining' => 'mining',
+        'it' => 'it',
+        'hr' => 'hr',
+        'r & d' => 'rd',
+        'r&d' => 'rd',
+    ];
+
+    $key = $map[$division] ?? null;
+
+    if (!$key) {
+        abort(404);
+    }
+
+    // 🔥 VSli (Villa Shipping) → FULL DASHBOARD
+    if ($key === 'vsli') {
         $metrics = $this->buildShippingMetrics();
+        return view('dashboard.vsli', $metrics);
+    }
 
-        if ($division === 'vsli') {
-            return view('dashboard.vsli', $metrics);
-        }
-
-        return view('dashboard.coming-soon', [
-            'division' => $division,
+    // 🔥 Other divisions (pwede nimo fill later)
+    if ($key === 'yatira') {
+        return view('dashboard.yatira', [
+        'division' => $division
         ]);
     }
+
+   if ($key === 'mining') {
+    return view('dashboard.mining', [
+        'division' => $division
+    ]);
+}
+
+if ($key === 'it') {
+    return view('dashboard.it', [
+        'division' => $division
+    ]);
+}
+
+if ($key === 'hr') {
+    return view('dashboard.hr', [
+        'division' => $division
+    ]);
+}
+
+if ($key === 'rd') {
+    return view('dashboard.rd', [
+        'division' => $division
+    ]);
+}
+
+    abort(404);
+}
 
     protected function buildShippingMetrics(): array
     {
