@@ -6,7 +6,125 @@
     <title>Villa System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ asset('css/custom.css') }}">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: #f4f6f9;
+        }
+
+        .layout {
+            display: flex;
+        }
+
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1e3c72, #2a5298);
+            padding: 15px;
+            color: white;
+            transition: all .3s;
+        }
+
+        .sidebar.collapsed {
+            width: 80px;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+        }
+
+        .sidebar a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            border-radius: 10px;
+            color: #dbeafe;
+            text-decoration: none;
+            margin-bottom: 5px;
+            transition: 0.2s;
+        }
+
+        .sidebar a:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+
+        .sidebar a i {
+            font-size: 18px;
+            width: 25px;
+            text-align: center;
+        }
+
+        .sidebar a.active,
+        .active-menu {
+            background: #3b82f6;
+            color: white !important;
+            font-weight: bold;
+        }
+
+        .sidebar-title {
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-size: 13px;
+            color: #cbd5f1;
+        }
+
+        .sidebar-dropdown {
+            margin-left: 15px;
+            display: none;
+        }
+
+        .sidebar-dropdown.show {
+            display: block;
+        }
+
+        .sidebar-dropdown-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+
+        .sidebar-dropdown-header:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        .sidebar.collapsed span,
+        .sidebar.collapsed .sidebar-title,
+        .sidebar.collapsed h4 {
+            display: none;
+        }
+
+        .sidebar.collapsed a {
+            justify-content: center;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .topbar {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
 </head>
 <body>
 <div class="layout">
