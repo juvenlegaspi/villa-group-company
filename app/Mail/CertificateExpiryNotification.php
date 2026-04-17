@@ -2,8 +2,10 @@
 
 namespace App\Mail;
 
+use App\Models\User;
+use App\Models\Vessel;
+use App\Models\VesselCertificate;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -13,39 +15,37 @@ class CertificateExpiryNotification extends Mailable
 {
     use Queueable, SerializesModels;
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct()
-    {
-        //
+    public function __construct(
+        public VesselCertificate $certificate,
+        public Vessel $vessel,
+        public User $recipient
+    ) {
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Certificate Expiry Notification',
+            subject: 'Certificate Expiring Soon',
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
+        $fullName = trim(collect([$this->recipient->name, $this->recipient->lastname])->filter()->implode(' '));
+
         return new Content(
-            view: 'view.name',
+            view: 'emails.certificate-expiry-notification',
+            with: [
+                'recipientName' => $fullName,
+                'vesselName' => $this->vessel->vessel_name,
+                'certificateName' => $this->certificate->certificate_name,
+                'expiryDate' => optional($this->certificate->expiry_date)->format('F d, Y'),
+                'daysRemaining' => now()->diffInDays($this->certificate->expiry_date, false),
+                'remarks' => $this->certificate->remarks,
+            ],
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
     public function attachments(): array
     {
         return [];

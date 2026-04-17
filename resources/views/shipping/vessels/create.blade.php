@@ -1,25 +1,19 @@
 @extends('layouts.app')
 
 @section('content')
-
 <div class="container-fluid">
-
-    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">🚢 Add New Vessel</h3>
-        <a href="/shipping/vessels" class="btn btn-outline-secondary">
-            ← Back to Vessel List
+        <h3 class="fw-bold">Add New Vessel</h3>
+        <a href="{{ route('vessels.index') }}" class="btn btn-outline-secondary">
+            Back to Vessel List
         </a>
     </div>
 
-    <!-- CARD -->
     <div class="card shadow-sm border-0">
         <div class="card-body">
-
-            <form method="POST" action="/shipping/vessels">
+            <form method="POST" action="{{ url('/shipping/vessels') }}">
                 @csrf
 
-                <!-- ROW 1 -->
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="fw-bold">Vessel Name</label>
@@ -37,7 +31,6 @@
                     </div>
                 </div>
 
-                <!-- ROW 2 -->
                 <div class="row g-3 mt-1">
                     <div class="col-md-4">
                         <label class="fw-bold">Vessel Type</label>
@@ -48,13 +41,15 @@
                             <option value="RO-RO">RO-RO</option>
                         </select>
                     </div>
+
                     <div class="col-md-4">
-    <label class="fw-bold">DWT</label>
-    <div class="input-group">
-        <input type="number" name="dwt" class="form-control" placeholder="Enter DWT">
-        <span class="input-group-text">MT</span>
-    </div>
-</div>
+                        <label class="fw-bold">DWT</label>
+                        <div class="input-group">
+                            <input type="number" name="dwt" class="form-control" placeholder="Enter DWT">
+                            <span class="input-group-text">MT</span>
+                        </div>
+                    </div>
+
                     <div class="col-md-4">
                         <label class="fw-bold">Fuel Type</label>
                         <select name="fuel_type" class="form-control">
@@ -64,7 +59,7 @@
                         </select>
                     </div>
                 </div>
-                <!-- ROW 3 -->
+
                 <div class="row g-3 mt-1">
                     <div class="col-md-4">
                         <label class="fw-bold">Service Speed</label>
@@ -79,6 +74,7 @@
                             <option value="Time Charter">Time Charter</option>
                         </select>
                     </div>
+
                     <div class="col-md-4">
                         <label class="fw-bold">Captain In Charge</label>
                         <select name="captain_id" class="form-control" required>
@@ -90,6 +86,7 @@
                             @endforeach
                         </select>
                     </div>
+
                     <div class="col-md-4">
                         <label class="fw-bold">Vessel Status</label>
                         <select name="vessel_status" class="form-control">
@@ -103,18 +100,11 @@
                     </div>
                 </div>
 
-                <!-- BUTTON -->
                 <div class="mt-4 text-end">
-                    <button class="btn btn-primary px-4">
-                        💾 Save Vessel
-                    </button>
+                    <button class="btn btn-primary px-4">Save Vessel</button>
                 </div>
-
             </form>
-
         </div>
     </div>
-
 </div>
-
 @endsection

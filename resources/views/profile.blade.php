@@ -1,12 +1,10 @@
 @extends('layouts.app')
 
 @section('content')
-
 <div class="card-box col-md-6">
-
     <h3>My Profile</h3>
 
-    <form method="POST" action="/profile">
+    <form method="POST" action="{{ url('/profile') }}">
         @csrf
 
         <input type="text" name="name" value="{{ Auth::user()->name }}" class="form-control mb-2">
@@ -18,10 +16,8 @@
 
     <hr>
 
-    <a href="/change-password" class="btn btn-warning">
+    <a href="{{ url('/change-password') }}" class="btn btn-warning">
         Change Password
     </a>
-
 </div>
-
 @endsection

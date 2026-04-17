@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class TechDefect extends Model
 {
-    //
     protected $fillable = [
         'vessel_id',
         'status',
@@ -26,20 +25,23 @@ class TechDefect extends Model
         'remarks',
     ];
 
+    protected $casts = [
+        'date_completed' => 'date',
+        'date_identified' => 'date',
+    ];
+
     public function vessel()
     {
         return $this->belongsTo(Vessel::class);
     }
+
     public function thirdParty()
     {
         return $this->hasOne(ThirdPartySupport::class);
     }
+
     public function supports()
     {
-        return $this->hasMany(\App\Models\ThirdPartySupport::class,'tech_defect_id');
-    }
-    public function techDefect()
-    {
-        return $this->belongsTo(\App\Models\TechDefect::class, 'tech_defect_id');
+        return $this->hasMany(ThirdPartySupport::class, 'tech_defect_id');
     }
 }

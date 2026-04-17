@@ -8,10 +8,12 @@
             background: linear-gradient(to right, #1e3c72, #2a5298);
             height: 100vh;
         }
+
         .login-card {
             border-radius: 20px;
             padding: 30px;
         }
+
         .logo {
             font-size: 30px;
             font-weight: bold;
@@ -21,7 +23,7 @@
 </head>
 <body>
 <div class="container d-flex justify-content-center align-items-center vh-100">
-    <div class="card login-card shadow" style="width: 400px;">  
+    <div class="card login-card shadow" style="width: 400px;">
         <div class="text-center mb-3">
             <div class="logo">VILLA GROUP</div>
             <div class="logo">of Companies</div>
@@ -33,7 +35,7 @@
             </div>
         @endif
 
-        <form method="POST" action="/login">
+        <form method="POST" action="{{ url('/login') }}">
             @csrf
 
             <div class="mb-3">
@@ -48,9 +50,7 @@
 
             <button class="btn btn-primary w-100">Login</button>
         </form>
-
     </div>
 </div>
-
 </body>
 </html>

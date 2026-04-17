@@ -19,16 +19,14 @@ class DryDockingDetail extends Model
         'weight',
         'actual_progress',
         'activity',
-        'remarks'
+        'remarks',
     ];
 
-    // relation to header
     public function header()
     {
         return $this->belongsTo(DryDockingHeader::class, 'dry_dock_id');
     }
 
-    // relation to vessel
     public function vessel()
     {
         return $this->belongsTo(Vessel::class);

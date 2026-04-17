@@ -1,25 +1,35 @@
 @extends('layouts.app')
+
 @section('content')
 <div class="container">
-    <h4 class="mb-4">Vessel Certificates Monitoring</h4>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">Vessel Certificates Monitoring</h4>
+            <p class="text-muted mb-0">Monitor certificate validity per vessel.</p>
+        </div>
+    </div>
+
     <div class="row">
-        @foreach($vessels as $v)
+        @forelse($vessels as $vessel)
             <div class="col-md-3 mb-4">
-                <a href="{{ route('vessel.certificates.show',$v->id) }}" style="text-decoration:none">
-                    <div class="card shadow-sm text-center">
+                <a href="{{ route('vessel.certificates.show', $vessel->id) }}" class="text-decoration-none">
+                    <div class="card shadow-sm text-center h-100">
                         <div class="card-body">
-                            <h5>🚢 {{ $v->vessel_name }}</h5>
-                            @if($v->expired_count > 0)
+                            <h5 class="mb-3">{{ $vessel->vessel_name }}</h5>
+
+                            @if($vessel->expired_count > 0)
                                 <div class="badge bg-danger mb-1">
-                                    {{ $v->expired_count }} Expired
+                                    {{ $vessel->expired_count }} Expired
                                 </div>
                             @endif
-                            @if($v->expiring_count > 0)
+
+                            @if($vessel->expiring_count > 0)
                                 <div class="badge bg-warning text-dark">
-                                    {{ $v->expiring_count }} Expiring Soon
+                                    {{ $vessel->expiring_count }} Expiring Soon
                                 </div>
                             @endif
-                            @if($v->expired_count == 0 && $v->expiring_count == 0)
+
+                            @if($vessel->expired_count == 0 && $vessel->expiring_count == 0)
                                 <div class="badge bg-success">
                                     All Certificates Valid
                                 </div>
@@ -28,7 +38,13 @@
                     </div>
                 </a>
             </div>
-        @endforeach
+        @empty
+            <div class="col-12">
+                <div class="alert alert-info mb-0">
+                    No vessels available for certificate monitoring.
+                </div>
+            </div>
+        @endforelse
     </div>
 </div>
 @endsection

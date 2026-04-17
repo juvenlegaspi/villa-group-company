@@ -2,14 +2,11 @@
 
 namespace App\Models;
 
-
 use Illuminate\Database\Eloquent\Model;
-use App\Models\User;
 
 class VoyageLogHeader extends Model
 {
     protected $table = 'voyage_logs_header';
-
     protected $primaryKey = 'voyage_id';
 
     protected $fillable = [
@@ -24,25 +21,31 @@ class VoyageLogHeader extends Model
         'created_by',
         'vessel_id',
         'arrival_date',
-        'date_completed'
+        'date_completed',
+    ];
+
+    protected $casts = [
+        'date_completed' => 'date',
+        'date_created' => 'date',
     ];
 
     public function details()
     {
-        //return $this->hasMany(VoyageLogDetail::class,'voyage_id');
         return $this->hasMany(VoyageLogDetail::class, 'voyage_id', 'voyage_id');
     }
 
     public function vessel()
     {
-        return $this->belongsTo(Vessel::class,'vessel_id');
+        return $this->belongsTo(Vessel::class, 'vessel_id');
     }
-    public function getVoyageCodeAttribute()
-    {
-        return 'VL-' . str_pad($this->voyage_id, 5, '0', STR_PAD_LEFT);
-    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function getVoyageCodeAttribute()
+    {
+        return 'VL-' . str_pad($this->voyage_id, 5, '0', STR_PAD_LEFT);
     }
 }

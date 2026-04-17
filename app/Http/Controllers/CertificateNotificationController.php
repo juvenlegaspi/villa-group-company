@@ -2,26 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\VesselCertificate;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\CertificateExpiryNotification;
+use App\Services\CertificateAlertService;
 
 class CertificateNotificationController extends Controller
 {
-    public function sendAlerts()
+    public function __construct(
+        protected CertificateAlertService $certificateAlertService
+    ) {
+    }
+
+    public function sendAlerts(): string
     {
-        // kuha expired + expiring
-        $certificates = VesselCertificate::where(function ($query) {
-            $query->where('expiry_date', '<', now())
-                  ->orWhereBetween('expiry_date', [now(), now()->addDays(30)]);
-        })->get();
+        $sentCount = $this->certificateAlertService->sendExpiringCertificateAlerts();
 
-        foreach ($certificates as $cert) {
-            Mail::to('IT.Department@villagroupofcompanies.com') // ilisi ni boss
-                ->send(new CertificateExpiryNotification($cert));
-        }
-
-        return "Notifications Sent!";
+        return "Notifications sent: {$sentCount}";
     }
 }

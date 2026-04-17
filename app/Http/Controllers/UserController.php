@@ -2,136 +2,153 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Models\Department;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
+    protected const DEFAULT_PASSWORD = 'villa@2026';
+
     public function index(Request $request)
     {
         $search = $request->search;
-        $users = \App\Models\User::when($search, function ($query, $search) {
-            $query->where('name', 'like', "%{$search}%")
-                ->orWhere('lastname', 'like', "%{$search}%")
-                ->orWhere('username', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%");
-        })->paginate(10);
+
+        $users = User::query()
+            ->with('department')
+            ->when($search, function ($query, $searchTerm) {
+                $query->where(function ($userQuery) use ($searchTerm) {
+                    $userQuery->where('name', 'like', "%{$searchTerm}%")
+                        ->orWhere('lastname', 'like', "%{$searchTerm}%")
+                        ->orWhere('username', 'like', "%{$searchTerm}%")
+                        ->orWhere('email', 'like', "%{$searchTerm}%");
+                });
+            })
+            ->paginate(10)
+            ->withQueryString();
+
         return view('users.index', compact('users', 'search'));
     }
+
     public function create()
     {
-        if (!auth()->user()->is_admin) {
-            abort(403);
-        }
+        abort_unless(auth()->user()->isAdmin(), 403);
 
-        $departments = \App\Models\Department::all();
+        $departments = Department::all();
+
         return view('users.create', compact('departments'));
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required',
-            'lastname' => 'required',
-            'username' => 'required|unique:users',
-            'email' => 'required|email|unique:users',
-            'cell_number' => 'required',
+        abort_unless(auth()->user()->isAdmin(), 403);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'lastname' => 'required|string|max:255',
+            'username' => 'required|string|max:255|unique:users,username',
+            'email' => 'required|email|max:255|unique:users,email',
+            'cell_number' => 'required|string|max:255',
             'department_id' => 'required|exists:departments,id',
             'role' => 'required|in:it,manager,captain,staff,r&d,hr,owner',
         ]);
 
         User::create([
-            'name' => $request->name,
-            'lastname' => $request->lastname,
-            'username' => $request->username,
-            'email' => $request->email,
-            'cell_number' => $request->cell_number,
-            'password' => Hash::make('villa@2026'),
-            'role' => $request->role,
-            'department_id' => $request->department_id,
-            'is_admin' => $request->has('is_admin') ? 1 : 0,
-            'must_change_password' => 1
+            ...$data,
+            'password' => Hash::make(self::DEFAULT_PASSWORD),
+            'is_admin' => $request->boolean('is_admin'),
+            'must_change_password' => 1,
         ]);
-        return redirect('/users')->with('success', 'User created successfully');
+
+        return redirect('/users')->with('success', 'User created successfully.');
     }
-    // edit form
+
     public function edit($id)
     {
         $user = User::findOrFail($id);
+        abort_unless(auth()->user()->isAdmin() || auth()->id() == $id, 403);
 
-        if (!auth()->user()->is_admin && auth()->id() != $id) {
-            abort(403);
-        }
-        $departments = \App\Models\Department::all();
+        $departments = Department::all();
+
         return view('users.edit', compact('user', 'departments'));
     }
 
-    // update user
     public function update(Request $request, $id)
     {
         $user = User::findOrFail($id);
-        //  SECURITY CHECK
-        if (!auth()->user()->is_admin && auth()->id() != $id) {
-            abort(403);
-        }
-        $request->validate([
-            'name' => 'required',
-            'lastname' => 'required',
-            'username' => 'required|unique:users,username,' . $id,
-            'email' => 'required|email|unique:users,email,' . $id,
-            'cell_number' => 'required',
+        abort_unless(auth()->user()->isAdmin() || auth()->id() == $id, 403);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'lastname' => 'required|string|max:255',
+            'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($id)],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($id)],
+            'cell_number' => 'required|string|max:255',
+            'status' => 'nullable',
+            'role' => 'nullable|string|max:255',
+            'department_id' => 'nullable|exists:departments,id',
         ]);
-        // BASIC UPDATE (ALL USERS)
-        $user->name = $request->name;
-        $user->lastname = $request->lastname;
-        $user->username = $request->username;
-        $user->email = $request->email;
-        $user->cell_number = $request->cell_number;
-        //  ADMIN ONLY
-        if (auth()->user()->is_admin) {
-            $user->status = $request->status;
-            $user->role = $request->role;
-            $user->department_id = $request->department_id;
-            $user->is_admin = $request->has('is_admin') ? 1 : 0;
+
+        $user->fill([
+            'name' => $data['name'],
+            'lastname' => $data['lastname'],
+            'username' => $data['username'],
+            'email' => $data['email'],
+            'cell_number' => $data['cell_number'],
+        ]);
+
+        if (auth()->user()->isAdmin()) {
+            $user->fill([
+                'status' => $request->status,
+                'role' => $request->role,
+                'department_id' => $request->department_id,
+                'is_admin' => $request->boolean('is_admin'),
+            ]);
         }
+
         $user->save();
-        return redirect('/users')->with('success', 'User updated successfully');
+
+        return redirect('/users')->with('success', 'User updated successfully.');
     }
-    // delete user
+
     public function destroy($id)
     {
+        abort_unless(auth()->user()->isAdmin(), 403);
+
         User::findOrFail($id)->delete();
-        return redirect('/users');
+
+        return redirect('/users')->with('success', 'User deleted successfully.');
     }
+
     public function resetPassword($id)
     {
-        // only admin
-        if (!auth()->user()->is_admin) {
-         abort(403);
-        }
-        $user = \App\Models\User::findOrFail($id);
-        $user->password = Hash::make('villa@2026');
-        $user->must_change_password = 1; // force change
-        $user->save();
-        return back()->with('success', 'Password reset to default!');
+        abort_unless(auth()->user()->isAdmin(), 403);
+
+        $user = User::findOrFail($id);
+        $user->update([
+            'password' => Hash::make(self::DEFAULT_PASSWORD),
+            'must_change_password' => 1,
+        ]);
+
+        return back()->with('success', 'Password reset to default successfully.');
     }
+
     public function changePassword(Request $request, $id)
-{
-    $user = User::findOrFail($id);
+    {
+        abort_unless(auth()->user()->isAdmin(), 403);
 
-    if (auth()->user()->is_admin != 1) {
-        abort(403);
+        $data = $request->validate([
+            'password' => 'required|confirmed|min:6',
+        ]);
+
+        $user = User::findOrFail($id);
+        $user->update([
+            'password' => Hash::make($data['password']),
+            'must_change_password' => 0,
+        ]);
+
+        return back()->with('success', 'Password updated successfully.');
     }
-
-    $request->validate([
-        'password' => 'required|confirmed|min:6'
-    ]);
-
-    $user->password = bcrypt($request->password);
-    $user->must_change_password = 0;
-    $user->save();
-
-    return back()->with('success', 'Password updated successfully');
-}
 }

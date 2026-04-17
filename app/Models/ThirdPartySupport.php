@@ -11,7 +11,7 @@ class ThirdPartySupport extends Model
         'reason_for_support',
         'spares_required',
         'tools_required',
-        'status'
+        'status',
     ];
 
     public function techDefect()

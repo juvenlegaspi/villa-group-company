@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class VoyageLogDetail extends Model
 {
     protected $table = 'voyage_logs_details';
-
     protected $primaryKey = 'dtl_id';
 
     protected $fillable = [
@@ -22,11 +21,18 @@ class VoyageLogDetail extends Model
         'status',
         'is_paused',
         'pause_at',
-        'total_pause'
+        'total_pause',
+    ];
+
+    protected $casts = [
+        'date_time_started' => 'datetime',
+        'date_time_ended' => 'datetime',
+        'pause_at' => 'datetime',
+        'is_paused' => 'boolean',
     ];
 
     public function header()
     {
-        return $this->belongsTo(VoyageLogHeader::class,'voyage_id');
+        return $this->belongsTo(VoyageLogHeader::class, 'voyage_id', 'voyage_id');
     }
 }

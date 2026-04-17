@@ -2,187 +2,146 @@
 
 namespace App\Http\Controllers;
 
-
-use Illuminate\Http\Request;
 use App\Models\Vessel;
 use App\Models\VesselCertificate;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
 
 class VesselCertificateController extends Controller
 {
-    //
     public function index()
-{
-    $user = auth()->user();
+    {
+        $user = auth()->user();
 
-    // COMMON COUNTS
-    $withCounts = function ($query) {
-        return $query->withCount([
-            'certificates as expired_count' => function($q){
-                $q->where('expiry_date', '<', now());
-            },
-            'certificates as expiring_count' => function($q){
-                $q->whereBetween('expiry_date', [now(), now()->copy()->addDays(30)]);
-            }
+        $withCounts = fn ($query) => $query->withCount([
+            'certificates as expired_count' => fn ($certificateQuery) => $certificateQuery->expired(),
+            'certificates as expiring_count' => fn ($certificateQuery) => $certificateQuery->expiringWithinDays(),
         ]);
-    };
 
-    //  ADMIN or MANAGER → TANAN
-    if ($user->is_admin == 1 || ($user->role == 'manager' && $user->department_id == 1)) {
+        $vessels = $user->is_admin == 1 || ($user->role === 'manager' && $user->department_id == 1)
+            ? $withCounts(Vessel::query())->get()
+            : $withCounts(Vessel::where('captain_id', $user->id))->get();
 
-        $vessels = $withCounts(Vessel::query())->get();
-
-    } else {
-
-        // CAPTAIN / OTHER → assigned vessel only
-        $vessels = $withCounts(
-            Vessel::where('captain_id', $user->id)
-        )->get();
+        return view('vessel_certificates.index', compact('vessels'));
     }
 
-    return view('vessel_certificates.index', compact('vessels'));
-}
     public function create($vessel)
     {
         $vessel = Vessel::findOrFail($vessel);
+
         return view('vessel_certificates.create', compact('vessel'));
     }
-    public function store(Request $request)
-{
-    $data = $request->validate([
-        'vessel_id' => 'required',
-        'certificate_name' => 'required',
-        'issue_date' => 'required|date',
-        'expiry_date' => 'required|date',
-        'remarks' => 'nullable',
-        'document' => 'nullable|file|max:5120' // 5MB
-    ]);
 
-    // FILE UPLOAD
-    if ($request->hasFile('document')) {
-        $file = $request->file('document');
-        $filename = time().'_'.$file->getClientOriginalName();
-        $file->move(public_path('uploads/certificates'), $filename);
-        $data['document'] = $filename;
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'vessel_id' => 'required',
+            'certificate_name' => 'required',
+            'issue_date' => 'required|date',
+            'expiry_date' => 'required|date|after_or_equal:issue_date',
+            'remarks' => 'nullable',
+            'document' => 'nullable|file|max:5120',
+        ]);
+
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('uploads/certificates'), $filename);
+            $data['document'] = $filename;
+        }
+
+        VesselCertificate::create($data);
+
+        return redirect()->route('vessel.certificates.show', $data['vessel_id'])
+            ->with('success', 'Certificate saved successfully.');
     }
 
-    VesselCertificate::create($data);
-
-    return redirect()->route('vessel-certificates.show', $data['vessel_id'])
-        ->with('success', 'Certificate saved!');
-}
-    /*public function vesselCertificates($id)
-    {
-        $vessel = Vessel::findOrFail($id);
-        $certificates = VesselCertificate::where('vessel_id', $id)
-            ->with('vessel')
-            ->get();
-        $today = now();
-        $expired = VesselCertificate::where('vessel_id',$id)
-            ->where('expiry_date','<',$today)
-            ->count();
-        $expiringSoon = VesselCertificate::where('vessel_id',$id)
-            ->whereBetween('expiry_date',[$today,$today->copy()->addDays(30)])
-            ->count();
-        return view('vessel_certificates.vessel_certificates', compact(
-            'vessel',
-            'certificates',
-            'expired',
-            'expiringSoon'
-        ));
-    }*/
     public function show(Request $request, $id)
     {
-        $vessel = \App\Models\Vessel::findOrFail($id);
-        $query = \App\Models\VesselCertificate::where('vessel_id', $id);
-        // SEARCH
-        if ($request->search) {
+        $vessel = Vessel::findOrFail($id);
+        $query = VesselCertificate::query()->where('vessel_id', $id);
+
+        if ($request->filled('search')) {
             $query->where('certificate_name', 'like', '%' . $request->search . '%');
         }
-        // FILTER
-        if ($request->filter == 'expired') {
-            $query->where('expiry_date', '<', now());
+
+        if ($request->filter === 'expired') {
+            $query->expired();
         }
-        if ($request->filter == 'expiring') {
-            $query->whereBetween('expiry_date', [now(), now()->copy()->addDays(30)]);
+
+        if ($request->filter === 'expiring') {
+            $query->expiringWithinDays();
         }
-        $certificates = $query->orderBy('expiry_date', 'asc')->get();
+
+        if ($request->filter === 'valid') {
+            $query->where('expiry_date', '>', now()->copy()->addDays(30));
+        }
+
+        $certificates = $query->orderBy('expiry_date')->get();
         $today = now();
-        return view('vessel_certificates.show', compact(
-            'vessel',
-            'certificates',
-            'today'
-        ));
+
+        return view('vessel_certificates.show', compact('vessel', 'certificates', 'today'));
     }
+
     public function edit($id)
     {
         $certificate = VesselCertificate::with('vessel')->findOrFail($id);
+
         return view('vessel_certificates.edit', compact('certificate'));
     }
+
     public function update(Request $request, $id)
-{
-    $certificate = VesselCertificate::findOrFail($id);
+    {
+        $certificate = VesselCertificate::findOrFail($id);
 
-    $data = $request->validate([
-        'certificate_name' => 'required',
-        'issue_date' => 'required|date',
-        'expiry_date' => 'required|date',
-        'remarks' => 'nullable',
-        'document' => 'nullable|file|max:5120'
-    ]);
+        $data = $request->validate([
+            'certificate_name' => 'required',
+            'issue_date' => 'required|date',
+            'expiry_date' => 'required|date|after_or_equal:issue_date',
+            'remarks' => 'nullable',
+            'document' => 'nullable|file|max:5120',
+        ]);
 
-    // FILE UPLOAD
-    if ($request->hasFile('document')) {
+        if ($request->hasFile('document')) {
+            if ($certificate->document && file_exists(public_path('uploads/certificates/' . $certificate->document))) {
+                unlink(public_path('uploads/certificates/' . $certificate->document));
+            }
 
-        // OPTIONAL: delete old file
-        if ($certificate->document && file_exists(public_path('uploads/certificates/'.$certificate->document))) {
-            unlink(public_path('uploads/certificates/'.$certificate->document));
+            $file = $request->file('document');
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('uploads/certificates'), $filename);
+            $data['document'] = $filename;
         }
 
-        $file = $request->file('document');
-        $filename = time().'_'.$file->getClientOriginalName();
-        $file->move(public_path('uploads/certificates'), $filename);
+        $certificate->update($data);
 
-        $data['document'] = $filename;
+        return redirect()->route('vessel.certificates.show', $certificate->vessel_id)
+            ->with('success', 'Certificate updated successfully.');
     }
 
-    $certificate->update($data);
-
-    return redirect()->route('vessel-certificates.show', $certificate->vessel_id)
-        ->with('success', 'Certificate updated!');
-}
     public function dashboard()
-{
-    $totalCertificates = VesselCertificate::count();
+    {
+        $totalCertificates = VesselCertificate::count();
+        $expiredCertificates = VesselCertificate::expired()->count();
+        $expiringCertificates = VesselCertificate::expiringWithinDays()->count();
+        $validCertificates = VesselCertificate::where('expiry_date', '>', now()->copy()->addDays(30))->count();
 
-    $expiredCertificates = VesselCertificate::where('expiry_date','<',now())->count();
+        $expiredList = VesselCertificate::expired()
+            ->orderBy('expiry_date')
+            ->limit(5)
+            ->get();
 
-    $expiringCertificates = VesselCertificate::whereBetween(
-        'expiry_date',
-        [now(), now()->addDays(30)]
-    )->count();
+        $expiringList = VesselCertificate::expiringWithinDays()
+            ->orderBy('expiry_date')
+            ->limit(5)
+            ->get();
 
-    $validCertificates = VesselCertificate::where('expiry_date','>',now()->addDays(30))->count();
-
-    // lists
-    $expiredList = VesselCertificate::where('expiry_date','<',now())
-                    ->orderBy('expiry_date','asc')
-                    ->limit(5)
-                    ->get();
-
-    $expiringList = VesselCertificate::whereBetween(
-                    'expiry_date',[now(), now()->addDays(30)])
-                    ->orderBy('expiry_date','asc')
-                    ->limit(5)
-                    ->get();
-
-    return view('vessel_certificates.dashboard', compact(
-        'totalCertificates',
-        'expiredCertificates',
-        'expiringCertificates',
-        'validCertificates',
-        'expiredList',
-        'expiringList'
-    ));
-}
+        return view('vessel_certificates.dashboard', compact(
+            'totalCertificates',
+            'expiredCertificates',
+            'expiringCertificates',
+            'validCertificates',
+            'expiredList',
+            'expiringList'
+        ));
+    }
 }
