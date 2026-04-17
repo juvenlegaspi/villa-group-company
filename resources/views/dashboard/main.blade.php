@@ -4,57 +4,66 @@
 <div class="container py-4">
 
     <h3 class="fw-bold mb-4">🏢 Select Division</h3>
-@php
+
+    @php
     $colors = [
-        'vsli' => 'blue',
-        'yatira' => 'purple',
-        'jmv' => 'green',
+        'villa shipping' => 'blue',
+        'yatira construction' => 'purple',
         'mining' => 'orange',
         'it' => 'dark',
         'hr' => 'pink',
-        'rd' => 'teal'
+        'r&d' => 'teal'
     ];
 
     $icons = [
-        'vsli' => '🚢',
-        'yatira' => '🏗️',
+        'villa shipping' => '🚢',
+        'yatira construction' => '🏗️',
         'mining' => '⛏️',
         'it' => '💻',
         'hr' => '👥',
-        'rd' => '🧪'
+        'r&d' => '🧪'
     ];
-@endphp
-    <div class="row g-4">
 
-        @foreach($divisions as $division)
-        @php
-        $key = strtolower($division);
-        $color = $colors[$key] ?? 'blue';
-        $icon = $icons[$key] ?? '🏢';
+    $user = auth()->user();
+    $isAdmin = $user->is_admin == 1 || $user->role == 'owner';
     @endphp
+
+    <div class="row g-4">
+        @foreach($departments as $dept)
+
+            @php
+                $key = strtolower(trim($dept->name));
+
+                $color = $colors[$key] ?? 'blue';
+                $icon = $icons[$key] ?? '🏢';
+
+                // 🔥 SAME LOGIC SA SIDEBAR
+                $show = $isAdmin || $user->department_id == $dept->id;
+            @endphp
+
+            @if($show)
             <div class="col-6 col-md-4 col-lg-3">
-                <a href="{{ route('division.dashboard', $division) }}" class="text-decoration-none">
+                <a href="{{ route('division.dashboard', $dept->name) }}" class="text-decoration-none">
 
-            <div class="division-card-modern division-{{ $color }}">
+                    <div class="division-card-modern division-{{ $color }}">
+                        <div class="division-icon">
+                            {{ $icon }}
+                        </div>
 
-                <div class="division-icon">
-                    {{ $icon }}
-                </div>
+                        <h5 class="mt-3 text-white">
+                            {{ $dept->name }}
+                        </h5>
 
-                <h5 class="mt-3 text-white text-capitalize">
-                    {{ $division }}
-                </h5>
+                        <p class="text-light small mb-0">
+                            Open Dashboard →
+                        </p>
+                    </div>
 
-                <p class="text-light small mb-0">
-                    Open Dashboard →
-                </p>
-
+                </a>
             </div>
+            @endif
 
-        </a>
-            </div>
         @endforeach
-
     </div>
 
 </div>

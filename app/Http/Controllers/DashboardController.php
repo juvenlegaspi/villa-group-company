@@ -7,14 +7,14 @@ use App\Models\Vessel;
 use App\Models\VesselCertificate;
 use App\Models\VoyageLog;
 use App\Models\VoyageLogHeader;
+use App\Models\Department;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $divisions = ['vsli', 'yatira', 'mining', 'it', 'hr', 'rd'];
-
-        return view('dashboard.main', compact('divisions'));
+        $departments = Department::all(); // dynamic gikan DB
+        return view('dashboard.main', compact('departments'));
     }
 
     public function divisionDashboard($division)

@@ -26,7 +26,6 @@
     <div class="card login-card shadow" style="width: 400px;">
         <div class="text-center mb-3">
             <div class="logo">VILLA GROUP</div>
-            <div class="logo">of Companies</div>
         </div>
 
         @if(session('error'))
