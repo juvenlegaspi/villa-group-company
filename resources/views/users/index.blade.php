@@ -31,6 +31,7 @@
             <th>ID</th>
             <th>Name</th>
             <th>Username</th>
+            <th>Division</th>
             <th>Department</th>
             <th>Role</th>
             <th>Cell Number</th>
@@ -43,6 +44,7 @@
                 <td>{{ $user->id }}</td>
                 <td>{{ $user->name }} {{ $user->lastname }}</td>
                 <td>{{ $user->username }}</td>
+                <td>{{ optional($user->division)->name ?? 'NO DIVISION' }}</td>
                 <td>{{ optional($user->department)->name ?? 'NO DEPT' }}</td>
                 <td>{{ $user->role }}</td>
                 <td>{{ $user->cell_number }}</td>

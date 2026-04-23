@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('content')
+{{--
 <div class="container">  
     <div class="row g-4">
         <div class="col-md-3">
@@ -49,7 +50,7 @@
         </div>
     </div>
 </div>
-
+--}}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>

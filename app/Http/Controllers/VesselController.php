@@ -85,7 +85,7 @@ class VesselController extends Controller
     protected function getCaptains()
     {
         return User::query()
-            ->where('department_id', 1)
+            ->where('department_id', 6)
             ->where('role', 'captain')
             ->orderBy('name')
             ->get();

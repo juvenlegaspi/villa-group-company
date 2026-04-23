@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use App\Models\Department;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Division;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,12 +28,12 @@ class AppServiceProvider extends ServiceProvider
                 $user = Auth::user();
                 if ($user->is_admin == 1) {
                     // ADMIN → makita tanan
-                    $departments = Department::all();
+                    $divisions = Division::all();
                 } else {
-                    // USER → iya ra department
-                    $departments = Department::where('id', $user->department_id)->get();
+                    // USER → iya ra division
+                    $divisions = Division::where('id', $user->division_id)->get();
                 }
-                $view->with('allDepartments', $departments);
+                $view->with('allDivisions', $divisions);
             }
             Paginator::useBootstrap();
         });

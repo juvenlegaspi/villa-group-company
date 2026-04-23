@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
+use App\Models\Division;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -18,6 +19,7 @@ class UserController extends Controller
 
         $users = User::query()
             ->with('department')
+            ->with('division')
             ->when($search, function ($query, $searchTerm) {
                 $query->where(function ($userQuery) use ($searchTerm) {
                     $userQuery->where('name', 'like', "%{$searchTerm}%")
@@ -37,8 +39,9 @@ class UserController extends Controller
         abort_unless(auth()->user()->isAdmin(), 403);
 
         $departments = Department::all();
+        $divisions = Division::all();
 
-        return view('users.create', compact('departments'));
+        return view('users.create', compact('departments', 'divisions'));
     }
 
     public function store(Request $request)
@@ -52,6 +55,7 @@ class UserController extends Controller
             'email' => 'required|email|max:255|unique:users,email',
             'cell_number' => 'required|string|max:255',
             'department_id' => 'required|exists:departments,id',
+            'division_id' => 'required|exists:divisions,id',
             'role' => 'required|in:it,manager,captain,staff,r&d,hr,owner',
         ]);
 
@@ -71,8 +75,9 @@ class UserController extends Controller
         abort_unless(auth()->user()->isAdmin() || auth()->id() == $id, 403);
 
         $departments = Department::all();
+        $divisions = Division::all();
 
-        return view('users.edit', compact('user', 'departments'));
+        return view('users.edit', compact('user', 'departments', 'divisions'));
     }
 
     public function update(Request $request, $id)
@@ -89,6 +94,7 @@ class UserController extends Controller
             'status' => 'nullable',
             'role' => 'nullable|string|max:255',
             'department_id' => 'nullable|exists:departments,id',
+            'division_id' => 'nullable|exists:divisions,id',
         ]);
 
         $user->fill([
@@ -97,6 +103,7 @@ class UserController extends Controller
             'username' => $data['username'],
             'email' => $data['email'],
             'cell_number' => $data['cell_number'],
+            'division_id' => $data['division_id'],
         ]);
 
         if (auth()->user()->isAdmin()) {

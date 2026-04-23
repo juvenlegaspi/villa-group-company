@@ -214,6 +214,15 @@
                     .division-teal {
                         background: linear-gradient(135deg, #136a8a, #267871);
                     }
+                    .card {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.table th {
+    font-weight: 600;
+}
     </style>
 </head>
 <body>
@@ -225,7 +234,7 @@
         @endphp
 
         <div class="sidebar-header">
-            <h4>Villa Group of Companies</h4>
+            <h4>Villa Group</h4>
             <button id="toggleSidebar" class="toggle-btn">
                 <i class="bi bi-list"></i>
             </button>
@@ -246,21 +255,23 @@
 
             <div class="sidebar-title">Divisions</div>
             <div class="ms-1">
-                @foreach($allDepartments as $dept)
+                @foreach($allDivisions as $div)
                     @php
                         $user = auth()->user();
-                        $isAllowedDept = $isAdmin || $user->department_id == $dept->id;
-                        $isShipping = str_contains(strtolower($dept->name), 'shipping');
+                        $isAllowed = $isAdmin || $user->division_id == $div->id;
+                        $divName = strtolower($div->name);
+                        $isShipping = str_contains($divName, 'shipping');
+                        $isYatira = str_contains($divName, 'yatira');
                     @endphp
 
-                    @if($isAllowedDept)
+                    @if($isAllowed)
                         @if($isShipping)
-                            <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $dept->id }}')">
-                                <span>{{ $dept->name }}</span>
+                            <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $div->id }}')">
+                                <span>{{ $div->name }}</span>
                                 <i class="bi bi-chevron-down"></i>
                             </div>
 
-                            <div id="menu{{ $dept->id }}" class="sidebar-dropdown {{ request()->is('shipping/*') ? 'show' : '' }}">
+                            <div id="menu{{ $div->id }}" class="sidebar-dropdown {{ request()->is('shipping/*') ? 'show' : '' }}">
                                 <a href="{{ route('vessels.index') }}" class="{{ request()->is('shipping/vessels*') ? 'active-menu' : '' }}">
                                     <i class="bi bi-ship"></i>
                                     <span>Vessels</span>
@@ -269,7 +280,7 @@
                                     <i class="bi bi-tools"></i>
                                     <span>Tech & Defects</span>
                                 </a>
-                                <a href="{{ route('vessel-certificates.index') }}" class="{{ request()->is('vessel-certificates*') ? 'active-menu' : '' }}">
+                                <a href="{{ route('vessel-certificates.index') }}" class="{{ request()->is('vessel_certificates*') ? 'active-menu' : '' }}">
                                     <i class="bi bi-file-earmark-text"></i>
                                     <span>Certificates</span>
                                 </a>
@@ -280,10 +291,22 @@
                                     </a>
                                 @endif
                             </div>
+                        @elseif($isYatira)
+                            <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $div->id }}')">
+                                <span>{{ $div->name }}</span>
+                                <i class="bi bi-chevron-down"></i>
+                            </div>
+
+                            <div id="menu{{ $div->id }}" class="sidebar-dropdown {{ request()->is('yatira/*') ? 'show' : '' }}">
+                                <a href="{{ route('suppliers.index') }}">
+                                    <i class="bi bi-truck"></i>
+                                    <span>Suppliers</span>
+                                </a>
+                            </div>
                         @else
-                            <a href="{{ url('/departments/' . $dept->id) }}">
+                            <a href="{{ url('/departments/' . $div->id) }}">
                                 <i class="bi bi-building"></i>
-                                <span>{{ $dept->name }}</span>
+                                <span>{{ $div->name }}</span>
                             </a>
                         @endif
                     @endif

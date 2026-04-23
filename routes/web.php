@@ -14,6 +14,7 @@ use App\Models\Department;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\SupplierController;
 
 Route::redirect('/', '/login');
 
@@ -138,4 +139,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/{id}/edit', [VesselCertificateController::class, 'edit'])->name('vessel-certificates.edit');
         Route::post('/{id}/update', [VesselCertificateController::class, 'update'])->name('vessel-certificates.update');
     });
+    Route::middleware('auth')->group(function () {
+        Route::get('/yatira/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+    });
+    Route::get('/yatira/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+
+    Route::get('/yatira/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
+
+    Route::post('/yatira/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+    Route::post('/yatira/suppliers/store', [SupplierController::class, 'store'])->name('suppliers.store');
 });

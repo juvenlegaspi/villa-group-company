@@ -54,7 +54,24 @@
                         <label class="fw-bold">Cell Number</label>
                         <input type="text" name="cell_number" class="form-control" required>
                     </div>
-
+                    <div class="col-md-4">
+                        <label class="fw-bold">Division</label>
+                        <select name="division_id" class="form-control" required>
+                            <option value="">Select Division</option>
+                                @foreach($divisions as $div)
+                                    <option value="{{ $div->id }}">{{ $div->name }}</option>
+                                @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="fw-bold">Department</label>
+                        <select name="department_id" class="form-control" required>
+                            <option value="">Select Department</option>
+                            @foreach($departments as $dept)
+                                <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                     <div class="col-md-4">
                         <label class="fw-bold">Role</label>
                         <select name="role" class="form-control" required>
@@ -68,17 +85,6 @@
                             <option value="owner">Owner</option>
                         </select>
                     </div>
-
-                    <div class="col-md-4">
-                        <label class="fw-bold">Department</label>
-                        <select name="department_id" class="form-control" required>
-                            <option value="">Select Department</option>
-                            @foreach($departments as $dept)
-                                <option value="{{ $dept->id }}">{{ $dept->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check form-switch mt-3">
                             <input class="form-check-input" type="checkbox" name="is_admin" value="1">

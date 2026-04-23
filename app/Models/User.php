@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Models\Division;
+use App\Models\Department;
 
 class User extends Authenticatable
 {
@@ -21,6 +23,7 @@ class User extends Authenticatable
         'is_admin',
         'role',
         'department_id',
+        'division_id',
         'must_change_password',
         'status',
     ];
@@ -51,5 +54,9 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin' || (bool) $this->is_admin;
+    }
+    public function division()
+    {
+        return $this->belongsTo(Division::class);
     }
 }

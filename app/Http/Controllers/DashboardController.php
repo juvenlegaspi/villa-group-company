@@ -8,74 +8,47 @@ use App\Models\VesselCertificate;
 use App\Models\VoyageLog;
 use App\Models\VoyageLogHeader;
 use App\Models\Department;
+use App\Models\Division;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $departments = Department::all(); // dynamic gikan DB
-        return view('dashboard.main', compact('departments'));
+        $divisions = Division::all(); // dynamic gikan DB
+        return view('dashboard.main', compact('divisions'));
     }
 
     public function divisionDashboard($division)
 {
     $division = strtolower(trim($division));
 
-    // 🔥 mapping gikan DB → system key
-    $map = [
-        'villa shipping' => 'vsli',
-        'yatira construction' => 'yatira',
-        'mining' => 'mining',
-        'it' => 'it',
-        'hr' => 'hr',
-        'r & d' => 'rd',
-        'r&d' => 'rd',
-    ];
-
-    $key = $map[$division] ?? null;
-
-    if (!$key) {
+    // kuha gikan DB
+    $div = Division::whereRaw('LOWER(name) = ?', [$division])->first();
+    
+    if (!$div) {
         abort(404);
     }
 
-    // 🔥 VSli (Villa Shipping) → FULL DASHBOARD
-    if ($key === 'vsli') {
-        $metrics = $this->buildShippingMetrics();
-        return view('dashboard.vsli', $metrics);
+
+    // 🔥 dynamic routing based sa division name
+    switch (strtolower($div->name)) {
+
+        case 'shipping lines':
+            $metrics = $this->buildShippingMetrics();
+            return view('dashboard.vsli', $metrics);
+
+        case 'yatira':
+            return view('dashboard.yatira', ['division' => $div]);
+
+        case 'jmv':
+            return view('dashboard.jmv', ['division' => $div]);
+
+        case 'corporate':
+            return view('dashboard.corporate', ['division' => $div]);
+
+        default:
+            abort(404);
     }
-
-    // 🔥 Other divisions (pwede nimo fill later)
-    if ($key === 'yatira') {
-        return view('dashboard.yatira', [
-        'division' => $division
-        ]);
-    }
-
-   if ($key === 'mining') {
-    return view('dashboard.mining', [
-        'division' => $division
-    ]);
-}
-
-if ($key === 'it') {
-    return view('dashboard.it', [
-        'division' => $division
-    ]);
-}
-
-if ($key === 'hr') {
-    return view('dashboard.hr', [
-        'division' => $division
-    ]);
-}
-
-if ($key === 'rd') {
-    return view('dashboard.rd', [
-        'division' => $division
-    ]);
-}
-
-    abort(404);
 }
 
     protected function buildShippingMetrics(): array

@@ -59,7 +59,28 @@
                             <option value="0" {{ $user->status == 0 ? 'selected' : '' }}>Inactive</option>
                         </select>
                     </div>
-
+                    <div class="col-md-4">
+                        <label class="fw-bold">Division</label>
+                        <select name="division_id" class="form-control" required>
+                            <option value="">Select Division</option>
+                            @foreach($divisions as $div)
+                                <option 
+                                    value="{{ $div->id }}" {{ $user->division_id == $div->id ? 'selected' : '' }}>
+                                    {{ $div->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="fw-bold">Department</label>
+                        <select name="department_id" class="form-control">
+                            @foreach($departments as $dept)
+                                <option value="{{ $dept->id }}" {{ $user->department_id == $dept->id ? 'selected' : '' }}>
+                                    {{ $dept->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                     <div class="col-md-4">
                         <label class="fw-bold">Role</label>
                         <select name="role" class="form-control">
@@ -72,18 +93,6 @@
                             <option value="owner" {{ $user->role == 'owner' ? 'selected' : '' }}>Owner</option>
                         </select>
                     </div>
-
-                    <div class="col-md-4">
-                        <label class="fw-bold">Department</label>
-                        <select name="department_id" class="form-control">
-                            @foreach($departments as $dept)
-                                <option value="{{ $dept->id }}" {{ $user->department_id == $dept->id ? 'selected' : '' }}>
-                                    {{ $dept->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
                     <div class="form-check form-switch mt-2">
                         <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin" value="1" {{ $user->is_admin ? 'checked' : '' }}>
                         <label class="form-check-label" for="is_admin">Grant Admin Access</label>
