@@ -20,6 +20,11 @@ class Supplier extends Model
         'telephone',
         'mobile',
         'email',
-        'status'
+        'status',
+        'added_by'
     ];
+    public function user()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'added_by');
+    }
 }

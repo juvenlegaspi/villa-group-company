@@ -14,9 +14,13 @@ class VesselController extends Controller
         $user = auth()->user();
 
         $vessels = Vessel::query()
-            ->with('captain')
-            ->when(! $user->is_admin, fn ($query) => $query->where('captain_id', $user->id))
-            ->paginate(10);
+        ->with('captain')
+        ->when(
+            !($user->is_admin || $user->role === 'manager'),
+            fn ($query) => $query->where('captain_id', $user->id)
+        )
+        ->latest()
+        ->paginate(10);
 
         $captains = $this->getCaptains();
 

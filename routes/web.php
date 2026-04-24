@@ -148,4 +148,5 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/yatira/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
     Route::post('/yatira/suppliers/store', [SupplierController::class, 'store'])->name('suppliers.store');
+    Route::post('/suppliers/update/{id}', [SupplierController::class, 'update'])->name('suppliers.update');
 });
