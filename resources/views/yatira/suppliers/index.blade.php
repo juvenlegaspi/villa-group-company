@@ -55,23 +55,32 @@
                       </td>
 
                       <td>
-                          <button class="btn btn-sm editBtn"
-    data-id="{{ $supplier->id }}"
-    data-name="{{ $supplier->name }}"
-    data-business_type="{{ $supplier->business_type }}"
-    data-tin="{{ $supplier->tin }}"
-    data-address="{{ $supplier->address }}"
-    data-products="{{ $supplier->products }}"
-    data-tax_type="{{ $supplier->tax_type }}"
-    data-lead_time="{{ $supplier->lead_time }}"
-    data-credit_term="{{ $supplier->credit_term }}"
-    data-limit_advances="{{ $supplier->limit_advances }}"
-    data-contact_person="{{ $supplier->contact_person }}"
-    data-telephone="{{ $supplier->telephone }}"
-    data-mobile="{{ $supplier->mobile }}"
-    data-email="{{ $supplier->email }}"
-    data-status="{{ $supplier->status }}">⋮</button>
-                      </td>
+                        @php
+                            $user = auth()->user();
+                        @endphp
+                    @if(
+                        $user->is_admin == 1 || 
+                        ($user->role === 'manager')
+                    )
+                        <button class="btn btn-sm editBtn"
+                            data-id="{{ $supplier->id }}"
+                            data-name="{{ $supplier->name }}"
+                            data-business_type="{{ $supplier->business_type }}"
+                            data-tin="{{ $supplier->tin }}"
+                            data-address="{{ $supplier->address }}"
+                            data-products="{{ $supplier->products }}"
+                            data-tax_type="{{ $supplier->tax_type }}"
+                            data-lead_time="{{ $supplier->lead_time }}"
+                            data-credit_term="{{ $supplier->credit_term }}"
+                            data-limit_advances="{{ $supplier->limit_advances }}"
+                            data-contact_person="{{ $supplier->contact_person }}"
+                            data-telephone="{{ $supplier->telephone }}"
+                            data-mobile="{{ $supplier->mobile }}"
+                            data-email="{{ $supplier->email }}"
+                            data-status="{{ $supplier->status }}">
+                            Edit
+                        </button>
+                    @endif
                   </tr>
                   @endforeach
                 </tbody>
@@ -363,7 +372,7 @@ document.getElementById('supplierForm').addEventListener('submit', function(e) {
                 </td>
 
                 <td>
-                    <button class="btn btn-light btn-sm">⋮</button>
+                    <button class="btn btn-light btn-sm">Edit</button>
                 </td>
             </tr>
             `;
