@@ -56,7 +56,7 @@ class UserController extends Controller
             'cell_number' => 'required|string|max:255',
             'department_id' => 'required|exists:departments,id',
             'division_id' => 'required|exists:divisions,id',
-            'role' => 'required|in:it,manager,captain,staff,r&d,hr,owner',
+            'role' => 'required|in:it,manager,captain,staff,r&d,hr,purchaser,owner',
         ]);
 
         User::create([

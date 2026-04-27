@@ -30,12 +30,10 @@
         <tr>
             <th>ID</th>
             <th>Name</th>
-            <th>Username</th>
             <th>Division</th>
             <th>Department</th>
             <th>Role</th>
             <th>Cell Number</th>
-            <th>Email</th>
             <th>Status</th>
             <th>Action</th>
         </tr>
@@ -43,12 +41,10 @@
             <tr>
                 <td>{{ $user->id }}</td>
                 <td>{{ $user->name }} {{ $user->lastname }}</td>
-                <td>{{ $user->username }}</td>
                 <td>{{ optional($user->division)->name ?? 'NO DIVISION' }}</td>
                 <td>{{ optional($user->department)->name ?? 'NO DEPT' }}</td>
                 <td>{{ $user->role }}</td>
                 <td>{{ $user->cell_number }}</td>
-                <td>{{ $user->email }}</td>
                 <td>
                     <span class="badge {{ $user->status ? 'bg-success' : 'bg-danger' }}">
                         {{ $user->status ? 'Active' : 'Inactive' }}

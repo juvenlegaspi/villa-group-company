@@ -59,11 +59,14 @@ class TechDefectController extends Controller
 
         $query = TechDefect::query()
             ->with(['vessel', 'supports'])
-            ->when(! $user->isAdmin(), function ($techDefectQuery) use ($user) {
+            ->when(
+            !($user->isAdmin() || $user->role === 'manager'),
+            function ($techDefectQuery) use ($user) {
                 $techDefectQuery->whereHas('vessel', function ($vesselQuery) use ($user) {
                     $vesselQuery->where('captain_id', $user->id);
                 });
-            });
+            }
+        );
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);

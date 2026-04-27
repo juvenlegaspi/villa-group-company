@@ -141,12 +141,7 @@ Route::middleware('auth')->group(function () {
     });
     Route::middleware('auth')->group(function () {
         Route::get('/yatira/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::post('/yatira/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+        Route::put('/yatira/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
     });
-    Route::get('/yatira/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
-
-    Route::get('/yatira/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
-
-    Route::post('/yatira/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
-    Route::post('/yatira/suppliers/store', [SupplierController::class, 'store'])->name('suppliers.store');
-    Route::post('/suppliers/update/{id}', [SupplierController::class, 'update'])->name('suppliers.update');
 });

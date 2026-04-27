@@ -17,7 +17,7 @@ class VesselCertificateController extends Controller
             'certificates as expiring_count' => fn ($certificateQuery) => $certificateQuery->expiringWithinDays(),
         ]);
 
-        $vessels = $user->is_admin == 1 || ($user->role === 'manager' && $user->department_id == 1)
+        $vessels = $user->is_admin == 1 || ($user->role === 'manager' && $user->department_id == 6)
             ? $withCounts(Vessel::query())->get()
             : $withCounts(Vessel::where('captain_id', $user->id))->get();
 
