@@ -63,6 +63,7 @@
                         ($user->role === 'manager')
                     )
                         <button class="btn btn-sm editBtn"
+                            onclick="editSupplier(this)"
                             data-id="{{ $supplier->id }}"
                             data-name="{{ $supplier->name }}"
                             data-business_type="{{ $supplier->business_type }}"
@@ -103,7 +104,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
-      <form id="supplierForm">
+      <form method="POST" action="{{ route('suppliers.store') }}">
         @csrf
 
         <div class="modal-body">
@@ -177,7 +178,7 @@
   </div>
 </div>
 
-<div class="modal fade" id="editSupplierModal">
+<div class="modal fade" id="editSupplierModal" tabindex="-1">
     <div class="modal-dialog modal-lg" style="max-height: 90vh;">
         <div class="modal-content">
 
@@ -186,9 +187,9 @@
                 <button class="btn-close" data-bs-dismiss="modal"></button>
             </div>
 
-            <form id="editSupplierForm">
+             <form method="POST" id="editForm">
                 @csrf
-                @method('POST')
+                @method('PUT')
 
                 <input type="hidden" id="edit_id">
 
@@ -301,162 +302,34 @@
   </div>
 </div>
 
-<!-- ================= CSS ================= -->
-<style>
-.is-invalid {
-    border: 1px solid red;
-}
-</style>
-
-<!-- ================= AJAX ================= -->
 <script>
-document.getElementById('supplierForm').addEventListener('submit', function(e) {
-    e.preventDefault();
+function editSupplier(btn){
 
-    let form = this;
-    let formData = new FormData(form);
-    let valid = true;
+    let id = btn.dataset.id;
 
-    // VALIDATION
-    form.querySelectorAll('.required').forEach(input => {
-        if (!input.value) {
-            input.classList.add('is-invalid');
-            valid = false;
-        } else {
-            input.classList.remove('is-invalid');
-        }
-    });
+   document.getElementById('editForm').action = `/yatira/suppliers/${id}`;
 
-    if (!valid) {
-        alert('Please fill all required fields');
-        return;
-    }
+    document.getElementById('edit_id').value = id;
+    document.getElementById('edit_name').value = btn.dataset.name;
+    document.getElementById('edit_business_type').value = btn.dataset.business_type;
+    document.getElementById('edit_tin').value = btn.dataset.tin;
+    document.getElementById('edit_address').value = btn.dataset.address;
+    document.getElementById('edit_products').value = btn.dataset.products;
+    document.getElementById('edit_tax_type').value = btn.dataset.tax_type;
+    document.getElementById('edit_lead_time').value = btn.dataset.lead_time;
+    document.getElementById('edit_credit_term').value = btn.dataset.credit_term;
+    document.getElementById('edit_limit_advances').value = btn.dataset.limit_advances;
+    document.getElementById('edit_contact_person').value = btn.dataset.contact_person;
+    document.getElementById('edit_telephone').value = btn.dataset.telephone;
+    document.getElementById('edit_mobile').value = btn.dataset.mobile;
+    document.getElementById('edit_email').value = btn.dataset.email;
+    document.getElementById('edit_status').value = btn.dataset.status;
 
-    let btn = document.getElementById('saveBtn');
-    btn.disabled = true;
-    btn.innerText = "Saving...";
+    new bootstrap.Modal(document.getElementById('editSupplierModal')).show();
+}
+</script>
 
-    fetch("{{ route('suppliers.store') }}", {
-        method: "POST",
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('input[name=_token]').value
-        },
-        body: formData
-    })
-    .then(res => res.json())
-    .then(res => {
 
-        if (res.success) {
-
-            let d = res.data;
-
-            let row = `
-            <tr>
-                <td><strong>${d.name}</strong></td>
-                <td>${d.contact_person ?? ''}</td>
-                <td>${d.business_type ?? ''}</td>
-                <td>${d.products ?? ''}</td>
-
-                <td>
-                    <span class="badge bg-primary">
-                        ${d.credit_term ?? ''} days
-                    </span>
-                </td>
-
-                <td>${d.created_at ?? ''}</td>
-
-                <td>
-                    <span class="badge bg-info">
-                        ${d.added_by_name ?? 'N/A'}
-                    </span>
-                </td>
-
-                <td>
-                    <button class="btn btn-light btn-sm">Edit</button>
-                </td>
-            </tr>
-            `;
-
-            document.querySelector("tbody").insertAdjacentHTML('afterbegin', row);
-
-            form.reset();
-
-            let modal = bootstrap.Modal.getInstance(document.getElementById('addSupplierModal'));
-            modal.hide();
-
-            let toast = new bootstrap.Toast(document.getElementById('liveToast'));
-            toast.show();
-
-        } else {
-            alert('Error saving');
-        }
-
-        btn.disabled = false;
-        btn.innerText = "Save Supplier";
-    })
-    .catch(err => {
-        console.log(err);
-        alert('Server error');
-
-        btn.disabled = false;
-        btn.innerText = "Save Supplier";
-    });
-});
-
-document.querySelectorAll('.editBtn').forEach(btn => {
-    btn.addEventListener('click', function() {
-
-        document.getElementById('edit_id').value = this.dataset.id;
-        document.getElementById('edit_name').value = this.dataset.name;
-        document.getElementById('edit_business_type').value = this.dataset.business_type;
-        document.getElementById('edit_tin').value = this.dataset.tin;
-        document.getElementById('edit_address').value = this.dataset.address;
-        document.getElementById('edit_products').value = this.dataset.products;
-        document.getElementById('edit_tax_type').value = this.dataset.tax_type;
-        document.getElementById('edit_lead_time').value = this.dataset.lead_time;
-        document.getElementById('edit_credit_term').value = this.dataset.credit_term;
-        document.getElementById('edit_limit_advances').value = this.dataset.limit_advances;
-        document.getElementById('edit_contact_person').value = this.dataset.contact_person;
-        document.getElementById('edit_telephone').value = this.dataset.telephone;
-        document.getElementById('edit_mobile').value = this.dataset.mobile;
-        document.getElementById('edit_email').value = this.dataset.email;
-        document.getElementById('edit_status').value = this.dataset.status;
-
-        new bootstrap.Modal(document.getElementById('editSupplierModal')).show();
-    });
-});
-
-document.getElementById('editSupplierForm').addEventListener('submit', function(e){
-    e.preventDefault();
-
-    let id = document.getElementById('edit_id').value;
-    let formData = new FormData(this);
-
-    fetch(`/yatira/suppliers/${id}`, {
-        method: 'POST', // Laravel PUT workaround
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('input[name=_token]').value,
-            'X-HTTP-Method-Override': 'PUT'
-        },
-        body: formData
-    })
-    .then(res => res.json())
-    .then(res => {
-
-        if(res.success){
-
-            location.reload(); // simple refresh (safe)
-
-        } else {
-            alert('Update failed');
-        }
-
-    })
-    .catch(err => {
-        console.log(err);
-        alert('Server error');
-    });
-});
 </script>
 
 @endsection

@@ -40,10 +40,7 @@ class SupplierController extends Controller
 
         $supplier = Supplier::create($data);
 
-        return response()->json([
-    'success' => true,
-    'data' => $supplier
-]);
+        return redirect()->back()->with('success', 'Supplier added successfully!');
     }
 
     /**
@@ -57,10 +54,7 @@ class SupplierController extends Controller
 
     $supplier->load('user');
 
-    return response()->json([
-        'success' => true,
-        'data' => $supplier
-    ]);
+    return redirect()->back()->with('success', 'Supplier updated!');
 }
 
     /**
