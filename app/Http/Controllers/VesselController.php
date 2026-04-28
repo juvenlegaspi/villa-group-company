@@ -19,7 +19,7 @@ class VesselController extends Controller
             !($user->is_admin || $user->role === 'manager'),
             fn ($query) => $query->where('captain_id', $user->id)
         )
-        ->latest()
+        ->orderBy('id', 'asc')
         ->paginate(10);
 
         $captains = $this->getCaptains();
