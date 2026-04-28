@@ -33,7 +33,7 @@ class DashboardController extends Controller
     // 🔥 dynamic routing based sa division name
     switch (strtolower($div->name)) {
 
-        case 'shipping lines':
+        case 'villa shipping lines':
             $metrics = $this->buildShippingMetrics();
             return view('dashboard.vsli', $metrics);
 

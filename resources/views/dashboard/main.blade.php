@@ -8,14 +8,14 @@
     @php
     $colors = [
         'yatira' => 'blue',
-        'shipping lines' => 'purple',
+        'villa shipping lines' => 'purple',
         'jmv' => 'orange',
         'corporate' => 'green'
     ];
 
     $icons = [
         'yatira' => '🏗️',
-        'shipping lines' => '🚢',
+        'villa shipping lines' => '🚢',
         'jmv' => '⛏️',
         'corporate' => '🏢'
     ];
