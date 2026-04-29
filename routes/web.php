@@ -15,6 +15,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\InventoryController;
 
 Route::redirect('/', '/login');
 
@@ -143,5 +144,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/yatira/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
         Route::post('/yatira/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
         Route::put('/yatira/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+        Route::get('/supplier/report', [DashboardController::class, 'exportSupplierReport'])
+            ->name('supplier.report');
+    });
+    Route::prefix('jmv')->group(function () {
+        Route::get('/inventory', [InventoryController::class, 'index'])
+            ->name('jmv.inventory.index');
+        Route::post('/jmv/inventory/store', [InventoryController::class, 'store'])
+            ->name('jmv.inventory.store');
     });
 });

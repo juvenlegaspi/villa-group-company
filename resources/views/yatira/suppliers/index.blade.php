@@ -19,6 +19,51 @@
     <!-- TABLE -->
     <div class="card">
         <div class="card-body">
+          <form method="GET" action="{{ route('suppliers.index') }}" 
+      style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:20px; background:#f8f9fa; padding:15px; border-radius:10px;">
+
+    <!-- 🔍 Search Input -->
+    <div>
+        <label style="font-size:12px; color:#555;">Search</label><br>
+        <input 
+            type="text" 
+            name="search" 
+            placeholder="Supplier, product, or user..." 
+            value="{{ request('search') }}"
+            style="padding:8px 10px; width:250px; border:1px solid #ccc; border-radius:5px;"
+        >
+    </div>
+
+    <!-- 📅 Date -->
+    <div>
+        <label style="font-size:12px; color:#555;">Date</label><br>
+        <input 
+            type="date" 
+            name="date" 
+            value="{{ request('date') }}"
+            style="padding:8px 10px; border:1px solid #ccc; border-radius:5px;"
+        >
+    </div>
+
+    <!-- 🔎 Search Button -->
+    <div style="margin-top:18px;">
+        <button type="submit" 
+            style="background:#0d6efd; color:white; padding:8px 15px; border:none; border-radius:5px;">
+            🔍 Search
+        </button>
+    </div>
+
+    <!-- 🔄 Reset Button -->
+    <div style="margin-top:18px;">
+        <a href="{{ route('suppliers.index') }}">
+            <button type="button" 
+                style="background:#6c757d; color:white; padding:8px 15px; border:none; border-radius:5px;">
+                Reset
+            </button>
+        </a>
+    </div>
+
+</form>
             <table class="table">
                 <thead>
                     <tr>

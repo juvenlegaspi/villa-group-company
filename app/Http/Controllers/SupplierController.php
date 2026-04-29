@@ -11,18 +11,34 @@ class SupplierController extends Controller
     /**
      * Display list
      */
-    public function index()
+    public function index(Request $request)
     {
-        $suppliers = Supplier::with('user:id,name,lastname')
-            ->latest()
-            ->paginate(10);
+        $search = $request->search;
+        $date = $request->date;
 
-        // add full name (added_by)
+        $suppliers = Supplier::with('user:id,name,lastname')
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('products', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($u) use ($search) {
+                        $u->where('name', 'like', "%{$search}%")
+                            ->orWhere('lastname', 'like', "%{$search}%");
+                    });
+                });
+            })
+            ->when($date, function ($query) use ($date) {
+                $query->whereDate('created_at', $date);
+            })
+            ->orderBy('name', 'asc')
+            ->paginate(10)
+            ->withQueryString();
+
+        // add full name
         $suppliers->getCollection()->transform(function ($supplier) {
             $supplier->added_by_name = $supplier->user
                 ? $supplier->user->name . ' ' . $supplier->user->lastname
                 : 'N/A';
-
             return $supplier;
         });
 

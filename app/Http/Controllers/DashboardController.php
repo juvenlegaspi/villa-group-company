@@ -9,6 +9,8 @@ use App\Models\VoyageLog;
 use App\Models\VoyageLogHeader;
 use App\Models\Department;
 use App\Models\Division;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Supplier;
 
 class DashboardController extends Controller
 {
@@ -38,7 +40,8 @@ class DashboardController extends Controller
             return view('dashboard.vsli', $metrics);
 
         case 'yatira':
-            return view('dashboard.yatira', ['division' => $div]);
+            $metrics = $this->buildSupplierMetrics();
+            return view('dashboard.yatira', compact('division', 'metrics'));
 
         case 'jmv':
             return view('dashboard.jmv', ['division' => $div]);
@@ -63,5 +66,40 @@ class DashboardController extends Controller
             'expiredCertificates' => VesselCertificate::expired()->count(),
             'expiringCertificates' => VesselCertificate::expiringWithinDays()->count(),
         ];
+    }
+    protected function buildSupplierMetrics(): array
+    {
+        $daily = \App\Models\Supplier::selectRaw('DATE(created_at) as date, COUNT(*) as total')
+            ->groupBy('date')
+            ->orderBy('date', 'asc')
+            ->pluck('total', 'date');
+
+        return [
+            'totalSuppliers' => \App\Models\Supplier::count(),
+            'todaySuppliers' => \App\Models\Supplier::whereDate('created_at', now())->count(),
+            'thisMonthSuppliers' => \App\Models\Supplier::whereMonth('created_at', now()->month)->count(),
+            'topProducts' => \App\Models\Supplier::select('products')
+                                ->groupBy('products')
+                                ->orderByRaw('COUNT(*) DESC')
+                                ->limit(5)
+                                ->pluck('products'),
+
+            // 📊 chart data
+            'chartLabels' => $daily->keys(),
+            'chartData' => $daily->values(),
+        ];
+    }
+    public function exportSupplierReport()
+    {
+        $metrics = $this->buildSupplierMetrics();
+
+        $suppliers = Supplier::with('user')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        $pdf = Pdf::loadView('reports.supplier', compact('metrics', 'suppliers'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->download('supplier_report.pdf');
     }
 }

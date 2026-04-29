@@ -263,6 +263,7 @@
                         $divName = strtolower($div->name);
                         $isShipping = str_contains($divName, 'shipping');
                         $isYatira = str_contains($divName, 'yatira');
+                        $isJmv = str_contains($divName, 'jmv');
                     @endphp
 
                     @if($isAllowed)
@@ -299,9 +300,21 @@
                             </div>
 
                             <div id="menu{{ $div->id }}" class="sidebar-dropdown {{ request()->is('yatira/*') ? 'show' : '' }}">
-                                <a href="{{ route('suppliers.index') }}">
+                                <a href="{{ route('suppliers.index') }}" class="{{ request()->is('yatira/suppliers') ? 'active' : '' }}">
                                     <i class="bi bi-truck"></i>
                                     <span>Suppliers</span>
+                                </a>
+                            </div>
+                        @elseif($isJmv)
+                            <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $div->id }}')">
+                                <span>{{ $div->name }}</span>
+                                <i class="bi bi-chevron-down"></i>
+                            </div>
+                            <div id="menu{{ $div->id }}" 
+                                class="sidebar-dropdown {{ request()->is('jmv/*') ? 'show' : '' }}">
+                                <a href="{{ route('jmv.inventory.index') }}" class="{{ request()->is('jmv/inventory') ? 'active' : '' }}">
+                                    <i class="bi bi-box-seam"></i>
+                                    <span>Inventory Management</span>
                                 </a>
                             </div>
                         @else
