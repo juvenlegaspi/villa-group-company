@@ -52,13 +52,7 @@
                     <!-- Port -->
                     <div class="col-md-6">
                         <label class="form-label">Port Location</label>
-                        <select name="port_location" class="form-select">
-                            <option value="">Select Port</option>
-                            <option value="CEBU">Cebu</option>
-                            <option value="MANILA">Manila</option>
-                            <option value="DAVAO">Davao</option>
-                            <option value="ILOILO">Iloilo</option>
-                        </select>
+                        <input type="text" name="port_location" class="form-control" placeholder="Enter port location (e.g. Cebu, Manila)">
                         @error('port_location')
                             <small class="text-danger">{{ $message }}</small>
                         @enderror

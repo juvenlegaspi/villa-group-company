@@ -82,8 +82,11 @@ class VesselController extends Controller
         };
 
         $voyages = $query->paginate(10)->withQueryString();
+        $hasOpenVoyage = VoyageLogHeader::where('vessel_id', $id)
+            ->where('status', 'OPEN')
+            ->exists();
 
-        return view('shipping.vessels.show', compact('vessel', 'voyages'));
+        return view('shipping.vessels.show', compact('vessel', 'voyages', 'hasOpenVoyage'));
     }
 
     protected function getCaptains()

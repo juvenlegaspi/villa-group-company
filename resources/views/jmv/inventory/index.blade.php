@@ -56,13 +56,25 @@
                 </thead>
                 <tbody>
                     @forelse($items as $index => $item)
-                    <tr>
+                    <tr class=" @if($item->stock_on_hand <= $item->minimum_quantity) table-danger @elseif($item->stock_on_hand > $item->maximum_quantity) table-warning @endif">
                         <td>{{ $items->firstItem() + $index }}</td>
                         <td>{{ $item->item_name }}</td>
                         <td>{{ $item->unit }}</td>
                         <td>{{ $item->maximum_quantity }}</td>
                         <td>{{ $item->minimum_quantity }}</td>
-                        <td>{{ $item->stock_on_hand }}</td>
+                        <td>
+                            @if($item->stock_on_hand <= $item->minimum_quantity)
+                                <span style="color:red; font-weight:bold;">
+                                    ⚠ {{ $item->stock_on_hand }}
+                                </span>
+                            @elseif($item->stock_on_hand > $item->maximum_quantity)
+                                <span style="color:orange; font-weight:bold;">
+                                    ▲ {{ $item->stock_on_hand }}
+                                </span>
+                            @else
+                                {{ $item->stock_on_hand }}
+                            @endif
+                        </td>
                         <td>
                             {{ $item->user 
                                 ? $item->user->name . ' ' . $item->user->lastname 

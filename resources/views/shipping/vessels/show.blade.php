@@ -77,9 +77,11 @@
 
                 <div class="mt-3 mt-md-0">
                     <a href="{{ route('vessels.index') }}" class="btn btn-light border me-2">Back</a>
-                    <a href="{{ url('/shipping/vessels/' . $vessel->id . '/logs/create') }}" class="btn btn-primary shadow-sm">
-                        Add Voyage
-                    </a>
+                    @if(!$hasOpenVoyage)
+                        <a href="{{ url('/shipping/vessels/' . $vessel->id . '/logs/create') }}" class="btn btn-primary shadow-sm">
+                            Add Voyage
+                        </a>
+                    @endif
                 </div>
             </div>
         </div>

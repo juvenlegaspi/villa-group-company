@@ -118,7 +118,11 @@
                             <div class="text-muted mt-2">
                                 Start: {{ optional($detail->date_time_started)->format('M d, Y h:i A') }}
                             </div>
-
+                            @if($detail->pause_at)
+                            <div class="text-muted mt-2">
+                                Pause time: {{ optional($detail->pause_at)->format('M d, Y h:i A') }}
+                            </div>
+                            @endif
                             @if($detail->date_time_ended)
                                 <div class="text-muted">
                                     End: {{ optional($detail->date_time_ended)->format('M d, Y h:i A') }}

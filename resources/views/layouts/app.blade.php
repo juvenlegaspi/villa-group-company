@@ -316,6 +316,17 @@
                                     <i class="bi bi-box-seam"></i>
                                     <span>Inventory Management</span>
                                 </a>
+                                <!-- Stock In -->
+                                <a href="{{ route('jmv.stockin.index') }}" class="{{ request()->is('jmv/stock-in') ? 'active' : '' }}">
+                                    <i class="bi bi-arrow-down-circle"></i>
+                                    <span>Stock In</span>
+                                </a>
+
+                                <!-- Stock Out -->
+                                <a href="{{ route('jmv.stockout.index') }}" class="{{ request()->is('jmv/stock-out') ? 'active' : '' }}">
+                                    <i class="bi bi-arrow-up-circle"></i>
+                                    <span>Stock Out</span>
+                                </a>
                             </div>
                         @else
                             <a href="{{ url('/departments/' . $div->id) }}">

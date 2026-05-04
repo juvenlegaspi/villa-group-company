@@ -152,5 +152,12 @@ Route::middleware('auth')->group(function () {
             ->name('jmv.inventory.index');
         Route::post('/jmv/inventory/store', [InventoryController::class, 'store'])
             ->name('jmv.inventory.store');
-    });
+        Route::get('/stock-in', function () {
+            return view('jmv.stockin.index');
+        })->name('jmv.stockin.index');
+
+        Route::get('/stock-out', function () {
+            return view('jmv.stockout.index');
+            })->name('jmv.stockout.index');
+        });
 });
