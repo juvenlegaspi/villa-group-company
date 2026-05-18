@@ -21,7 +21,7 @@ class Supplier extends Model
         'mobile',
         'email',
         'status',
-        'added_by'
+        'added_by',
     ];
     public function user()
     {

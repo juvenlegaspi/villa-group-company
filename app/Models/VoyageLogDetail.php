@@ -11,28 +11,32 @@ class VoyageLogDetail extends Model
 
     protected $fillable = [
         'voyage_id',
-        'voyage_status',
-        'activity',
-        'remarks',
-        'date_time_started',
-        'date_time_ended',
-        'total_hours',
-        'date_complete',
+        'vessel_id',
         'status',
-        'is_paused',
-        'pause_at',
-        'total_pause',
+        'total_hours',
+        'remarks',
+        'date_complete',
+        'main_status',
     ];
 
     protected $casts = [
-        'date_time_started' => 'datetime',
-        'date_time_ended' => 'datetime',
-        'pause_at' => 'datetime',
-        'is_paused' => 'boolean',
+        'date_complete' => 'date',
     ];
 
     public function header()
     {
         return $this->belongsTo(VoyageLogHeader::class, 'voyage_id', 'voyage_id');
     }
+    public function vessel()
+    {
+        return $this->belongsTo(Vessel::class, 'vessel_id');
+    }
+    public function activities()
+    {
+        return $this->hasMany(VoyageActivity::class, 'voyage_detail_id', 'dtl_id');
+    }
+    public function statusRelation()
+{
+    return $this->belongsTo(ActivityStatusVoyage::class, 'status', 'id');
+}
 }

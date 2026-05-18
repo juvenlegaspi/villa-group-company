@@ -39,12 +39,12 @@ class VesselCertificateController extends Controller
             'issue_date' => 'required|date',
             'expiry_date' => 'required|date|after_or_equal:issue_date',
             'remarks' => 'nullable',
-            'document' => 'nullable|file|max:5120',
+            'document' => 'nullable|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
         ]);
 
         if ($request->hasFile('document')) {
             $file = $request->file('document');
-            $filename = time() . '_' . $file->getClientOriginalName();
+            $filename = time() . '.' . $file->getClientOriginalExtension();
             $file->move(public_path('uploads/certificates'), $filename);
             $data['document'] = $filename;
         }
@@ -98,7 +98,7 @@ class VesselCertificateController extends Controller
             'issue_date' => 'required|date',
             'expiry_date' => 'required|date|after_or_equal:issue_date',
             'remarks' => 'nullable',
-            'document' => 'nullable|file|max:5120',
+            'document' => 'nullable|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
         ]);
 
         if ($request->hasFile('document')) {
@@ -107,7 +107,7 @@ class VesselCertificateController extends Controller
             }
 
             $file = $request->file('document');
-            $filename = time() . '_' . $file->getClientOriginalName();
+            $filename = time() . '.' . $file->getClientOriginalExtension();
             $file->move(public_path('uploads/certificates'), $filename);
             $data['document'] = $filename;
         }

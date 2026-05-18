@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\FuelRobMonitoring;
 
 class VoyageLogHeader extends Model
 {
@@ -13,6 +14,7 @@ class VoyageLogHeader extends Model
         'date_created',
         'cargo_type',
         'cargo_volume',
+        'port_id',
         'port_location',
         'voyage_no',
         'crew_on_board',
@@ -22,6 +24,7 @@ class VoyageLogHeader extends Model
         'vessel_id',
         'arrival_date',
         'date_completed',
+        'total_hours_voyage',
     ];
 
     protected $casts = [
@@ -47,5 +50,9 @@ class VoyageLogHeader extends Model
     public function getVoyageCodeAttribute()
     {
         return 'VL-' . str_pad($this->voyage_id, 5, '0', STR_PAD_LEFT);
+    }
+    public function fuelMonitorings()
+    {
+        return $this->hasMany(FuelRobMonitoring::class, 'voyage_id', 'voyage_id');
     }
 }

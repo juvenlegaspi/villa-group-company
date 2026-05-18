@@ -36,7 +36,29 @@
                     <!-- Volume -->
                     <div class="col-md-6">
                         <label class="form-label">Cargo Volume</label>
-                        <input type="text" name="cargo_volume" class="form-control" placeholder="Enter volume">
+                        <div class="input-group">
+
+                        <input type="text"
+                            name="cargo_volume"
+                            class="form-control"
+                            placeholder="Enter volume">
+
+                        <select name="cargo_unit"
+                                class="form-select"
+                                style="max-width:120px;"
+                                required>
+                            <option value="">-- SELECT UNIT --</option>
+                            <option value="Crates">Crates</option>
+                            <option value="MT">MT</option>
+                            <option value="LB">LB</option>
+                            <option value="CBM">CBM</option>
+                            <option value="L">L</option>
+                            <option value="BBL">BBL</option>
+                            <option value="Bushel">Bushel</option>
+                            <option value="Bag/Sacks">Bag/Sacks</option>
+                            <option value="Piece/Unit">Piece/Unit</option>
+                        </select>
+                    </div>
                         @error('cargo_volume')
                             <small class="text-danger">{{ $message }}</small>
                         @enderror
@@ -52,8 +74,15 @@
                     <!-- Port -->
                     <div class="col-md-6">
                         <label class="form-label">Port Location</label>
-                        <input type="text" name="port_location" class="form-control" placeholder="Enter port location (e.g. Cebu, Manila)">
-                        @error('port_location')
+                        <select name="port_id" class="form-control" required>
+                            <option value="">-- SELECT PORT --</option>
+                            @foreach($ports as $port)
+                                <option value="{{ $port->id }}">
+                                    {{ $port->port_name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('port_id')
                             <small class="text-danger">{{ $message }}</small>
                         @enderror
                     </div>
@@ -67,15 +96,31 @@
                     </div>
                     <!-- Fuel -->
                     <div class="col-md-6">
-                        <label class="form-label">Fuel ROB</label>
+                        <label class="form-label">Biginning Fuel ROB</label>
                         <div class="input-group">
-                            <input type="number" name="fuel_rob" class="form-control"
-                                   placeholder="Enter fuel">
+                            <input type="number"
+                                name="fuel_rob"
+                                class="form-control"
+                                value="{{ $lastVoyage ? preg_replace('/[^0-9.]/', '', $lastVoyage->fuel_rob) : '' }}"
+                                placeholder="Enter fuel"
+                                {{ $lastVoyage ? 'readonly' : '' }}>
                             <span class="input-group-text">Liters</span>
                             @error('fuel_rob')
                                 <small class="text-danger">{{ $message }}</small>
                             @enderror
                         </div>
+                    </div>
+                    <!-- ETA NEXT PORT -->
+                    <div class="col-md-6">
+                        <label class="form-label">ETA Next Port</label>
+
+                        <input type="datetime-local"
+                            name="arrival_date"
+                            class="form-control">
+
+                        @error('arrival_date')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
                     </div>
                 </div>
                 <!-- BUTTONS -->

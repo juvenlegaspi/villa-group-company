@@ -136,7 +136,7 @@
                             <td>
                                 @if($certificate->document)
                                     <a
-                                        href="{{ asset('uploads/certificates/' . $certificate->document) }}"
+                                        href="{{ url('uploads/certificates/' . $certificate->document) }}"
                                         target="_blank"
                                         class="btn btn-sm btn-outline-primary"
                                     >

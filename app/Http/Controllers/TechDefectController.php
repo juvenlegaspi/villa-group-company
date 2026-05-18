@@ -8,6 +8,7 @@ use App\Models\Vessel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use App\Models\User;
 
 class TechDefectController extends Controller
 {
@@ -105,11 +106,18 @@ class TechDefectController extends Controller
     }
 
     public function create()
-    {
-        $vessels = $this->getAccessibleVessels(auth()->user());
+{
+    $vessels = $this->getAccessibleVessels(auth()->user());
 
-        return view('shipping.tech_defects.create', compact('vessels'));
-    }
+    $shippingUsers = User::where('department_id', 6)
+        ->orderBy('name')
+        ->get();
+
+    return view(
+        'shipping.tech_defects.create',
+        compact('vessels', 'shippingUsers')
+    );
+}
 
     public function store(Request $request)
     {
@@ -272,17 +280,17 @@ class TechDefectController extends Controller
             return Vessel::orderBy('vessel_name')->get();
         }
 
-        if ($user->role === 'manager' && $user->department_id == 1) {
+        if ($user->role === 'manager' && $user->division_id == 2) {
             return Vessel::query()
                 ->when(
-                    $this->hasColumn('vessels', 'department_id'),
-                    fn ($query) => $query->where('department_id', $user->department_id)
+                    $this->hasColumn('vessels', 'division_id'),
+                    fn ($query) => $query->where('division_id', $user->division_id)
                 )
                 ->orderBy('vessel_name')
                 ->get();
         }
 
-        if ($user->role === 'captain' && $user->department_id == 1) {
+        if ($user->role === 'captain' && $user->division_id == 2) {
             return Vessel::where('captain_id', $user->id)
                 ->orderBy('vessel_name')
                 ->get();

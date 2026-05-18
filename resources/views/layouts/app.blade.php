@@ -276,7 +276,7 @@
                             <div id="menu{{ $div->id }}" class="sidebar-dropdown {{ request()->is('shipping/*') ? 'show' : '' }}">
                                 <a href="{{ route('vessels.index') }}" class="{{ request()->is('shipping/vessels*') ? 'active-menu' : '' }}">
                                     <i class="bi bi-ship"></i>
-                                    <span>Vessels We Owned</span>
+                                    <span>Vessels Monitoring</span>
                                 </a>
                                 <a href="{{ route('tech-defects.index') }}" class="{{ request()->is('shipping/tech-defects*') ? 'active-menu' : '' }}">
                                     <i class="bi bi-tools"></i>

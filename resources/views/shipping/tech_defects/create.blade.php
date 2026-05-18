@@ -51,19 +51,38 @@
                     <!-- Reported -->
                     <div class="col-md-4">
                         <label class="form-label">Reported By</label>
-                        <input type="text" name="reported_by" class="form-control text-uppercase">
+                        <select name="reported_by" class="form-control">
+                            <option value="">-- Select Personnel --</option>
+
+                            @foreach($shippingUsers as $user)
+                                <option value="{{ strtoupper($user->name) }}">
+                                    {{ strtoupper($user->name) }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
 
                     <!-- System -->
                     <div class="col-md-4">
                         <label class="form-label">System Affected</label>
-                        <input type="text" name="system_affected" class="form-control text-uppercase">
+                        <select name="system_affected" class="form-select">
+                            <option value="">-- Select System --</option>
+                            <option value="Deck">Deck</option>
+                            <option value="Main Engine">Main Engine</option>
+                            <option value="Auxiliary Engine">Auxiliary Engine</option>
+                            <option value="Crane">Crane</option>
+                            <option value="Safety Equipment">Safety Equipment</option>
+                            <option value="Cargo Handling">Cargo Handling</option>
+                            <option value="Accommodation">Accommodation</option>
+                            <option value="Other">Other</option>
+                        </select>
                     </div>
 
                     <!-- Severity -->
                     <div class="col-md-4">
                         <label class="form-label">Severity Level</label>
                         <select name="severity_level" class="form-select">
+                            <option value="">-- Select Severity --</option>
                             <option>Minor</option>
                             <option>Major</option>
                             <option>Critical</option>
@@ -74,6 +93,7 @@
                     <div class="col-md-4">
                         <label class="form-label">Operational Impact</label>
                         <select name="operational_impact" class="form-select">
+                            <option value="">-- Select Impact --</option>
                             <option>None</option>
                             <option>Limited</option>
                             <option>Stopped</option>
@@ -84,7 +104,6 @@
                     <div class="col-md-4">
                         <label class="form-label">Temporary Repair Done?</label>
                         <select name="temporary_repair" class="form-select">
-                            <option value="">-- Select --</option>
                             <option>Yes</option>
                             <option>No</option>
                         </select>

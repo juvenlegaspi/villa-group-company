@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\FuelRobMonitoringController;
 
 Route::redirect('/', '/login');
 
@@ -89,9 +90,9 @@ Route::middleware('auth')->group(function () {
             Route::get('/create/{vessel}', [VoyageLogController::class, 'create']);
             Route::post('/store', [VoyageLogController::class, 'store']);
             Route::get('/dashboard', [VoyageLogController::class, 'dashboard'])->name('voyage-logs.dashboard');
-            Route::get('/{id}', [VoyageLogController::class, 'show']);
             Route::get('/{id}/pdf', [VoyageLogController::class, 'exportPdf']);
-            Route::post('/{id}/add-detail', [VoyageLogController::class, 'addDetail']);
+            Route::get('/{id}', [VoyageLogController::class, 'show']);
+            Route::post('/{id}/add-detail', [VoyageLogController::class, 'addDetail'])->name('voyage.addDetail');
             Route::post('/{id}/start', [VoyageLogController::class, 'startTrail']);
             Route::post('/{id}/pause', [VoyageLogController::class, 'pauseTrail']);
             Route::post('/{id}/resume', [VoyageLogController::class, 'resumeTrail']);
@@ -99,8 +100,12 @@ Route::middleware('auth')->group(function () {
             Route::post('/{detail}/end', [VoyageLogController::class, 'endTrail']);
             Route::post('/{detail}/complete', [VoyageLogController::class, 'completeTrail']);
             Route::post('/{detail}/update-trail', [VoyageLogController::class, 'updateTrail']);
-            Route::post('/{detailId}/update-trail', [VoyageLogController::class, 'updateTrail'])
-                ->name('voyage-logs.update-trail');
+            Route::post('/{detailId}/update-trail', [VoyageLogController::class, 'updateTrail'])->name('voyage-logs.update-trail');
+            Route::post('/{detail}/add-activity', [VoyageLogController::class, 'addActivity'])->name('voyage.addActivity');
+            Route::post('/voyage-logs/activity/{id}/end', [VoyageLogController::class, 'endActivity'])->name('voyage.activity.end');
+            Route::post('/voyage-logs/detail/{id}/complete', [VoyageLogController::class, 'completeStatus'])->name('voyage.status.complete');
+            Route::post('/voyage-logs/activity/{id}/update',[VoyageLogController::class, 'updateActivity'])->name('voyage.activity.update');
+            Route::post('/{detail}/update-status', [VoyageLogController::class, 'updateStatus'])->name('voyage.status.update');
         });
 
         Route::prefix('tech-defects')->group(function () {
@@ -160,4 +165,8 @@ Route::middleware('auth')->group(function () {
             return view('jmv.stockout.index');
             })->name('jmv.stockout.index');
         });
+        Route::post('/fuel-rob/store',[FuelRobMonitoringController::class, 'store'])->name('fuel.rob.store');
+        Route::post('/fuel-bunkering/store',[FuelRobMonitoringController::class, 'fuelBunkering'])->name('fuel.bunkering.store');
+        Route::get('/{id}/pdf', [VoyageLogController::class, 'exportPdf'])
+    ->name('voyage.pdf');
 });

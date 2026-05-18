@@ -57,7 +57,7 @@
 
                         <div class="col-md-3">
                             <div class="info-box">
-                                <small>Speed</small>
+                                <small>Average Speed</small>
                                 <div>{{ $vessel->service_speed }} knots</div>
                             </div>
                         </div>
@@ -124,18 +124,16 @@
             <table class="table align-middle mb-0 custom-table">
                 <thead>
                     <tr>
-                        <th>Voyage</th>
+                        <th>Voyage ID</th>
                         <th>Date Start</th>
                         <th>Date End</th>
                         <th>Port</th>
-                        <th>No.</th>
-                        <th>Cargo</th>
-                        <th>Crew</th>
+                        <th>Voyage No.</th>
                         <th>Activities</th>
+                        <th>Total Voyage Hours</th>
                         <th>Status</th>
                     </tr>
                 </thead>
-
                 <tbody>
                     @foreach($voyages as $voyage)
                         <tr onclick="window.location='{{ url('/shipping/voyage-logs/' . $voyage->voyage_id) }}'">
@@ -146,24 +144,26 @@
                             <td>{{ optional($voyage->date_completed)->format('M d, Y') ?? '-' }}</td>
                             <td>{{ $voyage->port_location }}</td>
                             <td>{{ $voyage->voyage_no }}</td>
-                            <td>{{ $voyage->cargo_type }}</td>
-                            <td>{{ $voyage->crew_on_board }}</td>
                             <td>
                                 <span class="badge bg-light text-dark border">{{ $voyage->details->count() }}</span>
                             </td>
                             <td>
-                                @if($voyage->status === 'OPEN')
-                                    <span class="badge bg-warning text-dark px-3 py-2">Active</span>
+                                @if($voyage->status == 'COMPLETED')
+                                    {{ number_format($voyage->total_hours_voyage, 2) }} hrs
                                 @else
-                                    <span class="badge bg-success px-3 py-2">Completed</span>
+                                    <span class="badge bg-warning text-dark">
+                                        ONGOING
+                                    </span>
                                 @endif
+                            </td>
+                            <td>
+                                {{ $voyage->status }}
                             </td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
-
         <div class="p-3">
             {{ $voyages->links() }}
         </div>

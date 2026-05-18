@@ -141,7 +141,7 @@
 
 <!-- ================= MODAL ================= -->
 <div class="modal fade" id="addSupplierModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg" style="max-height: 90vh;">
     <div class="modal-content">
 
       <div class="modal-header">
@@ -152,7 +152,7 @@
       <form method="POST" action="{{ route('suppliers.store') }}">
         @csrf
 
-        <div class="modal-body">
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
 
           <!-- SUPPLIER INFO -->
           <h6 class="border-bottom pb-2">Supplier Information</h6>
@@ -171,14 +171,14 @@
           <input type="text" name="address" class="form-control mb-2 required" placeholder="Address">
           <textarea name="products" class="form-control mb-2 required" placeholder="Products"></textarea>
 
-          <div class="row">
+          <!--<div class="row">
             <div class="col-md-6">
               <input type="text" name="tax_type" class="form-control mb-2 required" placeholder="Tax Type">
             </div>
             <div class="col-md-6">
               <input type="number" name="lead_time" class="form-control mb-2 required" placeholder="Lead Time">
             </div>
-          </div>
+          </div>-->
 
           <div class="row">
             <div class="col-md-6">
@@ -186,6 +186,11 @@
                 <option value="">Credit Term</option>
                 <option value="15">15 Days</option>
                 <option value="30">30 Days</option>
+                <option value="35">35 Days</option>
+                <option value="40">40 Days</option>
+                <option value="45">45 Days</option>
+                <option value="50">50 Days</option>
+                <option value="55">55 Days</option>
                 <option value="60">60 Days</option>
               </select>
             </div>
@@ -281,9 +286,14 @@
                         <div class="col-md-6">
                             <label>Credit Term</label>
                             <select id="edit_credit_term" name="credit_term" class="form-control mb-2">
-                                <option value="">Select</option>
+                               <option value="">Credit Term</option>
                                 <option value="15">15 Days</option>
                                 <option value="30">30 Days</option>
+                                <option value="35">35 Days</option>
+                                <option value="40">40 Days</option>
+                                <option value="45">45 Days</option>
+                                <option value="50">50 Days</option>
+                                <option value="55">55 Days</option>
                                 <option value="60">60 Days</option>
                             </select>
                         </div>
