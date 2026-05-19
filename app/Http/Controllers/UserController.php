@@ -15,6 +15,8 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
+        abort_unless(auth()->user()->isAdmin(), 403);
+
         $search = $request->search;
 
         $users = User::query()

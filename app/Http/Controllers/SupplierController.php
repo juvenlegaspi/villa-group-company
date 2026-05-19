@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Supplier;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class SupplierController extends Controller
@@ -13,6 +13,8 @@ class SupplierController extends Controller
      */
     public function index(Request $request)
     {
+        $this->authorizeSupplierAccess();
+
         $search = $request->search;
         $date = $request->date;
 
@@ -20,11 +22,11 @@ class SupplierController extends Controller
             ->when($search, function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('products', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($u) use ($search) {
-                        $u->where('name', 'like', "%{$search}%")
-                            ->orWhere('lastname', 'like', "%{$search}%");
-                    });
+                        ->orWhere('products', 'like', "%{$search}%")
+                        ->orWhereHas('user', function ($u) use ($search) {
+                            $u->where('name', 'like', "%{$search}%")
+                                ->orWhere('lastname', 'like', "%{$search}%");
+                        });
                 });
             })
             ->when($date, function ($query) use ($date) {
@@ -34,11 +36,11 @@ class SupplierController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        // add full name
         $suppliers->getCollection()->transform(function ($supplier) {
             $supplier->added_by_name = $supplier->user
-                ? $supplier->user->name . ' ' . $supplier->user->lastname
+                ? $supplier->user->name.' '.$supplier->user->lastname
                 : 'N/A';
+
             return $supplier;
         });
 
@@ -50,11 +52,12 @@ class SupplierController extends Controller
      */
     public function store(Request $request)
     {
-        $data = $this->validatedData($request);
+        $this->authorizeSupplierAccess();
 
+        $data = $this->validatedData($request);
         $data['added_by'] = Auth::id();
 
-        $supplier = Supplier::create($data);
+        Supplier::create($data);
 
         return redirect()->back()->with('success', 'Supplier added successfully!');
     }
@@ -63,18 +66,18 @@ class SupplierController extends Controller
      * Update supplier
      */
     public function update(Request $request, $id)
-{
-    $supplier = Supplier::findOrFail($id);
+    {
+        $this->authorizeSupplierAccess();
 
-    $supplier->update($this->validatedData($request));
+        $supplier = Supplier::findOrFail($id);
+        $supplier->update($this->validatedData($request));
+        $supplier->load('user');
 
-    $supplier->load('user');
-
-    return redirect()->back()->with('success', 'Supplier updated!');
-}
+        return redirect()->back()->with('success', 'Supplier updated!');
+    }
 
     /**
-     * ✅ REUSABLE VALIDATION
+     * Reusable validation
      */
     private function validatedData(Request $request)
     {
@@ -92,24 +95,40 @@ class SupplierController extends Controller
             'telephone' => 'nullable|string|max:50',
             'mobile' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:255',
-            'status' => 'required|boolean'
+            'status' => 'required|boolean',
         ]);
     }
 
     /**
-     * ✅ REUSABLE RESPONSE (DRY)
+     * Reusable response
      */
     private function responseWithUser($supplier)
     {
         $supplier->load('user');
 
         $supplier->added_by_name = $supplier->user
-            ? $supplier->user->name . ' ' . $supplier->user->lastname
+            ? $supplier->user->name.' '.$supplier->user->lastname
             : 'N/A';
 
         return response()->json([
             'success' => true,
-            'data' => $supplier
+            'data' => $supplier,
         ]);
+    }
+
+    private function authorizeSupplierAccess(): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin()) {
+            return;
+        }
+
+        $user->loadMissing('division');
+
+        abort_unless(
+            strcasecmp((string) $user->division?->name, 'yatira') === 0,
+            403
+        );
     }
 }

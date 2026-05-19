@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -16,16 +18,29 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
+        $throttleKey = Str::lower($credentials['username']).'|'.$request->ip();
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            return back()->withErrors([
+                'username' => 'Too many login attempts. Please try again in '.RateLimiter::availableIn($throttleKey).' seconds.',
+            ])->onlyInput('username');
+        }
+
         $user = User::where('username', $credentials['username'])->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            RateLimiter::hit($throttleKey, 60);
+
             return back()->with('error', 'Invalid username or password.');
         }
 
         if ((int) $user->status === 0) {
+            RateLimiter::clear($throttleKey);
+
             return back()->with('error', 'Your account is inactive. Please contact the administrator.');
         }
 
+        RateLimiter::clear($throttleKey);
         Auth::login($user);
         $request->session()->regenerate();
 
@@ -34,6 +49,15 @@ class AuthController extends Controller
         }
 
         return redirect('/dashboard');
+    }
+
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect('/login');
     }
 
     public function updatePassword(Request $request)

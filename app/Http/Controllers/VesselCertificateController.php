@@ -27,6 +27,7 @@ class VesselCertificateController extends Controller
     public function create($vessel)
     {
         $vessel = Vessel::findOrFail($vessel);
+        $this->authorizeVesselAccess($vessel);
 
         return view('vessel_certificates.create', compact('vessel'));
     }
@@ -41,6 +42,9 @@ class VesselCertificateController extends Controller
             'remarks' => 'nullable',
             'document' => 'nullable|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
         ]);
+
+        $vessel = Vessel::findOrFail($data['vessel_id']);
+        $this->authorizeVesselManagement($vessel);
 
         if ($request->hasFile('document')) {
             $file = $request->file('document');
@@ -58,6 +62,7 @@ class VesselCertificateController extends Controller
     public function show(Request $request, $id)
     {
         $vessel = Vessel::findOrFail($id);
+        $this->authorizeVesselAccess($vessel);
         $query = VesselCertificate::query()->where('vessel_id', $id);
 
         if ($request->filled('search')) {
@@ -85,6 +90,7 @@ class VesselCertificateController extends Controller
     public function edit($id)
     {
         $certificate = VesselCertificate::with('vessel')->findOrFail($id);
+        $this->authorizeVesselManagement($certificate->vessel);
 
         return view('vessel_certificates.edit', compact('certificate'));
     }
@@ -92,6 +98,7 @@ class VesselCertificateController extends Controller
     public function update(Request $request, $id)
     {
         $certificate = VesselCertificate::findOrFail($id);
+        $this->authorizeVesselManagement(Vessel::findOrFail($certificate->vessel_id));
 
         $data = $request->validate([
             'certificate_name' => 'required',
@@ -120,6 +127,8 @@ class VesselCertificateController extends Controller
 
     public function dashboard()
     {
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->role === 'manager', 403);
+
         $totalCertificates = VesselCertificate::count();
         $expiredCertificates = VesselCertificate::expired()->count();
         $expiringCertificates = VesselCertificate::expiringWithinDays()->count();
@@ -143,5 +152,27 @@ class VesselCertificateController extends Controller
             'expiredList',
             'expiringList'
         ));
+    }
+
+    protected function authorizeVesselAccess(Vessel $vessel): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->role === 'manager') {
+            return;
+        }
+
+        abort_unless($vessel->captain_id === $user->id, 403);
+    }
+
+    protected function authorizeVesselManagement(Vessel $vessel): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->role === 'manager') {
+            return;
+        }
+
+        abort_unless($vessel->captain_id === $user->id, 403);
     }
 }

@@ -139,6 +139,7 @@ class TechDefectController extends Controller
     public function edit($id)
     {
         $report = TechDefect::findOrFail($id);
+        $this->authorizeTechDefectAccess($report);
         $vessels = $this->getAccessibleVessels(auth()->user());
 
         return view('shipping.tech_defects.edit', compact('report', 'vessels'));
@@ -147,6 +148,7 @@ class TechDefectController extends Controller
     public function update(Request $request, $id)
     {
         $report = TechDefect::findOrFail($id);
+        $this->authorizeTechDefectAccess($report);
 
         return match ($request->action) {
             'start' => $this->startRepair($report),
@@ -160,7 +162,9 @@ class TechDefectController extends Controller
 
     public function destroy($id)
     {
-        TechDefect::findOrFail($id)->delete();
+        $report = TechDefect::findOrFail($id);
+        $this->authorizeTechDefectAccess($report);
+        $report->delete();
 
         return redirect()->route('tech-defects.index')
             ->with('success', 'Report deleted successfully.');
@@ -169,6 +173,7 @@ class TechDefectController extends Controller
     public function show($id)
     {
         $report = TechDefect::with(['vessel', 'supports'])->findOrFail($id);
+        $this->authorizeTechDefectAccess($report);
         $supports = $report->supports;
         $allSupportDone = $supports->every(fn ($support) => $support->status === 'Done');
 
@@ -310,6 +315,11 @@ class TechDefectController extends Controller
         if (! in_array($vesselId, $allowedVessels, true)) {
             abort(403, 'Unauthorized vessel.');
         }
+    }
+
+    protected function authorizeTechDefectAccess(TechDefect $report): void
+    {
+        $this->authorizeVesselSelection(auth()->user(), (int) $report->vessel_id);
     }
 
     protected function hasColumn(string $table, string $column): bool

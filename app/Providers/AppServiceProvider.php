@@ -2,11 +2,10 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
-use App\Models\Department;
+use App\Models\Division;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
-use App\Models\Division;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,19 +22,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        view()->composer('*', function ($view) {
+        Paginator::useBootstrap();
+
+        view()->composer('layouts.app', function ($view) {
+            $divisions = collect();
+
             if (Auth::check()) {
                 $user = Auth::user();
-                if ($user->is_admin == 1) {
-                    // ADMIN → makita tanan
-                    $divisions = Division::all();
-                } else {
-                    // USER → iya ra division
-                    $divisions = Division::where('id', $user->division_id)->get();
-                }
-                $view->with('allDivisions', $divisions);
+
+                $divisions = $user->isAdmin()
+                    ? Division::orderBy('name')->get()
+                    : Division::whereKey($user->division_id)->get();
             }
-            Paginator::useBootstrap();
+
+            $view->with('allDivisions', $divisions);
         });
     }
 }

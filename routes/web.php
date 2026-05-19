@@ -4,6 +4,9 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CertificateNotificationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DryDockingHeaderController;
+use App\Http\Controllers\FuelRobMonitoringController;
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TechDefectController;
 use App\Http\Controllers\ThirdPartyController;
 use App\Http\Controllers\UserController;
@@ -12,21 +15,13 @@ use App\Http\Controllers\VesselController;
 use App\Http\Controllers\VoyageLogController;
 use App\Models\Department;
 use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\InventoryController;
-use App\Http\Controllers\FuelRobMonitoringController;
 
 Route::redirect('/', '/login');
 
 Route::view('/login', 'login')->name('login');
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', function () {
-    Auth::logout();
-
-    return redirect('/login');
-})->name('logout');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::middleware('auth')->group(function () {
     Route::view('/change-password', 'auth.change-password');
@@ -90,7 +85,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/create/{vessel}', [VoyageLogController::class, 'create']);
             Route::post('/store', [VoyageLogController::class, 'store']);
             Route::get('/dashboard', [VoyageLogController::class, 'dashboard'])->name('voyage-logs.dashboard');
-            Route::get('/{id}/pdf', [VoyageLogController::class, 'exportPdf']);
+            Route::get('/{id}/pdf', [VoyageLogController::class, 'exportPdf'])->name('voyage.pdf');
             Route::get('/{id}', [VoyageLogController::class, 'show']);
             Route::post('/{id}/add-detail', [VoyageLogController::class, 'addDetail'])->name('voyage.addDetail');
             Route::post('/{id}/start', [VoyageLogController::class, 'startTrail']);
@@ -102,9 +97,9 @@ Route::middleware('auth')->group(function () {
             Route::post('/{detail}/update-trail', [VoyageLogController::class, 'updateTrail']);
             Route::post('/{detailId}/update-trail', [VoyageLogController::class, 'updateTrail'])->name('voyage-logs.update-trail');
             Route::post('/{detail}/add-activity', [VoyageLogController::class, 'addActivity'])->name('voyage.addActivity');
-            Route::post('/voyage-logs/activity/{id}/end', [VoyageLogController::class, 'endActivity'])->name('voyage.activity.end');
-            Route::post('/voyage-logs/detail/{id}/complete', [VoyageLogController::class, 'completeStatus'])->name('voyage.status.complete');
-            Route::post('/voyage-logs/activity/{id}/update',[VoyageLogController::class, 'updateActivity'])->name('voyage.activity.update');
+            Route::post('/activity/{id}/end', [VoyageLogController::class, 'endActivity'])->name('voyage.activity.end');
+            Route::post('/detail/{id}/complete', [VoyageLogController::class, 'completeStatus'])->name('voyage.status.complete');
+            Route::post('/activity/{id}/update', [VoyageLogController::class, 'updateActivity'])->name('voyage.activity.update');
             Route::post('/{detail}/update-status', [VoyageLogController::class, 'updateStatus'])->name('voyage.status.update');
         });
 
@@ -145,28 +140,32 @@ Route::middleware('auth')->group(function () {
         Route::get('/{id}/edit', [VesselCertificateController::class, 'edit'])->name('vessel-certificates.edit');
         Route::post('/{id}/update', [VesselCertificateController::class, 'update'])->name('vessel-certificates.update');
     });
-    Route::middleware('auth')->group(function () {
-        Route::get('/yatira/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
-        Route::post('/yatira/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
-        Route::put('/yatira/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
-        Route::get('/supplier/report', [DashboardController::class, 'exportSupplierReport'])
-            ->name('supplier.report');
+
+    Route::prefix('yatira')->group(function () {
+        Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+        Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
     });
+
+    Route::get('/supplier/report', [DashboardController::class, 'exportSupplierReport'])->name('supplier.report');
+
     Route::prefix('jmv')->group(function () {
-        Route::get('/inventory', [InventoryController::class, 'index'])
-            ->name('jmv.inventory.index');
-        Route::post('/jmv/inventory/store', [InventoryController::class, 'store'])
-            ->name('jmv.inventory.store');
+        Route::get('/inventory', [InventoryController::class, 'index'])->name('jmv.inventory.index');
+        Route::post('/inventory/store', [InventoryController::class, 'store'])->name('jmv.inventory.store');
         Route::get('/stock-in', function () {
             return view('jmv.stockin.index');
         })->name('jmv.stockin.index');
-
         Route::get('/stock-out', function () {
             return view('jmv.stockout.index');
-            })->name('jmv.stockout.index');
-        });
-        Route::post('/fuel-rob/store',[FuelRobMonitoringController::class, 'store'])->name('fuel.rob.store');
-        Route::post('/fuel-bunkering/store',[FuelRobMonitoringController::class, 'fuelBunkering'])->name('fuel.bunkering.store');
-        Route::get('/{id}/pdf', [VoyageLogController::class, 'exportPdf'])
-    ->name('voyage.pdf');
+        })->name('jmv.stockout.index');
+    });
+
+    Route::post('/fuel-rob/store', [FuelRobMonitoringController::class, 'store'])->name('fuel.rob.store');
+    Route::post('/fuel-bunkering/store', [FuelRobMonitoringController::class, 'fuelBunkering'])->name('fuel.bunkering.store');
+
+    // Legacy compatibility routes for older hardcoded URLs/forms.
+    Route::post('/shipping/voyage-logs/voyage-logs/activity/{id}/end', [VoyageLogController::class, 'endActivity']);
+    Route::post('/shipping/voyage-logs/voyage-logs/detail/{id}/complete', [VoyageLogController::class, 'completeStatus']);
+    Route::post('/shipping/voyage-logs/voyage-logs/activity/{id}/update', [VoyageLogController::class, 'updateActivity']);
+    Route::post('/jmv/jmv/inventory/store', [InventoryController::class, 'store']);
 });

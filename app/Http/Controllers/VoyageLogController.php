@@ -129,6 +129,11 @@ class VoyageLogController extends Controller
         $voyage = VoyageLogHeader::where('voyage_id', $detail->voyage_id)
             ->first();
 
+        $lastEndedActivity = VoyageActivity::where('voyage_detail_id', $detail->dtl_id)
+            ->whereNotNull('end_date_time')
+            ->latest('end_date_time')
+            ->first();
+
         VoyageActivity::create([
             'voyage_id'         => $detail->voyage_id,
             'voyage_detail_id'  => $detail->dtl_id,
@@ -137,7 +142,7 @@ class VoyageLogController extends Controller
             'status_activity_id'=> $request->activity_id,
             'port_location'     => $request->port_location,
             'remarks'         => $request->remarks,
-            'start_date_time'   => now(),
+            'start_date_time'   => $lastEndedActivity?->end_date_time ?? now(),
             'main_status'       => 'ONGOING',
         ]);
 

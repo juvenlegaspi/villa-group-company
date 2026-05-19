@@ -747,10 +747,6 @@
                             Insufficient fuel balance.
                         </div>
                     </div>
-                    <div id="fuelWarning"
-                        class="text-danger fw-bold mt-2 d-none">
-                        Insufficient fuel balance.
-                    </div>
                     {{-- Remarks --}}
                     <div class="mb-3">
                         <label>Remarks</label>
@@ -782,7 +778,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let auxiliary = parseFloat(document.getElementById('auxiliary_engine').value) || 0;
         let boiler = parseFloat(document.getElementById('boiler').value) || 0;
         let others = parseFloat(document.getElementById('others').value) || 0;
-        let total = main + auxiliary + others;
+        let total = main + auxiliary + boiler + others;
         let remaining = beginningFuel - total;
         totalConsumed.value = total.toFixed(2);
         remainingFuel.value = remaining.toFixed(2);

@@ -29,6 +29,8 @@ class VesselController extends Controller
 
     public function create()
     {
+        $this->authorizeVesselManagement();
+
         $captains = $this->getCaptains();
 
         return view('shipping.vessels.create', compact('captains'));
@@ -36,6 +38,8 @@ class VesselController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorizeVesselManagement();
+
         $data = $this->validateVessel($request);
 
         Vessel::create($data);
@@ -47,6 +51,7 @@ class VesselController extends Controller
     public function edit($id)
     {
         $vessel = Vessel::findOrFail($id);
+        $this->authorizeVesselManagement();
         $captains = $this->getCaptains();
 
         return view('shipping.vessels.edit', compact('vessel', 'captains'));
@@ -55,6 +60,7 @@ class VesselController extends Controller
     public function update(Request $request, $id)
     {
         $vessel = Vessel::findOrFail($id);
+        $this->authorizeVesselManagement();
         $data = $this->validateVessel($request);
 
         $vessel->update($data);
@@ -66,6 +72,7 @@ class VesselController extends Controller
     public function show(Request $request, $id)
     {
         $vessel = Vessel::findOrFail($id);
+        $this->authorizeVesselAccess($vessel);
         $query = VoyageLogHeader::query()->where('vessel_id', $id);
 
         if ($request->filled('search')) {
@@ -112,5 +119,21 @@ class VesselController extends Controller
             'charter_type' => 'nullable|string|max:255',
             'vessel_status' => 'nullable|string|max:255',
         ]);
+    }
+
+    protected function authorizeVesselManagement(): void
+    {
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->role === 'manager', 403);
+    }
+
+    protected function authorizeVesselAccess(Vessel $vessel): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->role === 'manager') {
+            return;
+        }
+
+        abort_unless($vessel->captain_id === $user->id, 403);
     }
 }
