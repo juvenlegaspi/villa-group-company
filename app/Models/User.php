@@ -53,7 +53,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->role === 'admin' || (bool) $this->is_admin;
+        return in_array($this->role, ['admin', 'owner'], true) || (bool) $this->is_admin;
     }
     public function division()
     {

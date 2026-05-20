@@ -230,8 +230,9 @@
 <div class="layout">
     <div id="sidebar" class="sidebar">
         @php
-            $isAdmin = auth()->user()->is_admin == 1;
-            $isOwner = auth()->user()->role == 'owner';
+            $user = auth()->user();
+            $isAdmin = $user->isAdmin();
+            $isOwner = $user->role == 'owner';
         @endphp
 
         <div class="sidebar-header">
@@ -246,19 +247,18 @@
             <span>Dashboard</span>
         </a>
 
-        @if(!$isOwner)
-            @if($isAdmin)
-                <a href="{{ url('/users') }}" class="{{ request()->is('users*') ? 'active' : '' }}">
-                    <i class="bi bi-people"></i>
-                    <span>Users</span>
-                </a>
-            @endif
+        @if($isAdmin && !$isOwner)
+            <a href="{{ url('/users') }}" class="{{ request()->is('users*') ? 'active' : '' }}">
+                <i class="bi bi-people"></i>
+                <span>Users</span>
+            </a>
+        @endif
 
+        @unless($isOwner)
             <div class="sidebar-title">Divisions</div>
             <div class="ms-1">
                 @foreach($allDivisions as $div)
                     @php
-                        $user = auth()->user();
                         $isAllowed = $isAdmin || $user->division_id == $div->id;
                         $divName = strtolower($div->name);
                         $isShipping = str_contains($divName, 'shipping');
@@ -316,13 +316,10 @@
                                     <i class="bi bi-box-seam"></i>
                                     <span>Inventory Management</span>
                                 </a>
-                                <!-- Stock In -->
                                 <a href="{{ route('jmv.stockin.index') }}" class="{{ request()->is('jmv/stock-in') ? 'active' : '' }}">
                                     <i class="bi bi-arrow-down-circle"></i>
                                     <span>Stock In</span>
                                 </a>
-
-                                <!-- Stock Out -->
                                 <a href="{{ route('jmv.stockout.index') }}" class="{{ request()->is('jmv/stock-out') ? 'active' : '' }}">
                                     <i class="bi bi-arrow-up-circle"></i>
                                     <span>Stock Out</span>
@@ -337,7 +334,7 @@
                     @endif
                 @endforeach
             </div>
-        @endif
+        @endunless
     </div>
 
     <div class="main-content">

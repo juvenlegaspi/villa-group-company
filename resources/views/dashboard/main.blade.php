@@ -21,7 +21,7 @@
     ];
 
     $user = auth()->user();
-    $isAdmin = $user->is_admin == 1 || $user->role == 'owner';
+    $isAdmin = $user->isAdmin();
     @endphp
 
     <div class="row g-4">
