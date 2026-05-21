@@ -127,7 +127,8 @@
                         <th>Voyage ID</th>
                         <th>Date Start</th>
                         <th>Date End</th>
-                        <th>Port</th>
+                        <th>Port Origin</th>
+                        <th>Port Destination</th>
                         <th>Voyage No.</th>
                         <th>Activities</th>
                         <th>Total Voyage Hours</th>
@@ -143,6 +144,7 @@
                             <td>{{ optional($voyage->date_created)->format('M d, Y') }}</td>
                             <td>{{ optional($voyage->date_completed)->format('M d, Y') ?? '-' }}</td>
                             <td>{{ $voyage->port_location }}</td>
+                            <td>{{ $voyage->port_destination }}</td>
                             <td>{{ $voyage->voyage_no }}</td>
                             <td>
                                 <span class="badge bg-light text-dark border">{{ $voyage->details->count() }}</span>

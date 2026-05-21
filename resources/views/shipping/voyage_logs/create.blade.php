@@ -72,8 +72,8 @@
                         @enderror
                     </div>
                     <!-- Port -->
-                    <div class="col-md-6">
-                        <label class="form-label">Port Location</label>
+                    <div class="col-md-3">
+                        <label class="form-label">Port Origin</label>
                         <select name="port_id" class="form-control" required>
                             <option value="">-- SELECT PORT --</option>
                             @foreach($ports as $port)
@@ -83,6 +83,23 @@
                             @endforeach
                         </select>
                         @error('port_id')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Port Destination</label>
+
+                        <select name="port_destination_id" class="form-control" required>
+                            <option value="">-- SELECT PORT DESTINATION --</option>
+
+                            @foreach($ports as $port)
+                                <option value="{{ $port->id }}">
+                                    {{ $port->port_name }}
+                                </option>
+                            @endforeach
+                        </select>
+
+                        @error('port_destination_id')
                             <small class="text-danger">{{ $message }}</small>
                         @enderror
                     </div>

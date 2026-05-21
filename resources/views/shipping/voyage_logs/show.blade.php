@@ -36,19 +36,24 @@
         </div>
         <div class="card-body">
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <b>Date Created</b><br>
                     {{ optional($voyage->date_created)->format('M d, Y') }}
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <b>Voyage ID</b><br>
                     {{ $voyage->voyage_id }}
                 </div>
-                <div class="col-md-3">
-                    <b>Port Location</b><br>
+                <div class="col-md-2">
+                    <b>Port Origin</b><br>
                     {{ $voyage->port_location }}
                 </div>
+
                 <div class="col-md-3">
+                    <b>Port Destination</b><br>
+                    {{ $voyage->port_destination }}
+                </div>
+                <div class="col-md-2">
                     <b>Voyage Number</b><br>
                     {{ $voyage->voyage_no }}
                 </div>
@@ -146,10 +151,10 @@
                                     <th>Activity</th>
                                     <th>Start</th>
                                     <th>End</th>
-                                    <th>Port</th>
                                     <th>Remarks</th>
                                     <th>Edit Info</th>
                                     <th>Total Hours</th>
+                                    <th>Time stamp</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -173,7 +178,6 @@
                                                 ? \Carbon\Carbon::parse($act->end_date_time)->format('M d, Y h:i A') 
                                                 : '--' }}
                                         </td>
-                                        <td>{{ $act->port_location ?? '-' }}</td>
                                         <td>{{ $act->remarks ?? '-' }}</td>
                                         <td style="min-width:190px; font-size:10px; line-height:1;">
                                             @if($act->edit_reason)
@@ -198,6 +202,11 @@
                                             @endif
                                         </td>
                                         <td>{{ $act->total_hours ?? 0 }}</td>
+                                        <td>
+                                            {{ $act->updated_at 
+                                                ? $act->updated_at->format('M d, Y h:i A') 
+                                                : '--' }}
+                                        </td>
                                         <td>
                                             @if(!$act->end_date_time)
                                                 <button
@@ -231,6 +240,7 @@
                                                 @endif
                                             @endif
                                         </td>
+                                        
                                     </tr>
                                     <div class="modal fade" id="fuelModal{{ $act->activity_id }}" tabindex="-1">
                                         <div class="modal-dialog">
@@ -446,7 +456,7 @@
                             {{-- TOTAL --}}
                             <tfoot>
                                 <tr>
-                                    <th colspan="6" class="text-end">Total All</th>
+                                    <th colspan="5" class="text-end">Total All</th>
                                     <th>{{ number_format($totalAll, 2) }}</th>
                                     <th></th>
                                 </tr>
@@ -561,7 +571,7 @@
                                             </select>
                                         </div>
                                         {{-- LOCATION --}}
-                                        <div class="mb-3">
+                                        {{--<div class="mb-3">
                                             <label>Port Location</label>
                                             <select name="port_location" class="form-control" required>
                                                 <option value="">-- SELECT PORT --</option>
@@ -571,7 +581,7 @@
                                                     </option>
                                                 @endforeach
                                             </select>
-                                        </div>
+                                        </div>--}}
                                         <div class="mb-3">
                                             <label>Remarks</label>
                                             <textarea

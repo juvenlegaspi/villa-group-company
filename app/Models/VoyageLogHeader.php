@@ -14,6 +14,8 @@ class VoyageLogHeader extends Model
         'date_created',
         'cargo_type',
         'cargo_volume',
+        'port_destination_id',
+        'port_destination',
         'port_id',
         'port_location',
         'voyage_no',
