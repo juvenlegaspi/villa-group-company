@@ -32,6 +32,7 @@ class VoyageLogHeader extends Model
     protected $casts = [
         'date_completed' => 'date',
         'date_created' => 'date',
+        'arrival_date' => 'datetime',
     ];
 
     public function details()

@@ -60,7 +60,7 @@
             </div>
             <hr>
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <b>Fuel ROB</b>
                         @if($voyage->status != 'COMPLETED')
@@ -71,17 +71,21 @@
                     </div>
                     {{ $voyage->fuel_rob }}
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <b>Cargo Type</b><br>
                     {{ $voyage->cargo_type }}
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <b>Cargo Volume</b><br>
                     {{ $voyage->cargo_volume }}
                 </div>
                 <div class="col-md-3">
                     <b>Crew on Board</b><br>
                     {{ $voyage->crew_on_board }}
+                </div>
+                <div class="col-md-2">
+                    <b>ETA Next Port</b><br>
+                    {{ $voyage->arrival_date ? $voyage->arrival_date->format('M d, Y') : '-' }}
                 </div>
             </div>
         </div>

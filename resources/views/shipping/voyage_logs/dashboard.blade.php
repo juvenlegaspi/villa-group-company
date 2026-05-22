@@ -443,7 +443,7 @@
                         <tr>
 
                             <td>
-                                {{ $activity->activity->activity_name ?? '-' }}
+                                {{ $activity->activity->name ?? '-' }}
                             </td>
 
                             <td>

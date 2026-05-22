@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Vessel;
+use App\Models\VoyageLogHeader;
 
 class FuelRobMonitoring extends Model
 {
@@ -33,4 +35,14 @@ class FuelRobMonitoring extends Model
         'created_by',
 
     ];
+
+    public function vessel()
+    {
+        return $this->belongsTo(Vessel::class, 'vessel_id');
+    }
+
+    public function voyage()
+    {
+        return $this->belongsTo(VoyageLogHeader::class, 'voyage_id', 'voyage_id');
+    }
 }
