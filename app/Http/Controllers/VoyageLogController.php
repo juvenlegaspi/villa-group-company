@@ -14,6 +14,7 @@ use App\Models\ActivityVoyage;
 use App\Models\VoyageActivity;
 use App\Models\Port;
 use App\Models\FuelRobMonitoring;
+use Illuminate\Support\Facades\DB;
 
 class VoyageLogController extends Controller
 {
@@ -159,6 +160,9 @@ class VoyageLogController extends Controller
         $endDateTime = $request->end_date . ' ' . $request->end_time;
         $start = \Carbon\Carbon::parse($activity->start_date_time);
         $end = \Carbon\Carbon::parse($endDateTime);
+        if ($end->lessThanOrEqualTo($start)) {
+            return back()->with('invalidEndTime', true);
+        }
         $totalHours = $start->diffInMinutes($end) / 60;
         $activity->update([
             'end_date_time' => $endDateTime,
@@ -382,153 +386,167 @@ class VoyageLogController extends Controller
 
 public function dashboard()
 {
+    $locationNameSql = "COALESCE(NULLIF(TRIM(port_location), ''), 'Unassigned')";
+    $currentMonthStart = now()->copy()->startOfMonth();
+    $currentMonthEnd = now()->copy()->endOfMonth();
+    $currentMonthLabel = strtoupper($currentMonthStart->format('F'));
 
     $totalVoyages = VoyageLogHeader::count();
+    $activeVoyages = VoyageLogHeader::where('status', 'OPEN')->count();
+    $completedVoyages = VoyageLogHeader::where('status', 'COMPLETED')->count();
+    $monthlyVoyageSummary = VoyageLogHeader::whereBetween('date_created', [
+        $currentMonthStart->toDateString(),
+        $currentMonthEnd->toDateString(),
+    ])->count();
 
-    $activeVoyages = VoyageLogHeader::where(
-        'status',
-        'OPEN'
-    )->count();
+    $monthlyVoyageTrend = VoyageLogHeader::selectRaw('MONTH(date_created) as month_num, COUNT(*) as total')
+        ->whereYear('date_created', $currentMonthStart->year)
+        ->groupBy('month_num')
+        ->orderBy('month_num')
+        ->get()
+        ->map(fn ($row) => [
+            'label' => Carbon::create()->month((int) $row->month_num)->format('M'),
+            'total' => (int) $row->total,
+        ]);
 
-    $completedVoyages = VoyageLogHeader::where(
-        'status',
-        'COMPLETED'
-    )->count();
+    $monthlyVoyagesPerVessel = VoyageLogHeader::with('vessel')
+        ->whereBetween('date_created', [
+            $currentMonthStart->toDateString(),
+            $currentMonthEnd->toDateString(),
+        ])
+        ->selectRaw('vessel_id, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours')
+        ->groupBy('vessel_id')
+        ->orderByDesc('total_voyages')
+        ->limit(8)
+        ->get()
+        ->map(function ($row) {
+            return [
+                'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                'total_voyages' => (int) ($row->total_voyages ?? 0),
+                'total_voyage_hours' => round((float) ($row->total_voyage_hours ?? 0), 2),
+            ];
+        });
 
-    // ===============================
-    // MONTHLY VOYAGES
-    // ===============================
-    $monthlyVoyages = VoyageLogHeader::selectRaw(
-        'MONTH(date_created) as month, COUNT(*) as total'
-    )
-    ->groupBy('month')
-    ->pluck('total', 'month');
+    $monthlyFuelByVessel = FuelRobMonitoring::with('vessel')
+        ->whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])
+        ->selectRaw('vessel_id, SUM(total_consumed) as total_consumed, SUM(received_fuel) as total_received, AVG(NULLIF(total_consumed, 0)) as average_consumed')
+        ->groupBy('vessel_id')
+        ->orderByDesc('total_consumed')
+        ->limit(8)
+        ->get()
+        ->map(function ($row) {
+            return [
+                'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                'total_consumed' => round((float) ($row->total_consumed ?? 0), 2),
+                'total_received' => round((float) ($row->total_received ?? 0), 2),
+                'average_consumed' => round((float) ($row->average_consumed ?? 0), 2),
+            ];
+        });
 
-    // ===============================
-    // VOYAGES PER VESSEL
-    // ===============================
-    $vesselVoyages = VoyageLogHeader::selectRaw(
-        'vessel_id, COUNT(*) as total'
-    )
-    ->groupBy('vessel_id')
-    ->pluck('total', 'vessel_id');
+    $fuelConsumptionByEngine = [
+        'Main Engine' => (float) FuelRobMonitoring::whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])->sum('main_engine'),
+        'Auxiliary' => (float) FuelRobMonitoring::whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])->sum('auxiliary_engine'),
+        'Boiler' => (float) FuelRobMonitoring::whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])->sum('boiler'),
+        'Others' => (float) FuelRobMonitoring::whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])->sum('others'),
+    ];
 
-    // ===============================
-    // MOST USED PORTS
-    // ===============================
-    $portStats = VoyageLogHeader::selectRaw(
-        'port_location, COUNT(*) as total'
-    )
-    ->groupBy('port_location')
-    ->pluck('total', 'port_location');
+    $turnaroundPerPort = VoyageLogHeader::query()
+        ->whereBetween('date_created', [
+            $currentMonthStart->toDateString(),
+            $currentMonthEnd->toDateString(),
+        ])
+        ->selectRaw("{$locationNameSql} as location_name, COUNT(*) as total_voyages, AVG(NULLIF(total_hours_voyage, 0)) as average_turnaround_hours, SUM(COALESCE(total_hours_voyage, 0)) as total_turnaround_hours")
+        ->groupBy(DB::raw($locationNameSql))
+        ->orderByDesc('average_turnaround_hours')
+        ->limit(8)
+        ->get()
+        ->map(function ($row) {
+            return [
+                'location_name' => $row->location_name ?? 'Unassigned',
+                'total_voyages' => (int) ($row->total_voyages ?? 0),
+                'average_turnaround_hours' => round((float) ($row->average_turnaround_hours ?? 0), 2),
+                'total_turnaround_hours' => round((float) ($row->total_turnaround_hours ?? 0), 2),
+            ];
+        });
 
-    // ===============================
-    // ACTIVITY STATUS DISTRIBUTION
-    // ===============================
-    $activityStats = VoyageLogDetail::whereNotNull('main_status')
-        ->selectRaw('main_status, COUNT(*) as total')
-        ->groupBy('main_status')
-        ->pluck('total', 'main_status');
+    $loadingDurationByVessel = VoyageActivity::with('vessel')
+        ->whereBetween('start_date_time', [$currentMonthStart, $currentMonthEnd])
+        ->whereHas('activity', function ($query) {
+            $query->whereRaw("LOWER(name) LIKE '%load%'")
+                ->whereRaw("LOWER(name) NOT LIKE '%unload%'");
+        })
+        ->selectRaw('vessel_id, COUNT(*) as total_activities, SUM(COALESCE(total_hours, 0)) as total_duration_hours, AVG(NULLIF(total_hours, 0)) as average_duration_hours')
+        ->groupBy('vessel_id')
+        ->orderByDesc('total_duration_hours')
+        ->limit(8)
+        ->get()
+        ->map(function ($row) {
+            return [
+                'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                'total_activities' => (int) ($row->total_activities ?? 0),
+                'total_duration_hours' => round((float) ($row->total_duration_hours ?? 0), 2),
+                'average_duration_hours' => round((float) ($row->average_duration_hours ?? 0), 2),
+            ];
+        });
 
-    // ===============================
-    // TODAY COUNTS
-    // ===============================
-    $activitiesToday = VoyageActivity::whereDate(
-        'created_at',
-        today()
-    )->count();
+    $unloadingDurationByVessel = VoyageActivity::with('vessel')
+        ->whereBetween('start_date_time', [$currentMonthStart, $currentMonthEnd])
+        ->whereHas('activity', function ($query) {
+            $query->whereRaw("LOWER(name) LIKE '%unload%'");
+        })
+        ->selectRaw('vessel_id, COUNT(*) as total_activities, SUM(COALESCE(total_hours, 0)) as total_duration_hours, AVG(NULLIF(total_hours, 0)) as average_duration_hours')
+        ->groupBy('vessel_id')
+        ->orderByDesc('total_duration_hours')
+        ->limit(8)
+        ->get()
+        ->map(function ($row) {
+            return [
+                'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                'total_activities' => (int) ($row->total_activities ?? 0),
+                'total_duration_hours' => round((float) ($row->total_duration_hours ?? 0), 2),
+                'average_duration_hours' => round((float) ($row->average_duration_hours ?? 0), 2),
+            ];
+        });
 
-    $fuelUpdatesToday = FuelRobMonitoring::whereDate(
-        'created_at',
-        today()
-    )->count();
+    $loadingByVesselMap = $loadingDurationByVessel->keyBy('vessel_name');
+    $unloadingByVesselMap = $unloadingDurationByVessel->keyBy('vessel_name');
+    $loadingUnloadingLabels = $loadingDurationByVessel->pluck('vessel_name')
+        ->merge($unloadingDurationByVessel->pluck('vessel_name'))
+        ->unique()
+        ->values();
 
-    $activeVessels = VoyageLogHeader::where(
-        'status',
-        'OPEN'
-    )
-    ->distinct('vessel_id')
-    ->count('vessel_id');
+    $loadingDurationChartData = $loadingUnloadingLabels
+        ->map(fn ($vesselName) => (float) ($loadingByVesselMap->get($vesselName)['total_duration_hours'] ?? 0))
+        ->values();
 
-    $completedToday = VoyageLogHeader::whereDate(
-        'date_completed',
-        today()
-    )->count();
+    $unloadingDurationChartData = $loadingUnloadingLabels
+        ->map(fn ($vesselName) => (float) ($unloadingByVesselMap->get($vesselName)['total_duration_hours'] ?? 0))
+        ->values();
 
-    // ===============================
-    // TOP ACTIVITIES
-    // ===============================
-    $topActivities = VoyageActivity::with('activity')
-        ->selectRaw('status_activity_id, COUNT(*) as total')
-        ->groupBy('status_activity_id')
-        ->orderByDesc('total')
-        ->take(5)
-        ->get();
-
-    // ===============================
-    // FUEL SUMMARY
-    // ===============================
-    $totalFuelConsumed = FuelRobMonitoring::sum(
-        'total_consumed'
-    );
-
-    $totalFuelReceived = FuelRobMonitoring::sum(
-        'received_fuel'
-    );
-
-    $averageFuel = FuelRobMonitoring::avg(
-        'total_consumed'
-    );
-
-    // ===============================
-    // RECENT ACTIVITIES
-    // ===============================
-    $recentActivities = VoyageActivity::with([
-        'vessel',
-        'activity',
-        'detail'
-    ])
-    ->latest()
-    ->take(10)
-    ->get();
-
-    // ===============================
-    // LOW FUEL WARNING
-    // ===============================
-    $lowFuelVoyages = VoyageLogHeader::whereRaw("
-        CAST(
-            REPLACE(fuel_rob, ' Liters', '')
-            AS DECIMAL(10,2)
-        ) < 1000
-    ")->get();
-
-    return view(
-        'shipping.voyage_logs.dashboard',
-        compact(
-            'totalVoyages',
-            'activeVoyages',
-            'completedVoyages',
-            'monthlyVoyages',
-            'vesselVoyages',
-            'portStats',
-            'activityStats',
-
-            'activitiesToday',
-            'fuelUpdatesToday',
-            'activeVessels',
-            'completedToday',
-
-            'topActivities',
-
-            'totalFuelConsumed',
-            'totalFuelReceived',
-            'averageFuel',
-
-            'recentActivities',
-
-            'lowFuelVoyages'
-        )
-    );
+    return view('shipping.voyage_logs.dashboard', [
+        'totalVoyages' => $totalVoyages,
+        'activeVoyages' => $activeVoyages,
+        'completedVoyages' => $completedVoyages,
+        'currentMonthLabel' => $currentMonthLabel,
+        'monthlyVoyageSummary' => $monthlyVoyageSummary,
+        'monthlyVoyageTrend' => $monthlyVoyageTrend,
+        'monthlyVoyagesPerVessel' => $monthlyVoyagesPerVessel,
+        'monthlyVoyageVesselLabels' => $monthlyVoyagesPerVessel->pluck('vessel_name')->values(),
+        'monthlyVoyageVesselData' => $monthlyVoyagesPerVessel->pluck('total_voyages')->values(),
+        'monthlyFuelByVessel' => $monthlyFuelByVessel,
+        'monthlyFuelVesselLabels' => $monthlyFuelByVessel->pluck('vessel_name')->values(),
+        'monthlyFuelVesselData' => $monthlyFuelByVessel->pluck('total_consumed')->values(),
+        'fuelEngineLabels' => array_keys($fuelConsumptionByEngine),
+        'fuelEngineData' => array_values($fuelConsumptionByEngine),
+        'turnaroundPerPort' => $turnaroundPerPort,
+        'turnaroundPortLabels' => $turnaroundPerPort->pluck('location_name')->values(),
+        'turnaroundPortData' => $turnaroundPerPort->pluck('average_turnaround_hours')->values(),
+        'loadingDurationByVessel' => $loadingDurationByVessel,
+        'unloadingDurationByVessel' => $unloadingDurationByVessel,
+        'loadingUnloadingLabels' => $loadingUnloadingLabels,
+        'loadingDurationChartData' => $loadingDurationChartData,
+        'unloadingDurationChartData' => $unloadingDurationChartData,
+    ]);
 }
 
     protected function validateTrailRequest(Request $request): array

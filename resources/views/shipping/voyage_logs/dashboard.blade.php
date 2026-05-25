@@ -1,710 +1,543 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+    .ops-shell {
+        display: grid;
+        gap: 24px;
+    }
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    .ops-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+    }
 
-<div class="container">
+    .ops-card {
+        border: 0;
+        border-radius: 22px;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+        overflow: hidden;
+        background: #fff;
+    }
 
-    <h3 class="mb-4">
-        Voyage Logs Dashboard
-    </h3>
+    .ops-hero {
+        border-radius: 24px;
+        padding: 28px 30px;
+        background: linear-gradient(135deg, #0b3c74, #0f5fa8 55%, #7cc6ff);
+        color: #fff;
+        box-shadow: 0 20px 45px rgba(11, 60, 116, 0.2);
+    }
 
-    {{-- ========================================= --}}
-    {{-- MAIN COUNTS --}}
-    {{-- ========================================= --}}
+    .ops-stat {
+        padding: 22px;
+    }
 
-    <div class="row g-4">
+    .ops-stat-label {
+        color: #64748b;
+        font-size: 0.92rem;
+        margin-bottom: 8px;
+    }
 
-        <div class="col-md-4">
+    .ops-stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1;
+        color: #0f172a;
+        margin-bottom: 8px;
+    }
 
-            <div class="card shadow-sm border-0">
+    .ops-stat-note {
+        margin: 0;
+        color: #475569;
+        font-size: 0.9rem;
+    }
 
-                <div class="card-body text-center">
+    .ops-card-body {
+        padding: 24px;
+    }
 
-                    <h5>Total Voyages</h5>
+    .ops-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
 
-                    <h2 class="text-primary">
-                        {{ $totalVoyages }}
-                    </h2>
+    .ops-title h4,
+    .ops-title h5 {
+        margin: 0;
+        color: #0f172a;
+    }
 
+    .ops-subtext {
+        margin: 4px 0 0;
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+
+    .ops-chart-wrap {
+        position: relative;
+        min-height: 290px;
+    }
+
+    .ops-table thead th {
+        white-space: nowrap;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .ops-table tbody td {
+        vertical-align: middle;
+    }
+
+    @media (max-width: 768px) {
+        .ops-hero {
+            padding: 22px;
+        }
+    }
+</style>
+
+<div class="container-fluid px-0">
+    <div class="ops-shell">
+        <section class="ops-hero">
+            <h2 class="fw-bold mb-2">OPERATIONS | Dashboard</h2>
+            <p class="mb-0">Monthly vessel performance, fuel trend, turnaround time, ug loading/unloading duration.</p>
+        </section>
+
+        <section class="ops-grid">
+            <div class="ops-card">
+                <div class="ops-stat">
+                    <div class="ops-stat-label">Total Voyages for the Month of {{ $currentMonthLabel }}</div>
+                    <div class="ops-stat-value">{{ number_format($monthlyVoyageSummary) }}</div>
+                    <p class="ops-stat-note">{{ number_format($totalVoyages) }} total voyages in the system</p>
                 </div>
-
             </div>
-
-        </div>
-
-        <div class="col-md-4">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h5>Active Voyages</h5>
-
-                    <h2 class="text-warning">
-                        {{ $activeVoyages }}
-                    </h2>
-
+            <div class="ops-card">
+                <div class="ops-stat">
+                    <div class="ops-stat-label">Open Voyages</div>
+                    <div class="ops-stat-value">{{ number_format($activeVoyages) }}</div>
+                    <p class="ops-stat-note">Voyages currently marked open</p>
                 </div>
-
             </div>
-
-        </div>
-
-        <div class="col-md-4">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h5>Completed Voyages</h5>
-
-                    <h2 class="text-success">
-                        {{ $completedVoyages }}
-                    </h2>
-
+            <div class="ops-card">
+                <div class="ops-stat">
+                    <div class="ops-stat-label">Completed Voyages</div>
+                    <div class="ops-stat-value">{{ number_format($completedVoyages) }}</div>
+                    <p class="ops-stat-note">Voyages already completed</p>
                 </div>
-
             </div>
+        </section>
 
-        </div>
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h4>Top Vessels with Most Voyages in {{ $currentMonthLabel }}</h4>
+                                <p class="ops-subtext">Monthly voyage count ug total voyage hours per vessel.</p>
+                            </div>
+                        </div>
 
-    </div>
+                        <div class="ops-chart-wrap mb-4">
+                            <canvas id="monthlyVoyageVesselChart"></canvas>
+                        </div>
 
-    {{-- ========================================= --}}
-    {{-- TODAY COUNTS --}}
-    {{-- ========================================= --}}
-
-    <div class="row mt-4">
-
-        <div class="col-md-3">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h6>Activities Today</h6>
-
-                    <h2 class="text-primary">
-                        {{ $activitiesToday }}
-                    </h2>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-3">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h6>Fuel Updates Today</h6>
-
-                    <h2 class="text-warning">
-                        {{ $fuelUpdatesToday }}
-                    </h2>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-3">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h6>Active Vessels</h6>
-
-                    <h2 class="text-success">
-                        {{ $activeVessels }}
-                    </h2>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-3">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h6>Completed Today</h6>
-
-                    <h2 class="text-danger">
-                        {{ $completedToday }}
-                    </h2>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-    {{-- ========================================= --}}
-    {{-- LOW FUEL WARNING --}}
-    {{-- ========================================= --}}
-
-    @if($lowFuelVoyages->count() > 0)
-
-    <div class="alert alert-danger mt-4 shadow-sm">
-
-        <h5>
-            🚨 Low Fuel Warning
-        </h5>
-
-        <ul class="mb-0">
-
-            @foreach($lowFuelVoyages as $voyage)
-
-            <li>
-                Voyage #{{ $voyage->voyage_no }}
-                -
-                {{ $voyage->fuel_rob }}
-            </li>
-
-            @endforeach
-
-        </ul>
-
-    </div>
-
-    @endif
-
-    {{-- ========================================= --}}
-    {{-- CHARTS --}}
-    {{-- ========================================= --}}
-
-    <div class="row mt-4">
-
-        {{-- Voyage Status --}}
-
-        <div class="col-md-6">
-
-            <div class="card border-0 shadow-sm">
-
-                <div class="card-body">
-
-                    <h6>
-                        Voyage Status
-                    </h6>
-
-                    <div style="width:250px; margin:auto;">
-
-                        <canvas id="statusChart"></canvas>
-
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ops-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Voyages</th>
+                                        <th>Total Hours</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($monthlyVoyagesPerVessel as $row)
+                                        <tr>
+                                            <td>{{ $row['vessel_name'] }}</td>
+                                            <td>{{ number_format($row['total_voyages']) }}</td>
+                                            <td>{{ number_format($row['total_voyage_hours'], 2) }} hrs</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted py-4">No monthly voyage data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-
                 </div>
-
             </div>
 
-        </div>
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h4>Fuel Consumption Per Vessel</h4>
+                                <p class="ops-subtext">Fuel consumed ug received per vessel within {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
 
-        {{-- Monthly Voyages --}}
+                        <div class="ops-chart-wrap mb-4">
+                            <canvas id="monthlyFuelVesselChart"></canvas>
+                        </div>
 
-        <div class="col-md-6">
-
-            <div class="card border-0 shadow-sm">
-
-                <div class="card-body">
-
-                    <h6>
-                        Voyages Per Month
-                    </h6>
-
-                    <canvas id="voyageChart" height="100"></canvas>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-    {{-- ========================================= --}}
-    {{-- SECOND CHARTS --}}
-    {{-- ========================================= --}}
-
-    <div class="row mt-4">
-
-        {{-- Vessel Chart --}}
-
-        <div class="col-md-6">
-
-            <div class="card shadow-sm">
-
-                <div class="card-body">
-
-                    <h6>
-                        Voyages Per Vessel
-                    </h6>
-
-                    <canvas id="vesselChart"></canvas>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        {{-- Port Chart --}}
-
-        <div class="col-md-6">
-
-            <div class="card shadow-sm">
-
-                <div class="card-body">
-
-                    <h6>
-                        Most Used Ports
-                    </h6>
-
-                    <div style="width:300px; margin:auto;">
-
-                        <canvas id="portChart"></canvas>
-
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ops-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Avg. Fuel</th>
+                                        <th>Total Consumed</th>
+                                        <th>Total Received</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($monthlyFuelByVessel as $row)
+                                        <tr>
+                                            <td>{{ $row['vessel_name'] }}</td>
+                                            <td>{{ number_format($row['average_consumed'], 2) }} L</td>
+                                            <td>{{ number_format($row['total_consumed'], 2) }} L</td>
+                                            <td>{{ number_format($row['total_received'], 2) }} L</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">No monthly fuel data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-
                 </div>
-
             </div>
+        </section>
 
-        </div>
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h4>Monthly Voyage Trend</h4>
+                                <p class="ops-subtext">Voyage trend across the months of the current year.</p>
+                            </div>
+                        </div>
 
-    </div>
-
-    {{-- ========================================= --}}
-    {{-- ACTIVITY STATUS --}}
-    {{-- ========================================= --}}
-
-    <div class="row mt-4">
-
-        <div class="col-md-6">
-
-            <div class="card shadow-sm">
-
-                <div class="card-body">
-
-                    <h6>
-                        Activity Status Distribution
-                    </h6>
-
-                    <div style="width:250px; margin:auto;">
-
-                        <canvas id="activityChart"></canvas>
-
+                        <div class="ops-chart-wrap">
+                            <canvas id="monthlyVoyageTrendChart"></canvas>
+                        </div>
                     </div>
-
                 </div>
-
             </div>
 
-        </div>
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h4>Average Fuel Consumption Breakdown</h4>
+                                <p class="ops-subtext">Monthly fuel engine share from monitoring logs.</p>
+                            </div>
+                        </div>
 
-        {{-- TOP ACTIVITIES --}}
-
-        <div class="col-md-6">
-
-            <div class="card shadow-sm">
-
-                <div class="card-body">
-
-                    <h5>
-                        Top Activities
-                    </h5>
-
-                    <canvas id="topActivitiesChart"></canvas>
-
+                        <div class="ops-chart-wrap">
+                            <canvas id="fuelEngineBreakdownChart"></canvas>
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </section>
 
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h4>Average Turnaround Time</h4>
+                                <p class="ops-subtext">Per port call average turnaround hours for {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="ops-chart-wrap">
+                            <canvas id="averageTurnaroundChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-        </div>
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h4>Loading & Unloading Duration</h4>
+                                <p class="ops-subtext">Combined loading and unloading hours per vessel for {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
 
+                        <div class="ops-chart-wrap">
+                            <canvas id="loadingUnloadingChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h5>Turnaround Per Port Location</h5>
+                                <p class="ops-subtext">Average ug total turnaround hours per port location.</p>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ops-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Port Location</th>
+                                        <th>Voyages</th>
+                                        <th>Avg Turnaround</th>
+                                        <th>Total Hours</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($turnaroundPerPort as $row)
+                                        <tr>
+                                            <td>{{ $row['location_name'] }}</td>
+                                            <td>{{ number_format($row['total_voyages']) }}</td>
+                                            <td>{{ number_format($row['average_turnaround_hours'], 2) }} hrs</td>
+                                            <td>{{ number_format($row['total_turnaround_hours'], 2) }} hrs</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">No turnaround data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="ops-card h-100">
+                    <div class="ops-card-body">
+                        <div class="ops-title">
+                            <div>
+                                <h5>Loading / Unloading Summary</h5>
+                                <p class="ops-subtext">Duration summary per vessel for monthly cargo handling activities.</p>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ops-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Loading Hours</th>
+                                        <th>Unloading Hours</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($loadingUnloadingLabels as $vesselName)
+                                        <tr>
+                                            <td>{{ $vesselName }}</td>
+                                            <td>{{ number_format((float) ($loadingDurationChartData[$loop->index] ?? 0), 2) }} hrs</td>
+                                            <td>{{ number_format((float) ($unloadingDurationChartData[$loop->index] ?? 0), 2) }} hrs</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted py-4">No loading or unloading data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
-
-    {{-- ========================================= --}}
-    {{-- FUEL SUMMARY --}}
-    {{-- ========================================= --}}
-
-    <div class="row mt-4">
-
-        <div class="col-md-4">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h6>Total Fuel Consumed</h6>
-
-                    <h3 class="text-danger">
-
-                        {{ number_format($totalFuelConsumed, 2) }}
-
-                    </h3>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-4">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h6>Total Fuel Received</h6>
-
-                    <h3 class="text-success">
-
-                        {{ number_format($totalFuelReceived, 2) }}
-
-                    </h3>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-4">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body text-center">
-
-                    <h6>Average Fuel Consumption</h6>
-
-                    <h3 class="text-primary">
-
-                        {{ number_format($averageFuel, 2) }}
-
-                    </h3>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-    {{-- ========================================= --}}
-    {{-- RECENT ACTIVITIES --}}
-    {{-- ========================================= --}}
-
-    <div class="card shadow-sm mt-4">
-
-        <div class="card-body">
-
-            <h5 class="mb-3">
-
-                Recent Activities
-
-            </h5>
-
-            <div class="table-responsive">
-
-                <table class="table table-bordered table-hover">
-
-                    <thead class="table-dark">
-
-                        <tr>
-
-                            <th>Activity</th>
-                            <th>Status</th>
-                            <th>Vessel</th>
-                            <th>Created</th>
-
-                        </tr>
-
-                    </thead>
-
-                    <tbody>
-
-                        @forelse($recentActivities as $activity)
-
-                        <tr>
-
-                            <td>
-                                {{ $activity->activity->name ?? '-' }}
-                            </td>
-
-                            <td>
-
-                                <span class="badge bg-primary">
-
-                                    {{ $activity->detail->main_status ?? '-' }}
-
-                                </span>
-
-                            </td>
-
-                            <td>
-
-                                {{ $activity->vessel->vessel_name ?? '-' }}
-
-                            </td>
-
-                            <td>
-
-                                {{ $activity->created_at }}
-
-                            </td>
-
-                        </tr>
-
-                        @empty
-
-                        <tr>
-
-                            <td colspan="4" class="text-center">
-
-                                No recent activities
-
-                            </td>
-
-                        </tr>
-
-                        @endforelse
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </div>
-
-    </div>
-
 </div>
 
-{{-- ========================================= --}}
-{{-- CHART JS --}}
-{{-- ========================================= --}}
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
+    const monthlyVoyageVesselLabels = {!! json_encode($monthlyVoyageVesselLabels) !!};
+    const monthlyVoyageVesselData = {!! json_encode($monthlyVoyageVesselData) !!};
+    const monthlyFuelVesselLabels = {!! json_encode($monthlyFuelVesselLabels) !!};
+    const monthlyFuelVesselData = {!! json_encode($monthlyFuelVesselData) !!};
+    const monthlyVoyageTrendLabels = {!! json_encode($monthlyVoyageTrend->pluck('label')->values()) !!};
+    const monthlyVoyageTrendData = {!! json_encode($monthlyVoyageTrend->pluck('total')->values()) !!};
+    const fuelEngineLabels = {!! json_encode($fuelEngineLabels) !!};
+    const fuelEngineData = {!! json_encode($fuelEngineData) !!};
+    const turnaroundPortLabels = {!! json_encode($turnaroundPortLabels) !!};
+    const turnaroundPortData = {!! json_encode($turnaroundPortData) !!};
+    const loadingUnloadingLabels = {!! json_encode($loadingUnloadingLabels) !!};
+    const loadingDurationChartData = {!! json_encode($loadingDurationChartData) !!};
+    const unloadingDurationChartData = {!! json_encode($unloadingDurationChartData) !!};
 
-    // =========================================
-    // STATUS CHART
-    // =========================================
-
-    new Chart(
-        document.getElementById('statusChart'),
-        {
-            type: 'pie',
-
-            data: {
-
-                labels: ['Active', 'Completed'],
-
-                datasets: [{
-
-                    data: [
-                        {{ $activeVoyages }},
-                        {{ $completedVoyages }}
-                    ],
-
-                    backgroundColor: [
-                        '#ffc107',
-                        '#198754'
-                    ]
-
-                }]
-
+    new Chart(document.getElementById('monthlyVoyageVesselChart'), {
+        type: 'bar',
+        data: {
+            labels: monthlyVoyageVesselLabels,
+            datasets: [{
+                label: 'Voyages',
+                data: monthlyVoyageVesselData,
+                backgroundColor: ['#f7b500', '#28a5f5', '#1f78d1', '#184f9c', '#4c8fe3', '#81b5ff'],
+                borderRadius: 10,
+                maxBarThickness: 42
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, ticks: { precision: 0 } }
             }
-
         }
-    );
+    });
 
-    // =========================================
-    // MONTHLY CHART
-    // =========================================
-
-    new Chart(
-        document.getElementById('voyageChart'),
-        {
-            type: 'bar',
-
-            data: {
-
-                labels: {!! json_encode($monthlyVoyages->keys()) !!},
-
-                datasets: [{
-
-                    label: 'Voyages',
-
-                    data: {!! json_encode($monthlyVoyages->values()) !!},
-
-                    backgroundColor: '#0d6efd'
-
-                }]
-
+    new Chart(document.getElementById('monthlyFuelVesselChart'), {
+        type: 'line',
+        data: {
+            labels: monthlyFuelVesselLabels,
+            datasets: [{
+                label: 'Fuel Consumed',
+                data: monthlyFuelVesselData,
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.18)',
+                tension: 0.35,
+                fill: false,
+                pointRadius: 4,
+                pointBackgroundColor: '#f59e0b'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true }
             }
-
         }
-    );
+    });
 
-    // =========================================
-    // VESSEL CHART
-    // =========================================
-
-    new Chart(
-        document.getElementById('vesselChart'),
-        {
-            type: 'bar',
-
-            data: {
-
-                labels: {!! json_encode($vesselVoyages->keys()) !!},
-
-                datasets: [{
-
-                    label: 'Voyages',
-
-                    data: {!! json_encode($vesselVoyages->values()) !!},
-
-                    backgroundColor: '#198754'
-
-                }]
-
+    new Chart(document.getElementById('monthlyVoyageTrendChart'), {
+        type: 'line',
+        data: {
+            labels: monthlyVoyageTrendLabels,
+            datasets: [{
+                label: 'Voyages',
+                data: monthlyVoyageTrendData,
+                borderColor: '#ea7a00',
+                backgroundColor: 'rgba(234, 122, 0, 0.12)',
+                tension: 0.3,
+                fill: false,
+                pointRadius: 4,
+                pointBackgroundColor: '#ea7a00'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
             }
-
         }
-    );
+    });
 
-    // =========================================
-    // PORT CHART
-    // =========================================
-
-    new Chart(
-        document.getElementById('portChart'),
-        {
-            type: 'doughnut',
-
-            data: {
-
-                labels: {!! json_encode($portStats->keys()) !!},
-
-                datasets: [{
-
-                    data: {!! json_encode($portStats->values()) !!},
-
-                    backgroundColor: [
-                        '#0d6efd',
-                        '#ffc107',
-                        '#dc3545',
-                        '#198754',
-                        '#6f42c1'
-                    ]
-
-                }]
-
+    new Chart(document.getElementById('fuelEngineBreakdownChart'), {
+        type: 'pie',
+        data: {
+            labels: fuelEngineLabels,
+            datasets: [{
+                data: fuelEngineData,
+                backgroundColor: ['#0d6efd', '#fd7e14', '#6fbe44', '#6c757d'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
             }
-
         }
-    );
+    });
 
-    // =========================================
-    // ACTIVITY STATUS CHART
-    // =========================================
-
-    new Chart(
-        document.getElementById('activityChart'),
-        {
-            type: 'doughnut',
-
-            data: {
-
-                labels: {!! json_encode($activityStats->keys()) !!},
-
-                datasets: [{
-
-                    data: {!! json_encode($activityStats->values()) !!},
-
-                    backgroundColor: [
-                        '#0d6efd',
-                        '#ffc107',
-                        '#198754',
-                        '#dc3545'
-                    ]
-
-                }]
-
+    new Chart(document.getElementById('averageTurnaroundChart'), {
+        type: 'bar',
+        data: {
+            labels: turnaroundPortLabels,
+            datasets: [{
+                label: 'Average Turnaround Hours',
+                data: turnaroundPortData,
+                backgroundColor: ['#0f4c81', '#155e9c', '#1d70b8', '#2d87d3', '#4a9ce0', '#72b4ea', '#99caf3', '#bedef9'],
+                borderRadius: 10,
+                maxBarThickness: 46
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true }
             }
-
         }
-    );
+    });
 
-    // =========================================
-    // TOP ACTIVITIES CHART
-    // =========================================
-
-    new Chart(
-        document.getElementById('topActivitiesChart'),
-        {
-            type: 'bar',
-
-            data: {
-
-                labels: [
-
-                    @foreach($topActivities as $activity)
-
-                        '{{ $activity->activity->activity_name ?? "N/A" }}',
-
-                    @endforeach
-
-                ],
-
-                datasets: [{
-
-                    label: 'Total',
-
-                    data: [
-
-                        @foreach($topActivities as $activity)
-
-                            {{ $activity->total }},
-
-                        @endforeach
-
-                    ],
-
-                    backgroundColor: [
-                        '#0d6efd',
-                        '#198754',
-                        '#ffc107',
-                        '#dc3545',
-                        '#6f42c1'
-                    ]
-
-                }]
-
+    new Chart(document.getElementById('loadingUnloadingChart'), {
+        type: 'bar',
+        data: {
+            labels: loadingUnloadingLabels,
+            datasets: [{
+                label: 'Loading',
+                data: loadingDurationChartData,
+                backgroundColor: '#ff9f1c',
+                borderRadius: 8,
+                borderSkipped: false
+            }, {
+                label: 'Unloading',
+                data: unloadingDurationChartData,
+                backgroundColor: '#1e88e5',
+                borderRadius: 8,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    stacked: true
+                },
+                y: {
+                    stacked: true
+                }
             }
-
         }
-    );
-
+    });
 </script>
-
 @endsection

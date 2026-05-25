@@ -167,6 +167,9 @@
                     @endforelse
                 </tbody>
             </table>
+            <div class="mt-3">
+                {{ $certificates->links() }}
+            </div>
         </div>
     </div>
 </div>

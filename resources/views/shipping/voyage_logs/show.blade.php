@@ -778,6 +778,19 @@
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+@if(session('invalidEndTime'))
+
+<script>
+Swal.fire({
+    icon: 'error',
+    title: 'Invalid Date Time',
+    text: 'End datetime must be ahead of start datetime.'
+});
+</script>
+
+@endif
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const inputs = document.querySelectorAll('.fuel-input');

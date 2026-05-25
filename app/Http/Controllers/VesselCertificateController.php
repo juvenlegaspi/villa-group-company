@@ -36,11 +36,18 @@ class VesselCertificateController extends Controller
     {
         $data = $request->validate([
             'vessel_id' => 'required',
-            'certificate_name' => 'required',
+            'certificate_name' => 'required|unique:vessel_certificates,certificate_name',
             'issue_date' => 'required|date',
             'expiry_date' => 'required|date|after_or_equal:issue_date',
-            'remarks' => 'nullable',
-            'document' => 'nullable|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
+            'remarks' => 'required',
+            'document' => 'required|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
+        ], [
+            'certificate_name.required' => 'Certificate name is required.',
+            'certificate_name.unique'   => 'Certificate name is already taken.',
+            'issue_date.required'       => 'Issue date is required.',
+            'expiry_date.required'      => 'Expiry date is required.',
+            'remarks.required'          => 'Input N/A if none.',
+            'document.required'         => 'Please upload a document.',
         ]);
 
         $vessel = Vessel::findOrFail($data['vessel_id']);
@@ -52,9 +59,7 @@ class VesselCertificateController extends Controller
             $file->move(public_path('uploads/certificates'), $filename);
             $data['document'] = $filename;
         }
-
         VesselCertificate::create($data);
-
         return redirect()->route('vessel.certificates.show', $data['vessel_id'])
             ->with('success', 'Certificate saved successfully.');
     }
@@ -81,7 +86,7 @@ class VesselCertificateController extends Controller
             $query->where('expiry_date', '>', now()->copy()->addDays(30));
         }
 
-        $certificates = $query->orderBy('expiry_date')->get();
+        $certificates = $query->orderBy('expiry_date')->paginate(10);
         $today = now();
 
         return view('vessel_certificates.show', compact('vessel', 'certificates', 'today'));
@@ -129,29 +134,101 @@ class VesselCertificateController extends Controller
     {
         abort_unless(auth()->user()->isAdmin() || auth()->user()->role === 'manager', 403);
 
+        $today = now();
+        $windowEnd = $today->copy()->addDays(30);
+
         $totalCertificates = VesselCertificate::count();
         $expiredCertificates = VesselCertificate::expired()->count();
         $expiringCertificates = VesselCertificate::expiringWithinDays()->count();
-        $validCertificates = VesselCertificate::where('expiry_date', '>', now()->copy()->addDays(30))->count();
+        $validCertificates = VesselCertificate::where('expiry_date', '>', $windowEnd)->count();
+        $vesselsWithCertificates = Vessel::has('certificates')->count();
+        $renewedThisMonth = VesselCertificate::whereMonth('issue_date', $today->month)
+            ->whereYear('issue_date', $today->year)
+            ->count();
 
-        $expiredList = VesselCertificate::expired()
+        $expiredList = VesselCertificate::with('vessel')
+            ->expired()
             ->orderBy('expiry_date')
-            ->limit(5)
+            ->limit(6)
             ->get();
 
-        $expiringList = VesselCertificate::expiringWithinDays()
+        $expiringList = VesselCertificate::with('vessel')
+            ->expiringWithinDays()
             ->orderBy('expiry_date')
-            ->limit(5)
+            ->limit(6)
             ->get();
 
-        return view('vessel_certificates.dashboard', compact(
-            'totalCertificates',
-            'expiredCertificates',
-            'expiringCertificates',
-            'validCertificates',
-            'expiredList',
-            'expiringList'
-        ));
+        $recentCertificates = VesselCertificate::with('vessel')
+            ->latest('issue_date')
+            ->limit(6)
+            ->get();
+
+        $certificateStatusCounts = [
+            'Expired' => $expiredCertificates,
+            'Expiring Soon' => $expiringCertificates,
+            'Valid' => $validCertificates,
+        ];
+
+        $vesselRiskSummary = Vessel::withCount([
+                'certificates as expired_count' => fn ($query) => $query->expired(),
+                'certificates as expiring_count' => fn ($query) => $query->expiringWithinDays(),
+                'certificates as total_certificates_count',
+            ])
+            ->havingRaw('(expired_count + expiring_count) > 0')
+            ->orderByRaw('(expired_count + expiring_count) DESC')
+            ->orderBy('vessel_name')
+            ->limit(8)
+            ->get()
+            ->map(function ($vessel) {
+                return [
+                    'vessel_name' => $vessel->vessel_name,
+                    'expired_count' => (int) $vessel->expired_count,
+                    'expiring_count' => (int) $vessel->expiring_count,
+                    'total_certificates_count' => (int) $vessel->total_certificates_count,
+                ];
+            });
+
+        $expiryTrend = VesselCertificate::query()
+            ->selectRaw('YEAR(expiry_date) as year_num, MONTH(expiry_date) as month_num, COUNT(*) as total')
+            ->whereNotNull('expiry_date')
+            ->whereDate('expiry_date', '>=', $today->copy()->startOfMonth())
+            ->groupBy('year_num', 'month_num')
+            ->orderBy('year_num')
+            ->orderBy('month_num')
+            ->limit(6)
+            ->get()
+            ->map(fn ($row) => [
+                'label' => sprintf('%s %d', now()->copy()->setDate($row->year_num, $row->month_num, 1)->format('M'), $row->year_num),
+                'total' => (int) $row->total,
+            ]);
+
+        $certificateTypes = VesselCertificate::query()
+            ->selectRaw('certificate_name, COUNT(*) as total')
+            ->groupBy('certificate_name')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        return view('vessel_certificates.dashboard', [
+            'today' => $today,
+            'totalCertificates' => $totalCertificates,
+            'expiredCertificates' => $expiredCertificates,
+            'expiringCertificates' => $expiringCertificates,
+            'validCertificates' => $validCertificates,
+            'vesselsWithCertificates' => $vesselsWithCertificates,
+            'renewedThisMonth' => $renewedThisMonth,
+            'expiredList' => $expiredList,
+            'expiringList' => $expiringList,
+            'recentCertificates' => $recentCertificates,
+            'certificateStatusLabels' => array_keys($certificateStatusCounts),
+            'certificateStatusData' => array_values($certificateStatusCounts),
+            'vesselRiskSummary' => $vesselRiskSummary,
+            'vesselRiskLabels' => $vesselRiskSummary->pluck('vessel_name')->values(),
+            'vesselRiskData' => $vesselRiskSummary->map(fn ($row) => $row['expired_count'] + $row['expiring_count'])->values(),
+            'expiryTrend' => $expiryTrend,
+            'certificateTypeLabels' => $certificateTypes->pluck('certificate_name')->values(),
+            'certificateTypeData' => $certificateTypes->pluck('total')->values(),
+        ]);
     }
 
     protected function authorizeVesselAccess(Vessel $vessel): void

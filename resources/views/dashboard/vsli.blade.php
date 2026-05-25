@@ -216,6 +216,9 @@
                 <a href="{{ route('voyage-logs.dashboard') }}" class="btn btn-outline-light btn-sm">
                     <i class="bi bi-map me-1"></i> Voyage Dashboard
                 </a>
+                <a href="#monthly-vessel-insights" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-bar-chart-line me-1"></i> Monthly Vessel Insights
+                </a>
                 <a href="{{ route('tech-defects.dashboard') }}" class="btn btn-outline-light btn-sm">
                     <i class="bi bi-tools me-1"></i> Defects Dashboard
                 </a>
@@ -444,6 +447,290 @@
                         </div>
                     </div>
                 </div>
+
+                <hr class="my-4">
+
+                <div class="vsli-section-title mb-3">
+                    <div>
+                        <h5>Monthly Vessel Snapshot</h5>
+                        <p class="vsli-subtext">Current month focus for vessels, fuel, turnaround, ug loading activities.</p>
+                    </div>
+                </div>
+
+                <div class="vsli-mini-grid">
+                    <div class="vsli-mini-card">
+                        <div class="label">Month Covered</div>
+                        <div class="value">{{ $currentMonthLabel }}</div>
+                        <div class="small text-muted">Dashboard focus for the current month</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Total Voyages This Month</div>
+                        <div class="value">{{ number_format($monthlyVoyageSummary) }}</div>
+                        <div class="small text-muted">All voyage logs created within {{ $currentMonthLabel }}</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Vessels With Fuel Logs</div>
+                        <div class="value">{{ number_format($monthlyFuelByVessel->count()) }}</div>
+                        <div class="small text-muted">Vessels with fuel activity this month</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Ports With Turnaround</div>
+                        <div class="value">{{ number_format($turnaroundPerPort->count()) }}</div>
+                        <div class="small text-muted">Port locations with tracked turnaround hours</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="monthly-vessel-insights" class="row g-4">
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <h5>Monthly Voyages Per Vessel</h5>
+                                <p class="vsli-subtext">Pila ka voyage ang matag vessel sulod sa {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="vsli-chart-wrap mb-4">
+                            <canvas id="monthlyVoyageVesselChart"></canvas>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle vsli-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Voyages</th>
+                                        <th>Total Voyage Hours</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($monthlyVoyagesPerVessel as $vesselVoyage)
+                                        <tr>
+                                            <td>{{ $vesselVoyage['vessel_name'] }}</td>
+                                            <td>{{ number_format($vesselVoyage['total_voyages']) }}</td>
+                                            <td>{{ number_format($vesselVoyage['total_voyage_hours'], 2) }} hrs</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted py-4">No monthly voyage data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <h5>Monthly Fuel Per Vessel</h5>
+                                <p class="vsli-subtext">Fuel consumed ug received per vessel within {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="vsli-chart-wrap mb-4">
+                            <canvas id="monthlyFuelVesselChart"></canvas>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle vsli-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Consumed</th>
+                                        <th>Received</th>
+                                        <th>Avg / Log</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($monthlyFuelByVessel as $fuelSummary)
+                                        <tr>
+                                            <td>{{ $fuelSummary['vessel_name'] }}</td>
+                                            <td>{{ number_format($fuelSummary['total_consumed'], 2) }} L</td>
+                                            <td>{{ number_format($fuelSummary['total_received'], 2) }} L</td>
+                                            <td>{{ number_format($fuelSummary['average_consumed'], 2) }} L</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">No monthly fuel data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <h5>Average Turnaround Time</h5>
+                                <p class="vsli-subtext">Per port call average turnaround hours for {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="vsli-chart-wrap">
+                            <canvas id="averageTurnaroundChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <h5>Loading & Unloading Duration</h5>
+                                <p class="vsli-subtext">Combined loading and unloading hours per vessel for {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="vsli-chart-wrap">
+                            <canvas id="loadingUnloadingChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <h5>Turnaround Per Port Location</h5>
+                                <p class="vsli-subtext">Average ug total turnaround hours per port location for {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="vsli-chart-wrap mb-4">
+                            <canvas id="turnaroundPortChart"></canvas>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle vsli-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Port Location</th>
+                                        <th>Voyages</th>
+                                        <th>Avg Turnaround</th>
+                                        <th>Total Hours</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($turnaroundPerPort as $turnaround)
+                                        <tr>
+                                            <td>{{ $turnaround['location_name'] }}</td>
+                                            <td>{{ number_format($turnaround['total_voyages']) }}</td>
+                                            <td>{{ number_format($turnaround['average_turnaround_hours'], 2) }} hrs</td>
+                                            <td>{{ number_format($turnaround['total_turnaround_hours'], 2) }} hrs</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">No turnaround data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <h5>Loading Duration Per Vessel</h5>
+                                <p class="vsli-subtext">Loading activities duration per vessel for {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle vsli-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Loading Activities</th>
+                                        <th>Total Duration</th>
+                                        <th>Avg Duration</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($loadingDurationByVessel as $loading)
+                                        <tr>
+                                            <td>{{ $loading['vessel_name'] }}</td>
+                                            <td>{{ number_format($loading['total_activities']) }}</td>
+                                            <td>{{ number_format($loading['total_duration_hours'], 2) }} hrs</td>
+                                            <td>{{ number_format($loading['average_duration_hours'], 2) }} hrs</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">No loading activity data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <h5>Unloading Duration Per Vessel</h5>
+                                <p class="vsli-subtext">Unloading activities duration per vessel for {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle vsli-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Unloading Activities</th>
+                                        <th>Total Duration</th>
+                                        <th>Avg Duration</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($unloadingDurationByVessel as $unloading)
+                                        <tr>
+                                            <td>{{ $unloading['vessel_name'] }}</td>
+                                            <td>{{ number_format($unloading['total_activities']) }}</td>
+                                            <td>{{ number_format($unloading['total_duration_hours'], 2) }} hrs</td>
+                                            <td>{{ number_format($unloading['average_duration_hours'], 2) }} hrs</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">No unloading activity data found.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -639,6 +926,15 @@
     const fuelEngineData = {!! json_encode($fuelEngineData) !!};
     const topFuelVesselLabels = {!! json_encode($topFuelVesselLabels) !!};
     const topFuelVesselData = {!! json_encode($topFuelVesselData) !!};
+    const monthlyVoyageVesselLabels = {!! json_encode($monthlyVoyageVesselLabels) !!};
+    const monthlyVoyageVesselData = {!! json_encode($monthlyVoyageVesselData) !!};
+    const monthlyFuelVesselLabels = {!! json_encode($monthlyFuelVesselLabels) !!};
+    const monthlyFuelVesselData = {!! json_encode($monthlyFuelVesselData) !!};
+    const turnaroundPortLabels = {!! json_encode($turnaroundPortLabels) !!};
+    const turnaroundPortData = {!! json_encode($turnaroundPortData) !!};
+    const loadingUnloadingLabels = {!! json_encode($loadingUnloadingLabels) !!};
+    const loadingDurationChartData = {!! json_encode($loadingDurationChartData) !!};
+    const unloadingDurationChartData = {!! json_encode($unloadingDurationChartData) !!};
 
     new Chart(document.getElementById('voyageTrendChart'), {
         type: 'bar',
@@ -733,6 +1029,154 @@
             scales: {
                 x: {
                     beginAtZero: true
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById('monthlyVoyageVesselChart'), {
+        type: 'bar',
+        data: {
+            labels: monthlyVoyageVesselLabels,
+            datasets: [{
+                label: 'Voyages',
+                data: monthlyVoyageVesselData,
+                backgroundColor: '#f59e0b',
+                borderRadius: 10,
+                maxBarThickness: 42
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 0 }
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById('monthlyFuelVesselChart'), {
+        type: 'line',
+        data: {
+            labels: monthlyFuelVesselLabels,
+            datasets: [{
+                label: 'Fuel Consumed',
+                data: monthlyFuelVesselData,
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.12)',
+                tension: 0.35,
+                fill: true,
+                pointRadius: 4,
+                pointBackgroundColor: '#0d6efd'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById('turnaroundPortChart'), {
+        type: 'bar',
+        data: {
+            labels: turnaroundPortLabels,
+            datasets: [{
+                label: 'Avg Turnaround Hours',
+                data: turnaroundPortData,
+                backgroundColor: '#14b8a6',
+                borderRadius: 10,
+                maxBarThickness: 40
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById('averageTurnaroundChart'), {
+        type: 'bar',
+        data: {
+            labels: turnaroundPortLabels,
+            datasets: [{
+                label: 'Average Turnaround Hours',
+                data: turnaroundPortData,
+                backgroundColor: ['#0f4c81', '#155e9c', '#1d70b8', '#2d87d3', '#4a9ce0', '#72b4ea', '#99caf3', '#bedef9'],
+                borderRadius: 10,
+                maxBarThickness: 46
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById('loadingUnloadingChart'), {
+        type: 'bar',
+        data: {
+            labels: loadingUnloadingLabels,
+            datasets: [{
+                label: 'Loading',
+                data: loadingDurationChartData,
+                backgroundColor: '#f97316',
+                borderRadius: 8,
+                borderSkipped: false
+            }, {
+                label: 'Unloading',
+                data: unloadingDurationChartData,
+                backgroundColor: '#0d6efd',
+                borderRadius: 8,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    stacked: true
+                },
+                y: {
+                    stacked: true
                 }
             }
         }

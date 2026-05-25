@@ -37,16 +37,25 @@
                             value="{{ old('certificate_name') }}"
                             required
                         >
+                        @error('certificate_name')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
                     </div>
 
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">Issue Date</label>
                         <input type="date" name="issue_date" class="form-control" value="{{ old('issue_date') }}" required>
+                        @error('issue_date')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
                     </div>
 
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">Expiry Date</label>
                         <input type="date" name="expiry_date" class="form-control" value="{{ old('expiry_date') }}" required>
+                        @error('expiry_date')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
                     </div>
 
                     <div class="col-md-8">
@@ -58,6 +67,9 @@
                             placeholder="Optional notes"
                             value="{{ old('remarks') }}"
                         >
+                        @error('remarks')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
                     </div>
 
                     <div class="col-md-12">
@@ -68,6 +80,9 @@
                                 Allowed: PDF, Word, Excel, or image files up to 5 MB.
                             </small>
                         </div>
+                        @error('document')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
                     </div>
                 </div>
 

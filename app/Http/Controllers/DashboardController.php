@@ -11,6 +11,7 @@ use App\Models\VesselCertificate;
 use App\Models\VoyageActivity;
 use App\Models\VoyageLogHeader;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -64,6 +65,12 @@ class DashboardController extends Controller
 
     protected function buildShippingMetrics(): array
     {
+        $activityDurationSql = 'SUM(TIMESTAMPDIFF(MINUTE, start_date_time, COALESCE(end_date_time, NOW())))';
+        $locationNameSql = "COALESCE(NULLIF(TRIM(port_location), ''), 'Unassigned')";
+        $currentMonthStart = now()->copy()->startOfMonth();
+        $currentMonthEnd = now()->copy()->endOfMonth();
+        $currentMonthLabel = $currentMonthStart->format('F Y');
+
         $totalVoyages = VoyageLogHeader::count();
         $openVoyages = VoyageLogHeader::where('status', 'OPEN')->count();
         $completedVoyages = VoyageLogHeader::where('status', 'COMPLETED')->count();
@@ -147,6 +154,226 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
+        $vesselOperatingHours = VoyageActivity::with('vessel')
+            ->selectRaw("vessel_id, {$activityDurationSql} as total_minutes, COUNT(*) as total_activities")
+            ->whereNotNull('start_date_time')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_minutes')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                $minutes = (float) ($row->total_minutes ?? 0);
+
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'hours' => round($minutes / 60, 2),
+                    'activities' => (int) ($row->total_activities ?? 0),
+                ];
+            });
+
+        $locationHours = VoyageActivity::query()
+            ->selectRaw("{$locationNameSql} as location_name, {$activityDurationSql} as total_minutes, COUNT(*) as total_activities")
+            ->whereNotNull('start_date_time')
+            ->groupBy(DB::raw($locationNameSql))
+            ->orderByDesc('total_minutes')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                $minutes = (float) ($row->total_minutes ?? 0);
+
+                return [
+                    'location_name' => $row->location_name ?? 'Unassigned',
+                    'hours' => round($minutes / 60, 2),
+                    'activities' => (int) ($row->total_activities ?? 0),
+                ];
+            });
+
+        $latestFuelByVessel = FuelRobMonitoring::query()
+            ->select('vessel_id', 'remaining_fuel')
+            ->whereIn('fuel_id', function ($query) {
+                $query->from('fuel_rob_monitorings')
+                    ->selectRaw('MAX(fuel_id)')
+                    ->groupBy('vessel_id');
+            })
+            ->get()
+            ->keyBy('vessel_id');
+
+        $fuelByVessel = FuelRobMonitoring::with('vessel')
+            ->selectRaw('vessel_id, SUM(total_consumed) as total_consumed, SUM(received_fuel) as total_received, COUNT(*) as total_entries')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_consumed')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) use ($latestFuelByVessel) {
+                $latestRemaining = $latestFuelByVessel->get($row->vessel_id);
+
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'total_consumed' => round((float) ($row->total_consumed ?? 0), 2),
+                    'total_received' => round((float) ($row->total_received ?? 0), 2),
+                    'remaining_fuel' => round((float) ($latestRemaining?->remaining_fuel ?? 0), 2),
+                    'entries' => (int) ($row->total_entries ?? 0),
+                ];
+            });
+
+        $voyageLogsByVessel = VoyageLogHeader::with('vessel')
+            ->selectRaw('vessel_id, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours, AVG(NULLIF(total_hours_voyage, 0)) as average_voyage_hours')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_voyages')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'total_voyages' => (int) ($row->total_voyages ?? 0),
+                    'total_voyage_hours' => round((float) ($row->total_voyage_hours ?? 0), 2),
+                    'average_voyage_hours' => round((float) ($row->average_voyage_hours ?? 0), 2),
+                ];
+            });
+
+        $portStayByVessel = VoyageLogHeader::with('vessel')
+            ->selectRaw("vessel_id, {$locationNameSql} as location_name, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours")
+            ->groupBy('vessel_id', DB::raw($locationNameSql))
+            ->orderByDesc('total_voyage_hours')
+            ->limit(10)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'location_name' => $row->location_name ?? 'Unassigned',
+                    'total_voyages' => (int) ($row->total_voyages ?? 0),
+                    'total_voyage_hours' => round((float) ($row->total_voyage_hours ?? 0), 2),
+                ];
+            });
+
+        $activityHoursByVessel = VoyageActivity::with('vessel')
+            ->selectRaw('vessel_id, COUNT(*) as total_activities, SUM(COALESCE(total_hours, 0)) as total_activity_hours, AVG(NULLIF(total_hours, 0)) as average_activity_hours')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_activity_hours')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'total_activities' => (int) ($row->total_activities ?? 0),
+                    'total_activity_hours' => round((float) ($row->total_activity_hours ?? 0), 2),
+                    'average_activity_hours' => round((float) ($row->average_activity_hours ?? 0), 2),
+                ];
+            });
+
+        $monthlyVoyageSummary = VoyageLogHeader::whereBetween('date_created', [
+                $currentMonthStart->toDateString(),
+                $currentMonthEnd->toDateString(),
+            ])
+            ->count();
+
+        $monthlyVoyagesPerVessel = VoyageLogHeader::with('vessel')
+            ->whereBetween('date_created', [
+                $currentMonthStart->toDateString(),
+                $currentMonthEnd->toDateString(),
+            ])
+            ->selectRaw('vessel_id, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_voyages')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'total_voyages' => (int) ($row->total_voyages ?? 0),
+                    'total_voyage_hours' => round((float) ($row->total_voyage_hours ?? 0), 2),
+                ];
+            });
+
+        $monthlyFuelByVessel = FuelRobMonitoring::with('vessel')
+            ->whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])
+            ->selectRaw('vessel_id, SUM(total_consumed) as total_consumed, SUM(received_fuel) as total_received, AVG(NULLIF(total_consumed, 0)) as average_consumed')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_consumed')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'total_consumed' => round((float) ($row->total_consumed ?? 0), 2),
+                    'total_received' => round((float) ($row->total_received ?? 0), 2),
+                    'average_consumed' => round((float) ($row->average_consumed ?? 0), 2),
+                ];
+            });
+
+        $turnaroundPerPort = VoyageLogHeader::query()
+            ->whereBetween('date_created', [
+                $currentMonthStart->toDateString(),
+                $currentMonthEnd->toDateString(),
+            ])
+            ->selectRaw("{$locationNameSql} as location_name, COUNT(*) as total_voyages, AVG(NULLIF(total_hours_voyage, 0)) as average_turnaround_hours, SUM(COALESCE(total_hours_voyage, 0)) as total_turnaround_hours")
+            ->groupBy(DB::raw($locationNameSql))
+            ->orderByDesc('average_turnaround_hours')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'location_name' => $row->location_name ?? 'Unassigned',
+                    'total_voyages' => (int) ($row->total_voyages ?? 0),
+                    'average_turnaround_hours' => round((float) ($row->average_turnaround_hours ?? 0), 2),
+                    'total_turnaround_hours' => round((float) ($row->total_turnaround_hours ?? 0), 2),
+                ];
+            });
+
+        $loadingDurationByVessel = VoyageActivity::with('vessel')
+            ->whereBetween('start_date_time', [$currentMonthStart, $currentMonthEnd])
+            ->whereHas('activity', function ($query) {
+                $query->whereRaw("LOWER(name) LIKE '%load%'")
+                    ->whereRaw("LOWER(name) NOT LIKE '%unload%'");
+            })
+            ->selectRaw('vessel_id, COUNT(*) as total_activities, SUM(COALESCE(total_hours, 0)) as total_duration_hours, AVG(NULLIF(total_hours, 0)) as average_duration_hours')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_duration_hours')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'total_activities' => (int) ($row->total_activities ?? 0),
+                    'total_duration_hours' => round((float) ($row->total_duration_hours ?? 0), 2),
+                    'average_duration_hours' => round((float) ($row->average_duration_hours ?? 0), 2),
+                ];
+            });
+
+        $unloadingDurationByVessel = VoyageActivity::with('vessel')
+            ->whereBetween('start_date_time', [$currentMonthStart, $currentMonthEnd])
+            ->whereHas('activity', function ($query) {
+                $query->whereRaw("LOWER(name) LIKE '%unload%'");
+            })
+            ->selectRaw('vessel_id, COUNT(*) as total_activities, SUM(COALESCE(total_hours, 0)) as total_duration_hours, AVG(NULLIF(total_hours, 0)) as average_duration_hours')
+            ->groupBy('vessel_id')
+            ->orderByDesc('total_duration_hours')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'total_activities' => (int) ($row->total_activities ?? 0),
+                    'total_duration_hours' => round((float) ($row->total_duration_hours ?? 0), 2),
+                    'average_duration_hours' => round((float) ($row->average_duration_hours ?? 0), 2),
+                ];
+            });
+
+        $loadingByVesselMap = $loadingDurationByVessel->keyBy('vessel_name');
+        $unloadingByVesselMap = $unloadingDurationByVessel->keyBy('vessel_name');
+        $loadingUnloadingLabels = $loadingDurationByVessel->pluck('vessel_name')
+            ->merge($unloadingDurationByVessel->pluck('vessel_name'))
+            ->unique()
+            ->values();
+
+        $loadingDurationChartData = $loadingUnloadingLabels
+            ->map(fn ($vesselName) => (float) ($loadingByVesselMap->get($vesselName)['total_duration_hours'] ?? 0))
+            ->values();
+
+        $unloadingDurationChartData = $loadingUnloadingLabels
+            ->map(fn ($vesselName) => (float) ($unloadingByVesselMap->get($vesselName)['total_duration_hours'] ?? 0))
+            ->values();
+
         return [
             'totalVessels' => Vessel::count(),
             'activeVessels' => $activeVessels,
@@ -179,6 +406,30 @@ class DashboardController extends Controller
             'fuelEngineData' => array_values($fuelConsumptionByEngine),
             'topFuelVesselLabels' => $topFuelVessels->map(fn ($row) => $row->vessel?->vessel_name ?? 'Unknown')->values(),
             'topFuelVesselData' => $topFuelVessels->map(fn ($row) => (float) $row->total_consumed)->values(),
+            'vesselOperatingHours' => $vesselOperatingHours,
+            'locationHours' => $locationHours,
+            'locationHourLabels' => $locationHours->pluck('location_name')->values(),
+            'locationHourData' => $locationHours->pluck('hours')->values(),
+            'fuelByVessel' => $fuelByVessel,
+            'voyageLogsByVessel' => $voyageLogsByVessel,
+            'portStayByVessel' => $portStayByVessel,
+            'activityHoursByVessel' => $activityHoursByVessel,
+            'currentMonthLabel' => $currentMonthLabel,
+            'monthlyVoyageSummary' => $monthlyVoyageSummary,
+            'monthlyVoyagesPerVessel' => $monthlyVoyagesPerVessel,
+            'monthlyVoyageVesselLabels' => $monthlyVoyagesPerVessel->pluck('vessel_name')->values(),
+            'monthlyVoyageVesselData' => $monthlyVoyagesPerVessel->pluck('total_voyages')->values(),
+            'monthlyFuelByVessel' => $monthlyFuelByVessel,
+            'monthlyFuelVesselLabels' => $monthlyFuelByVessel->pluck('vessel_name')->values(),
+            'monthlyFuelVesselData' => $monthlyFuelByVessel->pluck('total_consumed')->values(),
+            'turnaroundPerPort' => $turnaroundPerPort,
+            'turnaroundPortLabels' => $turnaroundPerPort->pluck('location_name')->values(),
+            'turnaroundPortData' => $turnaroundPerPort->pluck('average_turnaround_hours')->values(),
+            'loadingDurationByVessel' => $loadingDurationByVessel,
+            'unloadingDurationByVessel' => $unloadingDurationByVessel,
+            'loadingUnloadingLabels' => $loadingUnloadingLabels,
+            'loadingDurationChartData' => $loadingDurationChartData,
+            'unloadingDurationChartData' => $unloadingDurationChartData,
         ];
     }
 
