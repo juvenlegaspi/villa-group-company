@@ -66,10 +66,10 @@ class DashboardController extends Controller
     protected function buildShippingMetrics(): array
     {
         $activityDurationSql = 'SUM(TIMESTAMPDIFF(MINUTE, start_date_time, COALESCE(end_date_time, NOW())))';
-        $locationNameSql = "COALESCE(NULLIF(TRIM(port_location), ''), 'Unassigned')";
         $currentMonthStart = now()->copy()->startOfMonth();
         $currentMonthEnd = now()->copy()->endOfMonth();
         $currentMonthLabel = $currentMonthStart->format('F Y');
+        $normalizeLocation = fn ($value) => filled(trim((string) $value)) ? trim((string) $value) : 'Unassigned';
 
         $totalVoyages = VoyageLogHeader::count();
         $openVoyages = VoyageLogHeader::where('status', 'OPEN')->count();
@@ -172,19 +172,30 @@ class DashboardController extends Controller
             });
 
         $locationHours = VoyageActivity::query()
-            ->selectRaw("{$locationNameSql} as location_name, {$activityDurationSql} as total_minutes, COUNT(*) as total_activities")
+            ->selectRaw("port_location, {$activityDurationSql} as total_minutes, COUNT(*) as total_activities")
             ->whereNotNull('start_date_time')
-            ->groupBy(DB::raw($locationNameSql))
+            ->groupBy('port_location')
             ->orderByDesc('total_minutes')
-            ->limit(8)
             ->get()
-            ->map(function ($row) {
-                $minutes = (float) ($row->total_minutes ?? 0);
+            ->groupBy(fn ($row) => $normalizeLocation($row->port_location))
+            ->map(function ($rows, $locationName) {
+                $minutes = (float) $rows->sum('total_minutes');
+                $activities = (int) $rows->sum('total_activities');
 
                 return [
-                    'location_name' => $row->location_name ?? 'Unassigned',
+                    'location_name' => $locationName,
                     'hours' => round($minutes / 60, 2),
-                    'activities' => (int) ($row->total_activities ?? 0),
+                    'activities' => $activities,
+                ];
+            })
+            ->sortByDesc('hours')
+            ->take(8)
+            ->values()
+            ->map(function ($row) {
+                return [
+                    'location_name' => $row['location_name'],
+                    'hours' => $row['hours'],
+                    'activities' => $row['activities'],
                 ];
             });
 
@@ -232,19 +243,24 @@ class DashboardController extends Controller
             });
 
         $portStayByVessel = VoyageLogHeader::with('vessel')
-            ->selectRaw("vessel_id, {$locationNameSql} as location_name, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours")
-            ->groupBy('vessel_id', DB::raw($locationNameSql))
+            ->selectRaw('vessel_id, port_location, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours')
+            ->groupBy('vessel_id', 'port_location')
             ->orderByDesc('total_voyage_hours')
-            ->limit(10)
             ->get()
-            ->map(function ($row) {
+            ->groupBy(fn ($row) => $row->vessel_id . '|' . $normalizeLocation($row->port_location))
+            ->map(function ($rows) use ($normalizeLocation) {
+                $first = $rows->first();
+
                 return [
-                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
-                    'location_name' => $row->location_name ?? 'Unassigned',
-                    'total_voyages' => (int) ($row->total_voyages ?? 0),
-                    'total_voyage_hours' => round((float) ($row->total_voyage_hours ?? 0), 2),
+                    'vessel_name' => $first->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'location_name' => $normalizeLocation($first->port_location),
+                    'total_voyages' => (int) $rows->sum('total_voyages'),
+                    'total_voyage_hours' => round((float) $rows->sum('total_voyage_hours'), 2),
                 ];
-            });
+            })
+            ->sortByDesc('total_voyage_hours')
+            ->take(10)
+            ->values();
 
         $activityHoursByVessel = VoyageActivity::with('vessel')
             ->selectRaw('vessel_id, COUNT(*) as total_activities, SUM(COALESCE(total_hours, 0)) as total_activity_hours, AVG(NULLIF(total_hours, 0)) as average_activity_hours')
@@ -306,19 +322,25 @@ class DashboardController extends Controller
                 $currentMonthStart->toDateString(),
                 $currentMonthEnd->toDateString(),
             ])
-            ->selectRaw("{$locationNameSql} as location_name, COUNT(*) as total_voyages, AVG(NULLIF(total_hours_voyage, 0)) as average_turnaround_hours, SUM(COALESCE(total_hours_voyage, 0)) as total_turnaround_hours")
-            ->groupBy(DB::raw($locationNameSql))
+            ->selectRaw('port_location, COUNT(*) as total_voyages, AVG(NULLIF(total_hours_voyage, 0)) as average_turnaround_hours, SUM(COALESCE(total_hours_voyage, 0)) as total_turnaround_hours')
+            ->groupBy('port_location')
             ->orderByDesc('average_turnaround_hours')
-            ->limit(8)
             ->get()
-            ->map(function ($row) {
+            ->groupBy(fn ($row) => $normalizeLocation($row->port_location))
+            ->map(function ($rows, $locationName) {
+                $totalVoyages = (int) $rows->sum('total_voyages');
+                $totalHours = (float) $rows->sum('total_turnaround_hours');
+
                 return [
-                    'location_name' => $row->location_name ?? 'Unassigned',
-                    'total_voyages' => (int) ($row->total_voyages ?? 0),
-                    'average_turnaround_hours' => round((float) ($row->average_turnaround_hours ?? 0), 2),
-                    'total_turnaround_hours' => round((float) ($row->total_turnaround_hours ?? 0), 2),
+                    'location_name' => $locationName,
+                    'total_voyages' => $totalVoyages,
+                    'average_turnaround_hours' => $totalVoyages > 0 ? round($totalHours / $totalVoyages, 2) : 0,
+                    'total_turnaround_hours' => round($totalHours, 2),
                 ];
-            });
+            })
+            ->sortByDesc('average_turnaround_hours')
+            ->take(8)
+            ->values();
 
         $loadingDurationByVessel = VoyageActivity::with('vessel')
             ->whereBetween('start_date_time', [$currentMonthStart, $currentMonthEnd])
