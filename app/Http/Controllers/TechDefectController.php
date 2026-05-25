@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use App\Models\User;
+use Carbon\Carbon;
 
 class TechDefectController extends Controller
 {
@@ -24,21 +25,77 @@ class TechDefectController extends Controller
         $ongoing = TechDefect::where('status', self::STATUS_ONGOING)->count();
         $waiting = TechDefect::where('status', self::STATUS_WAITING_THIRD_PARTY)->count();
         $completed = TechDefect::where('status', self::STATUS_COMPLETED)->count();
+
         $vesselDefects = TechDefect::selectRaw('vessel_id, COUNT(*) as total')
             ->groupBy('vessel_id')
             ->with('vessel')
             ->get();
-        $latestReports = TechDefect::with('vessel')->latest()->take(5)->get();
-        $monthlyDefects = TechDefect::selectRaw('MONTH(date_identified) as month, COUNT(*) as total')
-            ->groupBy('month')
-            ->orderBy('month')
+
+        $latestReports = TechDefect::with('vessel')
+            ->latest('id')
+            ->take(6)
             ->get();
+
+        $monthlyDefects = TechDefect::selectRaw('YEAR(date_identified) as year_num, MONTH(date_identified) as month_num, COUNT(*) as total')
+            ->whereNotNull('date_identified')
+            ->groupBy('year_num', 'month_num')
+            ->orderBy('year_num')
+            ->orderBy('month_num')
+            ->get()
+            ->map(fn ($row) => [
+                'label' => Carbon::create()->setDate($row->year_num, $row->month_num, 1)->format('M Y'),
+                'total' => (int) $row->total,
+            ])
+            ->take(-6)
+            ->values();
+
         $topVessel = TechDefect::selectRaw('vessel_id, COUNT(*) as total')
             ->groupBy('vessel_id')
             ->orderByDesc('total')
             ->with('vessel')
             ->first();
+
         $criticalDefects = TechDefect::where('severity_level', 'critical')->count();
+        $highSeverityDefects = TechDefect::whereIn('severity_level', ['critical', 'high', 'CRITICAL', 'HIGH'])->count();
+        $thirdPartyCases = TechDefect::where('third_party_required', 'Yes')->count();
+        $resolvedThisMonth = TechDefect::whereDate('date_completed', '>=', now()->startOfMonth())->count();
+
+        $severityBreakdown = [
+            'Critical' => TechDefect::whereRaw('LOWER(severity_level) = ?', ['critical'])->count(),
+            'High' => TechDefect::whereRaw('LOWER(severity_level) = ?', ['high'])->count(),
+            'Medium' => TechDefect::whereRaw('LOWER(severity_level) = ?', ['medium'])->count(),
+            'Low' => TechDefect::whereRaw('LOWER(severity_level) = ?', ['low'])->count(),
+        ];
+
+        $systemBreakdown = TechDefect::query()
+            ->selectRaw("COALESCE(NULLIF(system_affected, ''), 'UNSPECIFIED') as system_name, COUNT(*) as total")
+            ->groupBy('system_name')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        $portBreakdown = TechDefect::query()
+            ->selectRaw("COALESCE(NULLIF(port_location, ''), 'UNASSIGNED') as port_name, COUNT(*) as total")
+            ->groupBy('port_name')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        $riskVessels = TechDefect::with('vessel')
+            ->selectRaw('vessel_id, SUM(CASE WHEN LOWER(severity_level) = "critical" THEN 1 ELSE 0 END) as critical_total, SUM(CASE WHEN status != ? THEN 1 ELSE 0 END) as active_total, COUNT(*) as total_reports', [self::STATUS_COMPLETED])
+            ->groupBy('vessel_id')
+            ->orderByDesc('critical_total')
+            ->orderByDesc('active_total')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'critical_total' => (int) ($row->critical_total ?? 0),
+                    'active_total' => (int) ($row->active_total ?? 0),
+                    'total_reports' => (int) ($row->total_reports ?? 0),
+                ];
+            });
 
         return view('shipping.tech_defects.dashboard', compact(
             'totalReports',
@@ -50,7 +107,14 @@ class TechDefectController extends Controller
             'latestReports',
             'monthlyDefects',
             'topVessel',
-            'criticalDefects'
+            'criticalDefects',
+            'highSeverityDefects',
+            'thirdPartyCases',
+            'resolvedThisMonth',
+            'severityBreakdown',
+            'systemBreakdown',
+            'portBreakdown',
+            'riskVessels'
         ));
     }
 

@@ -384,104 +384,6 @@
             </div>
         </section>
 
-        <section id="fuel-monitoring" class="card vsli-card vsli-section-card">
-            <div class="card-body">
-                <div class="vsli-section-title">
-                    <div>
-                        <h4>Fuel Monitoring Dashboard</h4>
-                        <p class="vsli-subtext">Central summary sa consumption, bunkering, ug low fuel exposure.</p>
-                    </div>
-                </div>
-
-                <div class="vsli-mini-grid mb-4">
-                    <div class="vsli-mini-card">
-                        <div class="label">Total Fuel Consumed</div>
-                        <div class="value">{{ number_format($totalFuelConsumed, 2) }}</div>
-                        <div class="small text-muted">Liters consumed from monitoring logs</div>
-                    </div>
-                    <div class="vsli-mini-card">
-                        <div class="label">Total Fuel Received</div>
-                        <div class="value">{{ number_format($totalFuelReceived, 2) }}</div>
-                        <div class="small text-muted">Liters added through bunkering</div>
-                    </div>
-                    <div class="vsli-mini-card">
-                        <div class="label">Average Consumption</div>
-                        <div class="value">{{ number_format($averageFuelConsumed, 2) }}</div>
-                        <div class="small text-muted">Average per fuel monitoring record</div>
-                    </div>
-                    <div class="vsli-mini-card">
-                        <div class="label">Low Fuel Voyages</div>
-                        <div class="value">{{ number_format($lowFuelVoyages->count()) }}</div>
-                        <div class="small text-muted">Voyages below 1,000 liters remaining</div>
-                    </div>
-                </div>
-
-                <div class="row g-4">
-                    <div class="col-xl-4">
-                        <div class="vsli-chart-wrap">
-                            <canvas id="fuelEngineChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="col-xl-4">
-                        <div class="vsli-chart-wrap">
-                            <canvas id="topFuelVesselChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="col-xl-4">
-                        <div class="h-100 p-3 rounded-4" style="background: linear-gradient(180deg, #fff7ed, #ffffff); border: 1px solid #fed7aa;">
-                            <h5 class="mb-3">Low Fuel Watchlist</h5>
-                            <div class="vsli-alert-list">
-                                @forelse($lowFuelVoyages as $voyage)
-                                    <div class="vsli-alert-item" style="background:#fffaf5; border-color:#fdba74;">
-                                        <strong>{{ $voyage->vessel?->vessel_name ?? 'Unknown Vessel' }}</strong><br>
-                                        <span class="small text-muted">Voyage {{ $voyage->voyage_no ?? ('VL-' . $voyage->voyage_id) }}</span><br>
-                                        <span class="small text-danger">{{ number_format((float) $voyage->fuel_balance, 2) }} Liters remaining</span>
-                                    </div>
-                                @empty
-                                    <div class="vsli-alert-item" style="background:#fffaf5; border-color:#fed7aa;">
-                                        <strong>No low fuel alerts.</strong><br>
-                                        <span class="small text-muted">All monitored voyages are above the current threshold.</span>
-                                    </div>
-                                @endforelse
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <hr class="my-4">
-
-                <div class="vsli-section-title mb-3">
-                    <div>
-                        <h5>Monthly Vessel Snapshot</h5>
-                        <p class="vsli-subtext">Current month focus for vessels, fuel, turnaround, ug loading activities.</p>
-                    </div>
-                </div>
-
-                <div class="vsli-mini-grid">
-                    <div class="vsli-mini-card">
-                        <div class="label">Month Covered</div>
-                        <div class="value">{{ $currentMonthLabel }}</div>
-                        <div class="small text-muted">Dashboard focus for the current month</div>
-                    </div>
-                    <div class="vsli-mini-card">
-                        <div class="label">Total Voyages This Month</div>
-                        <div class="value">{{ number_format($monthlyVoyageSummary) }}</div>
-                        <div class="small text-muted">All voyage logs created within {{ $currentMonthLabel }}</div>
-                    </div>
-                    <div class="vsli-mini-card">
-                        <div class="label">Vessels With Fuel Logs</div>
-                        <div class="value">{{ number_format($monthlyFuelByVessel->count()) }}</div>
-                        <div class="small text-muted">Vessels with fuel activity this month</div>
-                    </div>
-                    <div class="vsli-mini-card">
-                        <div class="label">Ports With Turnaround</div>
-                        <div class="value">{{ number_format($turnaroundPerPort->count()) }}</div>
-                        <div class="small text-muted">Port locations with tracked turnaround hours</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <section id="monthly-vessel-insights" class="row g-4">
             <div class="col-xl-6">
                 <div class="card vsli-card vsli-section-card h-100">
@@ -601,6 +503,104 @@
                         <div class="vsli-chart-wrap">
                             <canvas id="loadingUnloadingChart"></canvas>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="fuel-monitoring" class="card vsli-card vsli-section-card">
+            <div class="card-body">
+                <div class="vsli-section-title">
+                    <div>
+                        <h4>Fuel Monitoring Dashboard</h4>
+                        <p class="vsli-subtext">Central summary sa consumption, bunkering, ug low fuel exposure.</p>
+                    </div>
+                </div>
+
+                <div class="vsli-mini-grid mb-4">
+                    <div class="vsli-mini-card">
+                        <div class="label">Total Fuel Consumed</div>
+                        <div class="value">{{ number_format($totalFuelConsumed, 2) }}</div>
+                        <div class="small text-muted">Liters consumed from monitoring logs</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Total Fuel Received</div>
+                        <div class="value">{{ number_format($totalFuelReceived, 2) }}</div>
+                        <div class="small text-muted">Liters added through bunkering</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Average Consumption</div>
+                        <div class="value">{{ number_format($averageFuelConsumed, 2) }}</div>
+                        <div class="small text-muted">Average per fuel monitoring record</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Low Fuel Voyages</div>
+                        <div class="value">{{ number_format($lowFuelVoyages->count()) }}</div>
+                        <div class="small text-muted">Voyages below 1,000 liters remaining</div>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-xl-4">
+                        <div class="vsli-chart-wrap">
+                            <canvas id="fuelEngineChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-xl-4">
+                        <div class="vsli-chart-wrap">
+                            <canvas id="topFuelVesselChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-xl-4">
+                        <div class="h-100 p-3 rounded-4" style="background: linear-gradient(180deg, #fff7ed, #ffffff); border: 1px solid #fed7aa;">
+                            <h5 class="mb-3">Low Fuel Watchlist</h5>
+                            <div class="vsli-alert-list">
+                                @forelse($lowFuelVoyages as $voyage)
+                                    <div class="vsli-alert-item" style="background:#fffaf5; border-color:#fdba74;">
+                                        <strong>{{ $voyage->vessel?->vessel_name ?? 'Unknown Vessel' }}</strong><br>
+                                        <span class="small text-muted">Voyage {{ $voyage->voyage_no ?? ('VL-' . $voyage->voyage_id) }}</span><br>
+                                        <span class="small text-danger">{{ number_format((float) $voyage->fuel_balance, 2) }} Liters remaining</span>
+                                    </div>
+                                @empty
+                                    <div class="vsli-alert-item" style="background:#fffaf5; border-color:#fed7aa;">
+                                        <strong>No low fuel alerts.</strong><br>
+                                        <span class="small text-muted">All monitored voyages are above the current threshold.</span>
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="vsli-section-title mb-3">
+                    <div>
+                        <h5>Monthly Vessel Snapshot</h5>
+                        <p class="vsli-subtext">Current month focus for vessels, fuel, turnaround, ug loading activities.</p>
+                    </div>
+                </div>
+
+                <div class="vsli-mini-grid">
+                    <div class="vsli-mini-card">
+                        <div class="label">Month Covered</div>
+                        <div class="value">{{ $currentMonthLabel }}</div>
+                        <div class="small text-muted">Dashboard focus for the current month</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Total Voyages This Month</div>
+                        <div class="value">{{ number_format($monthlyVoyageSummary) }}</div>
+                        <div class="small text-muted">All voyage logs created within {{ $currentMonthLabel }}</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Vessels With Fuel Logs</div>
+                        <div class="value">{{ number_format($monthlyFuelByVessel->count()) }}</div>
+                        <div class="small text-muted">Vessels with fuel activity this month</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Ports With Turnaround</div>
+                        <div class="value">{{ number_format($turnaroundPerPort->count()) }}</div>
+                        <div class="small text-muted">Port locations with tracked turnaround hours</div>
                     </div>
                 </div>
             </div>
