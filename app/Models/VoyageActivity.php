@@ -29,6 +29,9 @@ class VoyageActivity extends Model
         'end_date_time',
         'total_hours',
         'cargo_load',
+        'total_unload',
+        'cargo_unload',
+        'load_unit',
         'fuel_rob',
         'main_status',
     ];

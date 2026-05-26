@@ -124,29 +124,90 @@ class VoyageLogController extends Controller
     public function addActivity(Request $request, $detailId)
     {
         $request->validate([
-            'activity_id'   => 'required|exists:activity_voyage,id',
+            'activity_id' => 'required|exists:activity_voyage,id',
         ]);
-
         $detail = VoyageLogDetail::findOrFail($detailId);
-
         $voyage = VoyageLogHeader::where('voyage_id', $detail->voyage_id)
             ->first();
-
         $lastEndedActivity = VoyageActivity::where('vessel_id', $voyage->vessel_id)
             ->whereNotNull('end_date_time')
             ->latest('end_date_time')
             ->first();
+        // =========================================
+        // DEFAULT VALUES
+        // =========================================
+        $cargoLoad = null;
+        $totalLoad = null;
+        $cargoUnload = null;
+        $totalUnload = null;
+        // =========================================
+        // LOADING ACTIVITIES
+        // 34 = Loading
+        // 36 = Complete Loading
+        // =========================================
+        if (in_array($request->activity_id, [34, 36])) {
+            $cargoLoad = (float) $request->running_load;
+            // kuha last total load
+            $lastLoad = VoyageActivity::where('voyage_id', $detail->voyage_id)
+                ->whereNotNull('total_load')
+                ->latest('activity_id')
+                ->first();
+            $previousTotalLoad = $lastLoad?->total_load ?? 0;
+            $totalLoad = $previousTotalLoad + $cargoLoad;
+        }
+        // =========================================
+        // UNLOADING ACTIVITIES
+        // 35 = Unloading
+        // 37 = Complete Unloading
+        // =========================================
+        if (in_array($request->activity_id, [35, 37])) {
 
+            $cargoUnload = (float) $request->running_load;
+            // kuha last total unload
+            $lastUnload = VoyageActivity::where('voyage_id', $detail->voyage_id)
+                ->whereNotNull('total_unload')
+                ->latest('activity_id')
+                ->first();
+            $previousTotalUnload = $lastUnload?->total_unload ?? 0;
+            $totalUnload = $previousTotalUnload + $cargoUnload;
+        }
         VoyageActivity::create([
             'voyage_id'         => $detail->voyage_id,
             'voyage_detail_id'  => $detail->dtl_id,
             'vessel_id'         => $voyage->vessel_id,
             'status_id'         => $detail->status,
             'status_activity_id'=> $request->activity_id,
-            'remarks'         => $request->remarks,
+            'remarks'           => $request->remarks,
             'start_date_time'   => $lastEndedActivity?->end_date_time ?? now(),
+            // LOADING
+            'cargo_load'        => $cargoLoad,
+            'total_load'        => $totalLoad,
+            // UNLOADING
+            'cargo_unload'      => $cargoUnload,
+            'total_unload'      => $totalUnload,
+            'load_unit' => $request->load_unit,
             'main_status'       => 'ONGOING',
         ]);
+        if (in_array($request->activity_id, [34, 36])) {
+            preg_match('/[\d.]+/', $voyage->cargo_volume, $matches);
+            $currentCargo = (float) ($matches[0] ?? 0);
+            $newCargo = $currentCargo + (float) $request->running_load;
+            $voyage->update([
+                'cargo_volume' => $newCargo . ' ' . $request->load_unit
+            ]);
+        }
+        if (in_array($request->activity_id, [35, 37])) {
+            preg_match('/[\d.]+/', $voyage->cargo_volume, $matches);
+            $currentCargo = (float) ($matches[0] ?? 0);
+            $newCargo = $currentCargo - (float) $request->running_load;
+            // para dili negative
+            if ($newCargo < 0) {
+                $newCargo = 0;
+            }
+            $voyage->update([
+                'cargo_volume' => $newCargo . ' ' . $request->load_unit
+            ]);
+        }
         return back()->with('success', 'Activity added successfully.');
     }
 
@@ -366,6 +427,8 @@ class VoyageLogController extends Controller
     {
         $voyage = VoyageLogHeader::with([
             'details.activities.activity',
+            'details.statusRelation',
+            'vessel',
             'creator',
             'fuelMonitorings'
         ])->findOrFail($id);

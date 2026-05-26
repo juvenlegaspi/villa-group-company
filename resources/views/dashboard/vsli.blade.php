@@ -391,7 +391,7 @@
                         <div class="vsli-section-title">
                             <div>
                                 <h5>Monthly Voyages Per Vessel</h5>
-                                <p class="vsli-subtext">Pila ka voyage ang matag vessel sulod sa {{ $currentMonthLabel }}.</p>
+                                <p class="vsli-subtext">Voyage per vessel within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 

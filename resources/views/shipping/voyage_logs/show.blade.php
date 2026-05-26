@@ -565,7 +565,7 @@
                                         {{-- ACTIVITY DROPDOWN --}}
                                         <div class="mb-3">
                                             <label>Activity</label>
-                                            <select name="activity_id" class="form-control" required>
+                                            <select name="activity_id" class="form-control activity-select" required>
                                                 <option value="">-- SELECT ACTIVITY --</option>
                                                     @foreach($activities->where('activity_status_voyage_id', $detail->status) as $act)
                                                         <option value="{{ $act->id }}">
@@ -594,7 +594,7 @@
                                                 rows="3"
                                                 placeholder="Enter remarks"></textarea>
                                         </div>
-                                        @if($detail->status == 5)
+                                        <div class="mb-3 cargo-load-section d-none">
                                             <div class="mb-3 cargo-load-section">
                                                 <label>Running Load</label>
                                                 <div class="row">
@@ -621,7 +621,7 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        @endif
+                                        </div>
                                         <button class="btn btn-primary">Start</button>
                                     </form>
                                 </div>
@@ -778,6 +778,25 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.activity-select').forEach(function(select) {
+        select.addEventListener('change', function() {
+            let modal = this.closest('.modal');
+            let cargoSection = modal.querySelector('.cargo-load-section');
+            let activityId = parseInt(this.value);
+            // loading/unloading activities
+            let allowedActivities = [34, 35, 36, 37];
+            if (allowedActivities.includes(activityId)) {
+                cargoSection.classList.remove('d-none');
+            } else {
+                cargoSection.classList.add('d-none');
+            }
+        });
+    });
+});
+</script>
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @if(session('invalidEndTime'))
 
