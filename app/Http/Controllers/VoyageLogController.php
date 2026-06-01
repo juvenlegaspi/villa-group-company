@@ -126,6 +126,7 @@ class VoyageLogController extends Controller
     {
         $request->validate([
             'activity_id' => 'required|exists:activity_voyage,id',
+            'cargo_type' => 'nullable|string|max:255',
         ]);
         $detail = VoyageLogDetail::findOrFail($detailId);
         $voyage = VoyageLogHeader::where('voyage_id', $detail->voyage_id)
@@ -211,7 +212,20 @@ class VoyageLogController extends Controller
                 'cargo_volume' => $newCargo . ' ' . $request->load_unit
             ]);
         }
-        $voyage->update(['current_location_id' => $selectedPort->id, 'current_location'    => $selectedPort->port_name,]);
+        $updateData = [
+            'current_location_id' => $selectedPort->id,
+            'current_location'    => $selectedPort->port_name,
+        ];
+
+        // loading / unloading activities only
+        if (
+            in_array($request->activity_id, [34, 35, 36, 37]) &&
+            !empty($request->cargo_type)
+        ) {
+            $updateData['cargo_type'] = $request->cargo_type;
+        }
+
+        $voyage->update($updateData);
         return back()->with('success', 'Activity added successfully.');
     }
 

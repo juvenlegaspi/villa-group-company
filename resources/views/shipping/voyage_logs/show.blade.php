@@ -624,6 +624,13 @@
                                                             <option value="Piece/Unit">Piece/Unit</option>
                                                         </select>
                                                     </div>
+                                                    <div class="mb-3">
+                                                        <label>Cargo Type</label>
+                                                        <input type="text"
+                                                            name="cargo_type"
+                                                            class="form-control"
+                                                            placeholder="Enter cargo type">
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
