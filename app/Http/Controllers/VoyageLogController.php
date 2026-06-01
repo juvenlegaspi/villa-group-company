@@ -39,6 +39,7 @@ class VoyageLogController extends Controller
             'crew_on_board' => 'required',
             'port_id'       => 'required|exists:ports,id',
             'port_destination_id' => 'required|exists:ports,id',
+            'current_location_id' => 'required|exists:ports,id',
             'voyage_no'     => 'required|string|max:255',
             'fuel_rob'      => 'required|string|max:255',
             'arrival_date'  => 'nullable|date',
@@ -47,6 +48,7 @@ class VoyageLogController extends Controller
         // kuhaon ang selected port
         $port = Port::find($data['port_id']);
         $portDestination = Port::find($data['port_destination_id']);
+        $currentLocation = Port::find($data['current_location_id']);
         $cargoVolume = $data['cargo_volume'] . ' ' . $data['cargo_unit'];
 
         $voyage = VoyageLogHeader::create([
@@ -55,6 +57,7 @@ class VoyageLogController extends Controller
             // save pud ang port name
             'port_location' => $port->port_name,
             'port_destination' => $portDestination->port_name,
+            'current_location'  => $currentLocation->port_name,
 
             'date_created' => now()->toDateString(),
             'fuel_rob' => $data['fuel_rob'] . ' Liters',
@@ -169,12 +172,14 @@ class VoyageLogController extends Controller
             $previousTotalUnload = $lastUnload?->total_unload ?? 0;
             $totalUnload = $previousTotalUnload + $cargoUnload;
         }
+        $selectedPort = Port::find($request->port_location_id);
         VoyageActivity::create([
             'voyage_id'         => $detail->voyage_id,
             'voyage_detail_id'  => $detail->dtl_id,
             'vessel_id'         => $voyage->vessel_id,
             'status_id'         => $detail->status,
             'status_activity_id'=> $request->activity_id,
+            'port_location' => $selectedPort->port_name,
             'remarks'           => $request->remarks,
             'start_date_time'   => $lastEndedActivity?->end_date_time ?? now(),
             // LOADING
@@ -206,6 +211,7 @@ class VoyageLogController extends Controller
                 'cargo_volume' => $newCargo . ' ' . $request->load_unit
             ]);
         }
+        $voyage->update(['current_location_id' => $selectedPort->id, 'current_location'    => $selectedPort->port_name,]);
         return back()->with('success', 'Activity added successfully.');
     }
 

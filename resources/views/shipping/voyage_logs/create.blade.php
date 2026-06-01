@@ -105,8 +105,31 @@
                     </div>
                     <!-- Voyage Number -->
                     <div class="col-md-6">
+                        <label class="form-label">Current Location</label>
+
+                        <select name="current_location_id" class="form-control" required>
+                            <option value="">-- SELECT PORT --</option>
+
+                            @foreach($ports as $port)
+                                <option value="{{ $port->id }}">
+                                    {{ $port->port_name }}
+                                </option>
+                            @endforeach
+                        </select>
+
+                        @error('current_location_id')
+                            <small class="text-danger">{{ $message }}</small>
+                        @enderror
+                    </div>
+
+                    <div class="col-md-6">
                         <label class="form-label">Voyage Number</label>
-                        <input type="text" name="voyage_no" class="form-control" placeholder="Enter voyage number">
+
+                        <input type="text"
+                            name="voyage_no"
+                            class="form-control"
+                            placeholder="Enter voyage number">
+
                         @error('voyage_no')
                             <small class="text-danger">{{ $message }}</small>
                         @enderror

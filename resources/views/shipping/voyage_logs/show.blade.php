@@ -49,9 +49,13 @@
                     {{ $voyage->port_location }}
                 </div>
 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <b>Port Destination</b><br>
                     {{ $voyage->port_destination }}
+                </div>
+                <div class="col-md-2">
+                    <b>Current Location</b><br>
+                    {{ $voyage->current_location }}
                 </div>
                 <div class="col-md-2">
                     <b>Voyage Number</b><br>
@@ -575,17 +579,18 @@
                                             </select>
                                         </div>
                                         {{-- LOCATION --}}
-                                        {{--<div class="mb-3">
-                                            <label>Port Location</label>
-                                            <select name="port_location" class="form-control" required>
+                                        <div class="mb-3">
+                                            <label>Current Port Location</label>
+                                            <select name="port_location_id" class="form-control" required>
                                                 <option value="">-- SELECT PORT --</option>
+
                                                 @foreach($ports as $port)
-                                                    <option value="{{ $port->port_name }}">
+                                                    <option value="{{ $port->id }}">
                                                         {{ $port->port_name }}
                                                     </option>
                                                 @endforeach
                                             </select>
-                                        </div>--}}
+                                        </div>
                                         <div class="mb-3">
                                             <label>Remarks</label>
                                             <textarea

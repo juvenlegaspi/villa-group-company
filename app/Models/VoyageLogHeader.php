@@ -18,6 +18,8 @@ class VoyageLogHeader extends Model
         'port_destination',
         'port_id',
         'port_location',
+        'current_location_id',
+        'current_location',
         'voyage_no',
         'crew_on_board',
         'fuel_rob',
