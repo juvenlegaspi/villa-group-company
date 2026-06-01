@@ -160,6 +160,12 @@ Route::middleware('auth')->group(function () {
         })->name('jmv.stockout.index');
     });
 
+    Route::prefix('hyve')->group(function () {
+        Route::get('/booking', function () {
+            return view('hyve.booking.index');
+        })->name('hyve.projects.index');
+    });
+
     Route::post('/fuel-rob/store', [FuelRobMonitoringController::class, 'store'])->name('fuel.rob.store');
     Route::post('/fuel-bunkering/store', [FuelRobMonitoringController::class, 'fuelBunkering'])->name('fuel.bunkering.store');
 

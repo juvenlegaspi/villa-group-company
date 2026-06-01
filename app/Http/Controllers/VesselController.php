@@ -12,7 +12,6 @@ class VesselController extends Controller
     public function index()
     {
         $user = auth()->user();
-
         $vessels = Vessel::query()
         ->with('captain')
         ->when(
@@ -21,60 +20,44 @@ class VesselController extends Controller
         )
         ->orderBy('id', 'asc')
         ->paginate(10);
-
         $captains = $this->getCaptains();
-
         return view('shipping.vessels.index', compact('vessels', 'captains'));
     }
-
     public function create()
     {
         $this->authorizeVesselManagement();
-
         $captains = $this->getCaptains();
-
         return view('shipping.vessels.create', compact('captains'));
     }
-
     public function store(Request $request)
     {
         $this->authorizeVesselManagement();
-
         $data = $this->validateVessel($request);
-
         Vessel::create($data);
-
         return redirect()->route('vessels.index')
             ->with('success', 'Vessel added successfully.');
     }
-
     public function edit($id)
     {
         $vessel = Vessel::findOrFail($id);
         $this->authorizeVesselManagement();
         $captains = $this->getCaptains();
-
         return view('shipping.vessels.edit', compact('vessel', 'captains'));
     }
-
     public function update(Request $request, $id)
     {
         $vessel = Vessel::findOrFail($id);
         $this->authorizeVesselManagement();
         $data = $this->validateVessel($request);
-
         $vessel->update($data);
-
         return redirect()->route('vessels.index')
             ->with('success', 'Vessel updated successfully.');
     }
-
     public function show(Request $request, $id)
     {
         $vessel = Vessel::findOrFail($id);
         $this->authorizeVesselAccess($vessel);
         $query = VoyageLogHeader::query()->where('vessel_id', $id);
-
         if ($request->filled('search')) {
             $query->where(function ($voyageQuery) use ($request) {
                 $voyageQuery->where('voyage_id', 'like', '%' . $request->search . '%')
@@ -82,15 +65,16 @@ class VesselController extends Controller
                     ->orWhere('cargo_type', 'like', '%' . $request->search . '%');
             });
         }
-
         match ($request->sort) {
             'date' => $query->orderByDesc('date_created'),
             default => $query->orderByDesc('voyage_id'),
         };
-
         $voyages = $query->paginate(10)->withQueryString();
         $hasOpenVoyage = VoyageLogHeader::where('vessel_id', $id)
-            ->where('status', 'OPEN')
+            ->where(function ($query) {
+                $query->whereNull('date_completed')
+                    ->orWhere('status', '!=', 'COMPLETED');
+            })
             ->exists();
 
         return view('shipping.vessels.show', compact('vessel', 'voyages', 'hasOpenVoyage'));

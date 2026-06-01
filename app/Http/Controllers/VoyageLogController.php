@@ -25,9 +25,7 @@ class VoyageLogController extends Controller
         $nextId = $lastVoyage ? $lastVoyage->voyage_id + 1 : 1;
         $voyageCode = 'VL-' . str_pad($nextId, 5, '0', STR_PAD_LEFT);
         $ports = Port::where('status', 'ACTIVE')->orderBy('port_name')->get();
-        $lastVoyage = VoyageLogHeader::whereNotNull('fuel_rob')->latest('voyage_id')->first();
-        
-
+        $lastVoyage = VoyageLogHeader::where('vessel_id', $vesselId)->whereNotNull('fuel_rob')->whereNotNull('date_completed')->latest('voyage_id')->first();
         return view('shipping.voyage_logs.create', compact('vessel', 'voyageCode', 'ports', 'lastVoyage'));
     }
 

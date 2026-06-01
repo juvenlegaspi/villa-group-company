@@ -264,6 +264,7 @@
                         $isShipping = str_contains($divName, 'shipping');
                         $isYatira = str_contains($divName, 'yatira');
                         $isJmv = str_contains($divName, 'jmv');
+                        $isHyve = str_contains($divName, 'hyve');
                     @endphp
 
                     @if($isAllowed)
@@ -323,6 +324,18 @@
                                 <a href="{{ route('jmv.stockout.index') }}" class="{{ request()->is('jmv/stock-out') ? 'active' : '' }}">
                                     <i class="bi bi-arrow-up-circle"></i>
                                     <span>Stock Out</span>
+                                </a>
+                            </div>
+                        @elseif($isHyve)
+                            <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $div->id }}')">
+                                <span>{{ $div->name }}</span>
+                                <i class="bi bi-chevron-down"></i>
+                            </div>
+
+                            <div id="menu{{ $div->id }}" class="sidebar-dropdown {{ request()->is('hyve/*') ? 'show' : '' }}">
+                                <a href="{{ route('hyve.projects.index') }}" class="{{ request()->is('hyve/booking') ? 'active-menu' : '' }}">
+                                    <i class="bi bi-kanban"></i>
+                                    <span>Room Booking</span>
                                 </a>
                             </div>
                         @else

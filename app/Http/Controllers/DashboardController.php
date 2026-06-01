@@ -20,7 +20,7 @@ class DashboardController extends Controller
         $user = auth()->user();
 
         $divisions = $user->isAdmin()
-            ? Division::orderBy('name')->get()
+            ? Division::orderBy('id')->get()
             : Division::whereKey($user->division_id)->get();
 
         return view('dashboard.main', compact('divisions'));

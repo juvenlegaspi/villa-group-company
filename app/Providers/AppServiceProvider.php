@@ -31,7 +31,7 @@ class AppServiceProvider extends ServiceProvider
                 $user = Auth::user();
 
                 $divisions = $user->isAdmin()
-                    ? Division::orderBy('name')->get()
+                    ? Division::orderBy('id')->get()
                     : Division::whereKey($user->division_id)->get();
             }
 
