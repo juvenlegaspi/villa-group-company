@@ -336,10 +336,13 @@
                                                         </div>
                                                         <div class="mb-3">
                                                             <label>End Time</label>
-                                                            <input type="time"
-                                                                name="end_time"
-                                                                class="form-control"
-                                                                required>
+                                                            <input type="text"
+       name="end_time"
+       class="form-control"
+       placeholder="HH:mm"
+       maxlength="5"
+       required>
+                                                            <small class="text-muted">24-hour format only. Example: 14:30</small>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
@@ -790,6 +793,25 @@
         </div>
     </div>
 </div>
+<script>
+document.querySelectorAll('input[name="end_time"]').forEach(function (input) {
+    input.addEventListener('input', function () {
+        let value = this.value.replace(/[^\d:]/g, '');
+
+        // Kung walay colon ug naka-type na ug 2 ka digits
+        if (!value.includes(':') && value.length >= 2) {
+            value = value.substring(0, 2) + ':' + value.substring(2);
+        }
+
+        // Limit to HH:mm format length
+        if (value.length > 5) {
+            value = value.substring(0, 5);
+        }
+
+        this.value = value;
+    });
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.activity-select').forEach(function(select) {

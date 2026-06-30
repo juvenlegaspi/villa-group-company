@@ -337,6 +337,11 @@
                                     <i class="bi bi-kanban"></i>
                                     <span>Room Booking</span>
                                 </a>
+                                <a href="{{ route('hyve.layout.index') }}"
+                                    class="{{ request()->is('hyve/layout') ? 'active-menu' : '' }}">
+                                    <i class="bi bi-grid-3x3-gap"></i>
+                                    <span>Layout</span>
+                                </a>
                             </div>
                         @else
                             <a href="{{ url('/departments/' . $div->id) }}">

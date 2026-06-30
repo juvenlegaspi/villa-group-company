@@ -16,6 +16,8 @@ use App\Http\Controllers\VoyageLogController;
 use App\Models\Department;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\LayoutController;
+use App\Http\Controllers\BookingController;
 
 Route::redirect('/', '/login');
 
@@ -160,18 +162,19 @@ Route::middleware('auth')->group(function () {
         })->name('jmv.stockout.index');
     });
 
-    Route::prefix('hyve')->group(function () {
-        Route::get('/booking', function () {
-            return view('hyve.booking.index');
-        })->name('hyve.projects.index');
+    Route::prefix('hyve')->name('hyve.')->group(function () {
+        Route::get('/booking', [BookingController::class, 'index'])->name('projects.index');
+        Route::post('/booking/{bookingHeader}/approve', [BookingController::class, 'approve'])->name('projects.approve');
+        Route::get('/booking/{bookingHeader}/proof', [BookingController::class, 'proof'])->name('projects.proof');
+        Route::get('/layout', [LayoutController::class, 'index'])->name('layout.index');
     });
 
     Route::post('/fuel-rob/store', [FuelRobMonitoringController::class, 'store'])->name('fuel.rob.store');
     Route::post('/fuel-bunkering/store', [FuelRobMonitoringController::class, 'fuelBunkering'])->name('fuel.bunkering.store');
 
-    // Legacy compatibility routes for older hardcoded URLs/forms.
     Route::post('/shipping/voyage-logs/voyage-logs/activity/{id}/end', [VoyageLogController::class, 'endActivity']);
     Route::post('/shipping/voyage-logs/voyage-logs/detail/{id}/complete', [VoyageLogController::class, 'completeStatus']);
     Route::post('/shipping/voyage-logs/voyage-logs/activity/{id}/update', [VoyageLogController::class, 'updateActivity']);
     Route::post('/jmv/jmv/inventory/store', [InventoryController::class, 'store']);
 });
+
