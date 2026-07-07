@@ -169,6 +169,25 @@
         vertical-align: middle;
     }
 
+    .vsli-scroll-table {
+        height: 320px;
+        overflow-y: scroll;
+        overflow-x: auto;
+    }
+
+    .vsli-scroll-table::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .vsli-scroll-table::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.5);
+        border-radius: 999px;
+    }
+
+    .vsli-scroll-table::-webkit-scrollbar-track {
+        background: #f8fafc;
+    }
+
     .vsli-alert-list {
         display: grid;
         gap: 12px;
@@ -399,7 +418,7 @@
                             <canvas id="monthlyVoyageVesselChart"></canvas>
                         </div>
 
-                        <div class="table-responsive">
+                        <div class="table-responsive vsli-scroll-table">
                             <table class="table table-hover align-middle vsli-table mb-0">
                                 <thead class="table-light">
                                     <tr>
@@ -441,7 +460,7 @@
                             <canvas id="monthlyFuelVesselChart"></canvas>
                         </div>
 
-                        <div class="table-responsive">
+                        <div class="table-responsive vsli-scroll-table">
                             <table class="table table-hover align-middle vsli-table mb-0">
                                 <thead class="table-light">
                                     <tr>
@@ -745,7 +764,7 @@
                             </div>
                         </div>
 
-                        <div class="table-responsive">
+                        <div class="table-responsive vsli-scroll-table">
                             <table class="table table-hover align-middle vsli-table mb-0">
                                 <thead class="table-light">
                                     <tr>

@@ -88,7 +88,6 @@ class DashboardController extends Controller
 
         $recentVoyages = VoyageLogHeader::with('vessel')
             ->latest('voyage_id')
-            ->limit(6)
             ->get();
 
         $recentCargoVoyages = VoyageLogHeader::with('vessel')
@@ -101,7 +100,6 @@ class DashboardController extends Controller
                     ->orWhereNotNull('cargo_volume');
             })
             ->latest('voyage_id')
-            ->limit(6)
             ->get();
 
         $recentFuelMonitorings = FuelRobMonitoring::with(['vessel', 'voyage'])
