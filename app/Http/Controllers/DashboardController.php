@@ -91,6 +91,19 @@ class DashboardController extends Controller
             ->limit(6)
             ->get();
 
+        $recentCargoVoyages = VoyageLogHeader::with('vessel')
+            ->whereBetween('date_created', [
+                $currentMonthStart->toDateString(),
+                $currentMonthEnd->toDateString(),
+            ])
+            ->where(function ($query) {
+                $query->whereNotNull('cargo_type')
+                    ->orWhereNotNull('cargo_volume');
+            })
+            ->latest('voyage_id')
+            ->limit(6)
+            ->get();
+
         $recentFuelMonitorings = FuelRobMonitoring::with(['vessel', 'voyage'])
             ->latest('fuel_id')
             ->limit(6)
@@ -416,6 +429,7 @@ class DashboardController extends Controller
             'averageFuelConsumed' => $averageFuelConsumed,
             'fuelUpdatesToday' => $fuelUpdatesToday,
             'recentVoyages' => $recentVoyages,
+            'recentCargoVoyages' => $recentCargoVoyages,
             'recentFuelMonitorings' => $recentFuelMonitorings,
             'recentActivities' => $recentActivities,
             'recentDefects' => $recentDefects,

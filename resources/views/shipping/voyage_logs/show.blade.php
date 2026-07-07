@@ -337,11 +337,11 @@
                                                         <div class="mb-3">
                                                             <label>End Time</label>
                                                             <input type="text"
-       name="end_time"
-       class="form-control"
-       placeholder="HH:mm"
-       maxlength="5"
-       required>
+                                                                name="end_time"
+                                                                class="form-control"
+                                                                placeholder="HH:mm"
+                                                                maxlength="5"
+                                                                required>
                                                             <small class="text-muted">24-hour format only. Example: 14:30</small>
                                                         </div>
                                                     </div>

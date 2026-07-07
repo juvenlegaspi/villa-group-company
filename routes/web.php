@@ -178,3 +178,4 @@ Route::middleware('auth')->group(function () {
     Route::post('/jmv/jmv/inventory/store', [InventoryController::class, 'store']);
 });
 
+

@@ -786,6 +786,50 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
+                                <h5>Monthly Cargo Voyages</h5>
+                                <p class="vsli-subtext">Cargo movements recorded within {{ $currentMonthLabel }}.</p>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle vsli-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Vessel</th>
+                                        <th>Cargo</th>
+                                        <th>Quantity</th>
+                                        <th>From</th>
+                                        <th>To</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($recentCargoVoyages as $voyage)
+                                        <tr>
+                                            <td>{{ $voyage->vessel?->vessel_name ?? '-' }}</td>
+                                            <td>{{ $voyage->cargo_type ?? '-' }}</td>
+                                            <td>{{ $voyage->cargo_volume ?? '-' }}</td>
+                                            <td>{{ $voyage->port_location ?? '-' }}</td>
+                                            <td>{{ $voyage->port_destination ?? '-' }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-4">No cargo voyage records found for {{ $currentMonthLabel }}.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-4">
+            <div class="col-xl-6">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
                                 <h5>Recent Fuel Monitoring</h5>
                                 <p class="vsli-subtext">Latest ROB and bunkering related entries.</p>
                             </div>
