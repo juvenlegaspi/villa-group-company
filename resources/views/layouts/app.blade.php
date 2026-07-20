@@ -305,6 +305,10 @@
                                     <i class="bi bi-truck"></i>
                                     <span>Suppliers</span>
                                 </a>
+                                <a href="{{ route('yatira.inventory.index') }}" class="{{ request()->is('yatira/inventory') ? 'active' : '' }}">
+                                    <i class="bi bi-box-seam"></i>
+                                    <span>Inventory</span>
+                                </a>
                             </div>
                         @elseif($isJmv)
                             <div class="sidebar-dropdown-header" onclick="toggleMenu('menu{{ $div->id }}')">

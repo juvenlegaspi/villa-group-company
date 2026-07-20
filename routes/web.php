@@ -13,6 +13,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VesselCertificateController;
 use App\Http\Controllers\VesselController;
 use App\Http\Controllers\VoyageLogController;
+use App\Http\Controllers\YatiraInventoryController;
 use App\Models\Department;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
@@ -147,6 +148,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
         Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+        Route::get('/inventory', [YatiraInventoryController::class, 'index'])->name('yatira.inventory.index');
+        Route::post('/inventory/fixed-assets', [YatiraInventoryController::class, 'storeFixedAsset'])->name('yatira.inventory.fixed-assets.store');
+        Route::get('/inventory/fixed-assets/{fixedAsset}', [YatiraInventoryController::class, 'showFixedAsset'])->name('yatira.inventory.fixed-assets.show');
+        Route::put('/inventory/fixed-assets/{fixedAsset}', [YatiraInventoryController::class, 'updateFixedAsset'])->name('yatira.inventory.fixed-assets.update');
     });
 
     Route::get('/supplier/report', [DashboardController::class, 'exportSupplierReport'])->name('supplier.report');
@@ -177,5 +182,3 @@ Route::middleware('auth')->group(function () {
     Route::post('/shipping/voyage-logs/voyage-logs/activity/{id}/update', [VoyageLogController::class, 'updateActivity']);
     Route::post('/jmv/jmv/inventory/store', [InventoryController::class, 'store']);
 });
-
-
