@@ -6,6 +6,7 @@ use App\Models\YatiraFixedAsset;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class YatiraInventoryController extends Controller
 {
@@ -17,7 +18,9 @@ class YatiraInventoryController extends Controller
         $category = $request->string('category')->toString();
         $status = $request->string('status')->toString();
 
-        $fixedAssets = Schema::hasTable('yatira_fixed_assets')
+        $hasFixedAssetsTable = Schema::hasTable('yatira_fixed_assets');
+
+        $fixedAssets = $hasFixedAssetsTable
             ? YatiraFixedAsset::with('user:id,name,lastname')
                 ->when($search !== '', function ($query) use ($search) {
                     $query->where(function ($nested) use ($search) {
@@ -38,14 +41,42 @@ class YatiraInventoryController extends Controller
                 'query' => request()->query(),
             ]);
 
-        return view('yatira.inventory.index', compact('fixedAssets'));
+        $fixedAssetConditionCounts = $hasFixedAssetsTable
+            ? YatiraFixedAsset::query()
+                ->selectRaw('asset_condition, COUNT(*) as total')
+                ->groupBy('asset_condition')
+                ->pluck('total', 'asset_condition')
+                ->map(fn ($total) => (int) $total)
+                ->all()
+            : [];
+
+        $fixedAssetStats = [
+            'total' => array_sum($fixedAssetConditionCounts),
+            'condition_counts' => $fixedAssetConditionCounts,
+        ];
+
+        return view('yatira.inventory.index', compact('fixedAssets', 'fixedAssetStats'));
     }
 
     public function storeFixedAsset(Request $request)
     {
         $this->authorizeYatiraAccess();
 
+        if (is_string($request->input('asset_code'))) {
+            $request->merge([
+                'asset_code' => trim($request->input('asset_code')),
+            ]);
+        }
+
         $data = $request->validate([
+            'asset_entry_type' => ['required', Rule::in(['new', 'existing'])],
+            'asset_code' => [
+                'exclude_unless:asset_entry_type,existing',
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('yatira_fixed_assets', 'asset_code'),
+            ],
             'asset_name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
             'assigned_to' => 'nullable|string|max:255',
@@ -56,7 +87,11 @@ class YatiraInventoryController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
-        $data['asset_code'] = $this->generateAssetCode();
+        if ($data['asset_entry_type'] === 'new') {
+            $data['asset_code'] = $this->generateAssetCode();
+        }
+
+        unset($data['asset_entry_type']);
         $data['created_by'] = auth()->id();
 
         YatiraFixedAsset::create($data);

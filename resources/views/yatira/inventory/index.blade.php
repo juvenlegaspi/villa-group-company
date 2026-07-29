@@ -10,6 +10,37 @@
         'FURNITURE AND OFFICE EQUIPMENTS',
         'IT & SYSTEMS INFRASTRUCTURE',
     ];
+
+    $fixedAssetConditionDashboard = [
+        'Good' => ['color' => '#4285f4', 'count' => $fixedAssetStats['condition_counts']['Good'] ?? 0],
+        'Needs Repair' => ['color' => '#fbbc05', 'count' => $fixedAssetStats['condition_counts']['Needs Repair'] ?? 0],
+        'Damaged' => ['color' => '#ef4335', 'count' => $fixedAssetStats['condition_counts']['Damaged'] ?? 0],
+        'Retired' => ['color' => '#34a853', 'count' => $fixedAssetStats['condition_counts']['Retired'] ?? 0],
+    ];
+
+    $knownConditionTotal = collect($fixedAssetConditionDashboard)->sum('count');
+    $otherConditionTotal = max(0, $fixedAssetStats['total'] - $knownConditionTotal);
+
+    if ($otherConditionTotal > 0) {
+        $fixedAssetConditionDashboard['Other'] = ['color' => '#94a3b8', 'count' => $otherConditionTotal];
+    }
+
+    $chartStops = [];
+    $chartPosition = 0;
+
+    foreach ($fixedAssetConditionDashboard as $conditionData) {
+        if ($fixedAssetStats['total'] === 0 || $conditionData['count'] === 0) {
+            continue;
+        }
+
+        $nextPosition = $chartPosition + (($conditionData['count'] / $fixedAssetStats['total']) * 100);
+        $chartStops[] = $conditionData['color'] . ' ' . $chartPosition . '% ' . $nextPosition . '%';
+        $chartPosition = $nextPosition;
+    }
+
+    $fixedAssetChartBackground = $chartStops
+        ? 'conic-gradient(' . implode(', ', $chartStops) . ')'
+        : 'conic-gradient(#e2e8f0 0% 100%)';
 @endphp
 @if(session('success'))
     <div class="alert alert-success">
@@ -108,6 +139,101 @@
         color: #64748b;
     }
 
+    .yatira-mini-dashboard {
+        display: grid;
+        grid-template-columns: minmax(150px, 190px) 1fr;
+        align-items: center;
+        gap: 24px;
+        margin-bottom: 22px;
+        padding: 18px 22px;
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #ffffff, #f8fafc);
+    }
+
+    .yatira-status-chart {
+        position: relative;
+        width: 142px;
+        height: 142px;
+        margin: auto;
+        border-radius: 50%;
+    }
+
+    .yatira-status-chart::after {
+        position: absolute;
+        inset: 31px;
+        content: '';
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 0 0 1px rgba(226, 232, 240, 0.8);
+    }
+
+    .yatira-chart-center {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .yatira-chart-center strong {
+        color: #0f172a;
+        font-size: 1.55rem;
+        line-height: 1;
+        letter-spacing: 0;
+    }
+
+    .yatira-dashboard-copy h6 {
+        margin-bottom: 3px;
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .yatira-dashboard-copy > p {
+        margin-bottom: 14px;
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+
+    .yatira-status-legend {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(145px, 1fr));
+        gap: 9px 18px;
+    }
+
+    .yatira-status-item {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: #475569;
+        font-size: 0.88rem;
+    }
+
+    .yatira-status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+    .yatira-status-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .yatira-status-value {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
     .yatira-table-wrap {
         border: 1px solid #e2e8f0;
         border-radius: 18px;
@@ -154,6 +280,16 @@
             grid-template-columns: 1fr;
         }
     }
+
+    @media (max-width: 576px) {
+        .yatira-mini-dashboard {
+            grid-template-columns: 1fr;
+        }
+
+        .yatira-status-legend {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 <div class="container-fluid px-0">
@@ -181,6 +317,42 @@
 
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="fixed-assets-pane" role="tabpanel" aria-labelledby="fixed-assets-tab" tabindex="0">
+                        <div class="yatira-mini-dashboard">
+                            <div
+                                class="yatira-status-chart"
+                                style="background: {{ $fixedAssetChartBackground }};"
+                                role="img"
+                                aria-label="Fixed asset condition distribution"
+                            >
+                                <div class="yatira-chart-center">
+                                    <strong>{{ $fixedAssetStats['total'] }}</strong>
+                                    <span>Total Assets</span>
+                                </div>
+                            </div>
+
+                            <div class="yatira-dashboard-copy">
+                                <h6>Fixed Asset Condition</h6>
+                                <p>Quick overview of the current physical condition of all assets.</p>
+
+                                <div class="yatira-status-legend">
+                                    @foreach($fixedAssetConditionDashboard as $conditionLabel => $conditionData)
+                                        @php
+                                            $conditionPercentage = $fixedAssetStats['total'] > 0
+                                                ? ($conditionData['count'] / $fixedAssetStats['total']) * 100
+                                                : 0;
+                                        @endphp
+                                        <div class="yatira-status-item">
+                                            <span class="yatira-status-dot" style="background: {{ $conditionData['color'] }};"></span>
+                                            <span class="yatira-status-label">{{ $conditionLabel }}</span>
+                                            <span class="yatira-status-value">
+                                                {{ $conditionData['count'] }} ({{ number_format($conditionPercentage, 1) }}%)
+                                            </span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="yatira-section-head">
                             <div>
                                 <h5>Fixed Asset Table</h5>
@@ -310,9 +482,40 @@
                     <h6 class="yatira-modal-section-title">Asset Information</h6>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Asset Code</label>
-                            <input type="text" class="form-control" value="Auto-generated (Example: YC-ds2134)" readonly>
-                            <small class="text-muted">The system will generate a unique Yatira asset code automatically.</small>
+                            <label for="fixedAssetEntryType" class="form-label">Asset Entry</label>
+                            <select
+                                id="fixedAssetEntryType"
+                                name="asset_entry_type"
+                                class="form-select @error('asset_entry_type') is-invalid @enderror"
+                                required
+                            >
+                                <option value="new" @selected(old('asset_entry_type', 'new') === 'new')>New Asset</option>
+                                <option value="existing" @selected(old('asset_entry_type') === 'existing')>Existing Tagged Asset</option>
+                            </select>
+                            @error('asset_entry_type')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <small class="text-muted">Choose whether this asset needs a new system code or already has a tag.</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="fixedAssetCode" class="form-label">Asset Code</label>
+                            <input
+                                id="fixedAssetCode"
+                                type="text"
+                                name="asset_code"
+                                class="form-control @error('asset_code') is-invalid @enderror"
+                                value="{{ old('asset_entry_type', 'new') === 'existing' ? old('asset_code') : '' }}"
+                                maxlength="255"
+                                @readonly(old('asset_entry_type', 'new') !== 'existing')
+                                @if(old('asset_entry_type') === 'existing') required @endif
+                            >
+                            @error('asset_code')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <small id="fixedAssetCodeHelp" class="text-muted"></small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Asset Name</label>
@@ -379,6 +582,38 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const entryType = document.getElementById('fixedAssetEntryType');
+    const assetCode = document.getElementById('fixedAssetCode');
+    const assetCodeHelp = document.getElementById('fixedAssetCodeHelp');
+
+    if (!entryType || !assetCode || !assetCodeHelp) {
+        return;
+    }
+
+    function syncAssetCodeField() {
+        const isExisting = entryType.value === 'existing';
+
+        assetCode.readOnly = !isExisting;
+        assetCode.required = isExisting;
+        assetCode.placeholder = isExisting
+            ? 'Enter the existing asset tag/code'
+            : 'Auto-generated on save (Example: YC-ds2134)';
+        assetCodeHelp.textContent = isExisting
+            ? 'Enter the code already printed or attached to this asset.'
+            : 'The system will generate a unique Yatira asset code automatically.';
+
+        if (!isExisting) {
+            assetCode.value = '';
+        }
+    }
+
+    entryType.addEventListener('change', syncAssetCodeField);
+    syncAssetCodeField();
+});
+</script>
 
 @if($errors->any())
 <script>
