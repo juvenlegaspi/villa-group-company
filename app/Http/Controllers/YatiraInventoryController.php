@@ -50,9 +50,19 @@ class YatiraInventoryController extends Controller
                 ->all()
             : [];
 
+        $fixedAssetStatusCounts = $hasFixedAssetsTable
+            ? YatiraFixedAsset::query()
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->map(fn ($total) => (int) $total)
+                ->all()
+            : [];
+
         $fixedAssetStats = [
             'total' => array_sum($fixedAssetConditionCounts),
             'condition_counts' => $fixedAssetConditionCounts,
+            'status_counts' => $fixedAssetStatusCounts,
         ];
 
         return view('yatira.inventory.index', compact('fixedAssets', 'fixedAssetStats'));

@@ -156,8 +156,12 @@ class YatiraInventoryAssetEntryTest extends TestCase
                 'Good' => 2,
                 'Needs Repair' => 1,
             ],
+            'status_counts' => [
+                'Active' => 3,
+            ],
         ]);
-        $response->assertSee('Fixed Asset Condition');
+        $response->assertSee('Condition');
+        $response->assertSee('Status');
         $response->assertSee('2 (66.7%)');
         $response->assertSee('1 (33.3%)');
     }

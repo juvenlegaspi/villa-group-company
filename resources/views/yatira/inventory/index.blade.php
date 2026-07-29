@@ -41,6 +41,37 @@
     $fixedAssetChartBackground = $chartStops
         ? 'conic-gradient(' . implode(', ', $chartStops) . ')'
         : 'conic-gradient(#e2e8f0 0% 100%)';
+
+    $fixedAssetStatusDashboard = [
+        'Active' => ['color' => '#4285f4', 'count' => $fixedAssetStats['status_counts']['Active'] ?? 0],
+        'In Use' => ['color' => '#ef4335', 'count' => $fixedAssetStats['status_counts']['In Use'] ?? 0],
+        'Under Maintenance' => ['color' => '#fbbc05', 'count' => $fixedAssetStats['status_counts']['Under Maintenance'] ?? 0],
+        'Disposed' => ['color' => '#34a853', 'count' => $fixedAssetStats['status_counts']['Disposed'] ?? 0],
+    ];
+
+    $knownStatusTotal = collect($fixedAssetStatusDashboard)->sum('count');
+    $otherStatusTotal = max(0, $fixedAssetStats['total'] - $knownStatusTotal);
+
+    if ($otherStatusTotal > 0) {
+        $fixedAssetStatusDashboard['Other'] = ['color' => '#94a3b8', 'count' => $otherStatusTotal];
+    }
+
+    $statusChartStops = [];
+    $statusChartPosition = 0;
+
+    foreach ($fixedAssetStatusDashboard as $statusData) {
+        if ($fixedAssetStats['total'] === 0 || $statusData['count'] === 0) {
+            continue;
+        }
+
+        $nextStatusPosition = $statusChartPosition + (($statusData['count'] / $fixedAssetStats['total']) * 100);
+        $statusChartStops[] = $statusData['color'] . ' ' . $statusChartPosition . '% ' . $nextStatusPosition . '%';
+        $statusChartPosition = $nextStatusPosition;
+    }
+
+    $fixedAssetStatusChartBackground = $statusChartStops
+        ? 'conic-gradient(' . implode(', ', $statusChartStops) . ')'
+        : 'conic-gradient(#e2e8f0 0% 100%)';
 @endphp
 @if(session('success'))
     <div class="alert alert-success">
@@ -139,13 +170,19 @@
         color: #64748b;
     }
 
+    .yatira-dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 22px;
+    }
+
     .yatira-mini-dashboard {
         display: grid;
-        grid-template-columns: minmax(150px, 190px) 1fr;
+        grid-template-columns: minmax(130px, 150px) 1fr;
         align-items: center;
-        gap: 24px;
-        margin-bottom: 22px;
-        padding: 18px 22px;
+        gap: 16px;
+        padding: 16px 18px;
         border: 1px solid #e2e8f0;
         border-radius: 18px;
         background: linear-gradient(135deg, #ffffff, #f8fafc);
@@ -279,6 +316,10 @@
         .yatira-filter-bar {
             grid-template-columns: 1fr;
         }
+
+        .yatira-dashboard-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     @media (max-width: 576px) {
@@ -317,38 +358,76 @@
 
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="fixed-assets-pane" role="tabpanel" aria-labelledby="fixed-assets-tab" tabindex="0">
-                        <div class="yatira-mini-dashboard">
-                            <div
-                                class="yatira-status-chart"
-                                style="background: {{ $fixedAssetChartBackground }};"
-                                role="img"
-                                aria-label="Fixed asset condition distribution"
-                            >
-                                <div class="yatira-chart-center">
-                                    <strong>{{ $fixedAssetStats['total'] }}</strong>
-                                    <span>Total Assets</span>
+                        <div class="yatira-dashboard-grid">
+                            <div class="yatira-mini-dashboard">
+                                <div
+                                    class="yatira-status-chart"
+                                    style="background: {{ $fixedAssetChartBackground }};"
+                                    role="img"
+                                    aria-label="Fixed asset condition distribution"
+                                >
+                                    <div class="yatira-chart-center">
+                                        <strong>{{ $fixedAssetStats['total'] }}</strong>
+                                        <span>Total Assets</span>
+                                    </div>
+                                </div>
+
+                                <div class="yatira-dashboard-copy">
+                                    <h6>Condition</h6>
+                                    <p>Current physical condition of all fixed assets.</p>
+
+                                    <div class="yatira-status-legend">
+                                        @foreach($fixedAssetConditionDashboard as $conditionLabel => $conditionData)
+                                            @php
+                                                $conditionPercentage = $fixedAssetStats['total'] > 0
+                                                    ? ($conditionData['count'] / $fixedAssetStats['total']) * 100
+                                                    : 0;
+                                            @endphp
+                                            <div class="yatira-status-item">
+                                                <span class="yatira-status-dot" style="background: {{ $conditionData['color'] }};"></span>
+                                                <span class="yatira-status-label">{{ $conditionLabel }}</span>
+                                                <span class="yatira-status-value">
+                                                    {{ $conditionData['count'] }} ({{ number_format($conditionPercentage, 1) }}%)
+                                                </span>
+                                            </div>
+                                        @endforeach
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="yatira-dashboard-copy">
-                                <h6>Fixed Asset Condition</h6>
-                                <p>Quick overview of the current physical condition of all assets.</p>
+                            <div class="yatira-mini-dashboard">
+                                <div
+                                    class="yatira-status-chart"
+                                    style="background: {{ $fixedAssetStatusChartBackground }};"
+                                    role="img"
+                                    aria-label="Fixed asset status distribution"
+                                >
+                                    <div class="yatira-chart-center">
+                                        <strong>{{ $fixedAssetStats['total'] }}</strong>
+                                        <span>Total Assets</span>
+                                    </div>
+                                </div>
 
-                                <div class="yatira-status-legend">
-                                    @foreach($fixedAssetConditionDashboard as $conditionLabel => $conditionData)
-                                        @php
-                                            $conditionPercentage = $fixedAssetStats['total'] > 0
-                                                ? ($conditionData['count'] / $fixedAssetStats['total']) * 100
-                                                : 0;
-                                        @endphp
-                                        <div class="yatira-status-item">
-                                            <span class="yatira-status-dot" style="background: {{ $conditionData['color'] }};"></span>
-                                            <span class="yatira-status-label">{{ $conditionLabel }}</span>
-                                            <span class="yatira-status-value">
-                                                {{ $conditionData['count'] }} ({{ number_format($conditionPercentage, 1) }}%)
-                                            </span>
-                                        </div>
-                                    @endforeach
+                                <div class="yatira-dashboard-copy">
+                                    <h6>Status</h6>
+                                    <p>Current operational status of all fixed assets.</p>
+
+                                    <div class="yatira-status-legend">
+                                        @foreach($fixedAssetStatusDashboard as $statusLabel => $statusData)
+                                            @php
+                                                $statusPercentage = $fixedAssetStats['total'] > 0
+                                                    ? ($statusData['count'] / $fixedAssetStats['total']) * 100
+                                                    : 0;
+                                            @endphp
+                                            <div class="yatira-status-item">
+                                                <span class="yatira-status-dot" style="background: {{ $statusData['color'] }};"></span>
+                                                <span class="yatira-status-label">{{ $statusLabel }}</span>
+                                                <span class="yatira-status-value">
+                                                    {{ $statusData['count'] }} ({{ number_format($statusPercentage, 1) }}%)
+                                                </span>
+                                            </div>
+                                        @endforeach
+                                    </div>
                                 </div>
                             </div>
                         </div>
