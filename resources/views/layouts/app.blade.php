@@ -241,14 +241,15 @@
         .profile-menu-form { margin: 0; border-top: 1px solid #edf1f5; padding-top: 5px; }
         .mobile-menu-button { display: none; }
 
-        .app-content { min-height: calc(100vh - 74px); min-height: calc(100svh - 74px); background: var(--villa-page); }
+        .app-content { min-width: 0; max-width: 100%; min-height: calc(100vh - 74px); min-height: calc(100svh - 74px); overflow-x: clip; background: var(--villa-page); }
+        .app-content > * { min-width: 0; max-width: 100%; }
         .sidebar-backdrop { display: none; }
 
         .card { border: 0; border-radius: 14px; box-shadow: 0 3px 14px rgba(28,46,77,.07); }
         .table th { font-weight: 650; }
 
-        @media (max-width: 900px) {
-            .app-sidebar { transform: translateX(-100%); box-shadow: 18px 0 45px rgba(10,28,57,.24); }
+        @media (max-width: 1100px) {
+            .app-sidebar { width: min(var(--sidebar-width), 86vw); transform: translateX(-100%); box-shadow: 18px 0 45px rgba(10,28,57,.24); }
             .app-sidebar.is-open { transform: translateX(0); }
             .app-main { width: 100%; margin-left: 0; }
             .mobile-menu-button { display: grid; }

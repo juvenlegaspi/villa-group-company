@@ -66,7 +66,9 @@
     .row { @apply grid grid-cols-12 gap-4; }
     .col-12 { @apply col-span-12; }
     .col-6 { @apply col-span-6; }
-    .row > [class*="col-"] { min-width: 0; }
+    /* Responsive column fallback: breakpoint-only columns must occupy the
+       complete row until their declared breakpoint becomes active. */
+    .row > [class*="col-"] { min-width: 0; grid-column: 1 / -1; }
     .row > .col-12 { grid-column: 1 / -1; }
     .row > .col-6 { grid-column: span 6 / span 6; }
     @media (min-width: 768px) {
@@ -293,6 +295,14 @@
 
 @media (min-width: 1200px) {
     .p-xl-4 { padding: 1rem !important; }
+}
+
+@media (max-width: 767px) {
+    .row { grid-template-columns: minmax(0, 1fr); }
+    .row > [class*="col-"] { grid-column: 1 / -1 !important; width: 100%; }
+    .card, .card-body, .container, .container-fluid { min-width: 0; max-width: 100%; }
+    .card-body { padding: 1rem; }
+    canvas, img, svg { max-width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
