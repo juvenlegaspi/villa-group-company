@@ -119,7 +119,7 @@
     <div class="defect-shell">
         <section class="defect-hero">
             <h2 class="fw-bold mb-2">Tech Defects Command Dashboard</h2>
-            <p class="mb-0">Professional overview sa defect load, critical exposure, vessel risk, ug latest technical reports across the fleet.</p>
+            <p class="mb-0">Professional overview of defect workload, critical exposure, vessel risk, and the latest technical reports across the fleet.</p>
         </section>
 
         <section class="defect-grid">
@@ -132,9 +132,9 @@
             </div>
             <div class="defect-card">
                 <div class="defect-stat">
-                    <div class="defect-stat-label">Open</div>
+                    <div class="defect-stat-label">New Reports</div>
                     <div class="defect-stat-value text-danger">{{ number_format($open) }}</div>
-                    <p class="defect-stat-note">Fresh reports waiting for action</p>
+                    <p class="defect-stat-note">Draft vessel reports not yet submitted</p>
                 </div>
             </div>
             <div class="defect-card">
@@ -146,9 +146,16 @@
             </div>
             <div class="defect-card">
                 <div class="defect-stat">
-                    <div class="defect-stat-label">Waiting 3rd Party</div>
+                    <div class="defect-stat-label">Under Review / Assessment</div>
                     <div class="defect-stat-value" style="color:#0d6efd;">{{ number_format($waiting) }}</div>
-                    <p class="defect-stat-note">Cases requiring external support</p>
+                    <p class="defect-stat-note">Management, assessment or assignment queue</p>
+                </div>
+            </div>
+            <div class="defect-card">
+                <div class="defect-stat">
+                    <div class="defect-stat-label">For Verification</div>
+                    <div class="defect-stat-value" style="color:#7c3aed;">{{ number_format($forVerification) }}</div>
+                    <p class="defect-stat-note">Repairs awaiting manager approval</p>
                 </div>
             </div>
             <div class="defect-card">
@@ -174,7 +181,7 @@
                         <div class="defect-title">
                             <div>
                                 <h4>Defect Overview</h4>
-                                <p class="defect-subtext">Status distribution ug monthly trend sa technical defects.</p>
+                                <p class="defect-subtext">Status distribution and monthly trend of technical defects.</p>
                             </div>
                         </div>
 
@@ -246,7 +253,7 @@
                         <div class="defect-title">
                             <div>
                                 <h5>Severity Breakdown</h5>
-                                <p class="defect-subtext">Quick spread of critical, high, medium, ug low severity reports.</p>
+                                <p class="defect-subtext">Quick distribution of critical, high, medium, and low-severity reports.</p>
                             </div>
                         </div>
 
@@ -303,12 +310,12 @@
                             </div>
                             <div class="defect-alert-item" style="border-color:#fde68a; background:#fffbeb;">
                                 <strong>Critical Defect Exposure</strong><br>
-                                <span class="text-muted">{{ number_format($criticalDefects) }} critical and {{ number_format($highSeverityDefects) }} critical/high severity cases</span><br>
+                                <span class="text-muted">{{ number_format($criticalDefects) }} critical and {{ number_format($highSeverityDefects) }} critical/major severity cases</span><br>
                                 <span class="small text-warning">Keep engineering and operations aligned for escalation handling.</span>
                             </div>
                             <div class="defect-alert-item" style="border-color:#bfdbfe; background:#eff6ff;">
                                 <strong>Third-Party Dependency</strong><br>
-                                <span class="text-muted">{{ number_format($thirdPartyCases) }} reports marked with 3rd party requirement</span><br>
+                                <span class="text-muted">{{ number_format($thirdPartyCases) }} reports with unfinished third-party support</span><br>
                                 <span class="small text-primary">Track vendor response time and spare/tool readiness.</span>
                             </div>
                         </div>
@@ -340,10 +347,16 @@
                                 <tbody>
                                     @forelse($latestReports as $report)
                                         <tr>
-                                            <td><a href="{{ route('tech-defects.show', $report->id) }}">TD-{{ $report->id }}</a></td>
+                                            <td>
+                                                @if(auth()->user()->isExecutiveViewer())
+                                                    {{ $report->report_code }}
+                                                @else
+                                                    <a href="{{ route('tech-defects.show', $report->id) }}">{{ $report->report_code }}</a>
+                                                @endif
+                                            </td>
                                             <td>{{ $report->vessel?->vessel_name ?? '-' }}</td>
                                             <td>
-                                                <span class="badge {{ $report->status === 'Completed' ? 'bg-success' : ($report->status === 'Waiting 3rd Party' ? 'bg-primary' : ($report->status === 'Ongoing' ? 'bg-warning text-dark' : 'bg-danger')) }}">
+                                                <span class="badge {{ $report->status === 'Closed' ? 'bg-success' : ($report->status === 'Ongoing' ? 'bg-warning text-dark' : 'bg-primary') }}">
                                                     {{ $report->status }}
                                                 </span>
                                             </td>
@@ -365,10 +378,10 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const defectStatusLabels = ['Open', 'Ongoing', 'Waiting 3rd Party', 'Completed'];
-    const defectStatusData = [{{ $open }}, {{ $ongoing }}, {{ $waiting }}, {{ $completed }}];
+document.addEventListener('DOMContentLoaded', () => {
+    const defectStatusLabels = ['New Report', 'Ongoing', 'Review / Assessment / Action', 'For Verification', 'Closed'];
+    const defectStatusData = [{{ $open }}, {{ $ongoing }}, {{ $waiting }}, {{ $forVerification }}, {{ $completed }}];
     const monthlyDefectLabels = {!! json_encode($monthlyDefects->pluck('label')->values()) !!};
     const monthlyDefectData = {!! json_encode($monthlyDefects->pluck('total')->values()) !!};
     const vesselDefectLabels = {!! json_encode($riskVessels->pluck('vessel_name')->values()) !!};
@@ -386,7 +399,7 @@
             labels: defectStatusLabels,
             datasets: [{
                 data: defectStatusData,
-                backgroundColor: ['#dc3545', '#ffc107', '#0d6efd', '#198754'],
+                backgroundColor: ['#dc3545', '#ffc107', '#0d6efd', '#7c3aed', '#198754'],
                 borderWidth: 0
             }]
         },
@@ -530,5 +543,6 @@
             }
         }
     });
+});
 </script>
 @endsection

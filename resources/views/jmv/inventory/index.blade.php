@@ -1,141 +1,28 @@
 @extends('layouts.app')
-
+@section('title', 'Inventory | JMV Mining & Development')
 @section('content')
-@if(session('success'))
-    <div style="background:#d1e7dd; padding:10px; margin-bottom:10px; border-radius:5px;">
-        {{ session('success') }}
-    </div>
-@endif
-<div class="container py-4">
+<section class="min-h-[calc(100svh-74px)] bg-slate-50 px-4 py-6 sm:px-7 lg:px-10">
+<div class="mx-auto max-w-7xl">
+    @if(session('success'))<div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{{ session('success') }}</div>@endif
+    @if($errors->any())<div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><strong>Please review the following:</strong><ul class="mb-0 mt-1">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+    <header class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-amber-700">JMV Mining &amp; Development</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">Inventory Control</h1><p class="mt-1 text-sm text-slate-500">Item master, replenishment levels and accountable stock balances.</p></div><div class="flex flex-wrap gap-2">@if($canReport)<a href="{{ route('jmv.inventory.report') }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 no-underline shadow-sm"><i class="bi bi-download"></i>Export CSV</a>@endif @if($canManageItems)<button type="button" data-bs-toggle="modal" data-bs-target="#addItemModal" class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-villa-800 px-4 text-sm font-extrabold text-white shadow-sm"><i class="bi bi-plus-lg"></i>Add Item</button>@endif</div></header>
 
-    <h3 class="fw-bold mb-3">📦 Inventory Management</h3>
+    <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">@foreach([['Active Items',$stats['items'],'bi-box-seam','text-blue-700 bg-blue-50'],['Stock Units',$stats['stock'],'bi-stack','text-emerald-700 bg-emerald-50'],['Low Stock',$stats['low'],'bi-exclamation-triangle','text-amber-700 bg-amber-50'],['Out of Stock',$stats['out'],'bi-x-octagon','text-rose-700 bg-rose-50'],['Inventory Value','₱'.number_format($stats['value'],2),'bi-cash-stack','text-violet-700 bg-violet-50']] as [$label,$value,$icon,$tone])<article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><span class="mb-3 grid h-10 w-10 place-items-center rounded-xl {{ $tone }}"><i class="bi {{ $icon }}"></i></span><p class="mb-1 text-[.68rem] font-extrabold uppercase tracking-wider text-slate-500">{{ $label }}</p><p class="m-0 text-xl font-black text-slate-900">{{ is_numeric($value) ? number_format($value) : $value }}</p></article>@endforeach</div>
 
-    <!-- 🔍 SEARCH + ADD -->
-    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+    <form method="GET" class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_200px_auto]">
+        <label class="relative"><span class="sr-only">Search inventory</span><i class="bi bi-search absolute left-4 top-3.5 text-slate-400"></i><input name="search" value="{{ request('search') }}" placeholder="Search code, item or unit..." class="min-h-11 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm"></label>
+        <select name="stock_status" class="min-h-11 rounded-xl border border-slate-300 px-3 text-sm"><option value="">All stock levels</option><option value="active" @selected(request('stock_status')==='active')>Active items</option><option value="low" @selected(request('stock_status')==='low')>Low stock</option><option value="out" @selected(request('stock_status')==='out')>Out of stock</option></select>
+        <button class="min-h-11 rounded-xl border-0 bg-slate-900 px-5 text-sm font-bold text-white">Apply Filters</button>
+    </form>
 
-        <!-- Search -->
-        <form method="GET" action="{{ route('jmv.inventory.index') }}">
-            <input 
-                type="text" 
-                name="search" 
-                placeholder="Search item or unit..." 
-                value="{{ request('search') }}"
-                style="padding:8px; width:250px; border:1px solid #ccc; border-radius:5px;"
-            >
-            <button type="submit" 
-                style="padding:8px 12px; background:#0d6efd; color:white; border:none; border-radius:5px;">
-                Search
-            </button>
-        </form>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div class="overflow-x-auto"><table class="w-full min-w-[960px] text-left text-sm"><thead class="bg-slate-900 text-xs uppercase tracking-wider text-white"><tr><th class="px-4 py-4">Item</th><th class="px-4 py-4">Category / Location</th><th class="px-4 py-4">Levels</th><th class="px-4 py-4">On Hand</th><th class="px-4 py-4">Value</th><th class="px-4 py-4">Status</th>@if($canManageItems || $canAdjust)<th class="px-4 py-4 text-right">Action</th>@endif</tr></thead><tbody class="divide-y divide-slate-100">
+    @forelse($items as $item)<tr class="hover:bg-slate-50"><td class="px-4 py-4"><strong class="block text-slate-900">{{ $item->item_name }}</strong><span class="text-xs font-bold text-amber-700">{{ $item->item_code }}</span><span class="ml-2 text-xs text-slate-400">{{ $item->unit }}</span></td><td class="px-4 py-4"><span class="block text-slate-700">{{ $item->category?->name ?? 'Uncategorized' }}</span><span class="text-xs text-slate-400">{{ $item->defaultLocation?->name ?? 'No location' }}</span></td><td class="px-4 py-4 text-xs text-slate-500">Min {{ number_format($item->minimum_quantity) }} · Max {{ number_format($item->maximum_quantity) }}</td><td class="px-4 py-4"><strong class="text-lg {{ $item->stock_on_hand <= 0 ? 'text-rose-700' : ($item->stock_on_hand <= $item->minimum_quantity ? 'text-amber-700' : 'text-emerald-700') }}">{{ number_format($item->stock_on_hand) }}</strong> <span class="text-xs text-slate-400">{{ $item->unit }}</span></td><td class="px-4 py-4 font-semibold text-slate-700">₱{{ number_format($item->stock_on_hand * (float)$item->unit_cost,2) }}</td><td class="px-4 py-4"><span class="rounded-full px-3 py-1 text-xs font-extrabold {{ $item->status ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $item->status ? 'Active' : 'Inactive' }}</span></td>@if($canManageItems || $canAdjust)<td class="px-4 py-4 text-right"><div class="flex justify-end gap-2">@if($canManageItems)<button type="button" data-bs-toggle="modal" data-bs-target="#editItem{{ $item->id }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">Edit</button>@endif @if($canAdjust)<button type="button" data-bs-toggle="modal" data-bs-target="#adjustItem{{ $item->id }}" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">Adjust</button>@endif</div></td>@endif</tr>
+    @empty<tr><td colspan="7" class="px-6 py-14 text-center text-slate-500">No inventory items found.</td></tr>@endforelse
+    </tbody></table></div><div class="border-t border-slate-100 p-4">{{ $items->links() }}</div></div>
+</div></section>
 
-        <!-- Add Button -->
-        <button onclick="openModal()" 
-            style="padding:8px 15px; background:#198754; color:white; border:none; border-radius:5px;">
-            + Add Item
-        </button>
+@if($canManageItems)@foreach($items as $item)<div class="modal fade" id="editItem{{ $item->id }}" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable"><div class="modal-content rounded-4 border-0"><div class="modal-header"><h2 class="modal-title fs-5 fw-bold">Edit {{ $item->item_code }}</h2><button class="btn-close" data-bs-dismiss="modal"></button></div><form method="POST" action="{{ route('jmv.inventory.update',$item) }}">@csrf @method('PUT')<div class="modal-body"><div class="row g-3">@include('jmv.inventory.partials.item-fields',['editingItem'=>$item])</div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary">Save Changes</button></div></form></div></div></div>@endforeach @endif
+@if($canAdjust)@foreach($items as $item)<div class="modal fade" id="adjustItem{{ $item->id }}" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form method="POST" action="{{ route('jmv.inventory.adjust',$item) }}" class="modal-content rounded-4 border-0">@csrf<div class="modal-header"><div><h2 class="modal-title fs-5 fw-bold">Adjust {{ $item->item_code }}</h2><small class="text-muted">Current total: {{ $item->stock_on_hand }} {{ $item->unit }}</small></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="vstack gap-3"><div><label class="form-label fw-bold">Location *</label><select name="location_id" required class="form-select">@foreach($item->balances as $balance)<option value="{{ $balance->location_id }}">{{ $balance->location?->name }} — {{ $balance->quantity }} {{ $item->unit }}</option>@endforeach</select></div><div><label class="form-label fw-bold">Correct Location Balance *</label><input type="number" min="0" name="adjusted_balance" required class="form-control"></div><div><label class="form-label fw-bold">Reference Number *</label><input name="reference_no" required maxlength="100" class="form-control"></div><div><label class="form-label fw-bold">Reason *</label><textarea name="remarks" required maxlength="2000" rows="3" class="form-control"></textarea></div></div></div><div class="modal-footer"><button class="btn btn-warning">Post Adjustment</button></div></form></div></div>@endforeach @endif
 
-    </div>
-
-    <!-- 📋 TABLE -->
-    <div class="card shadow-sm">
-        <div class="card-body">
-
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Item Name</th>
-                        <th>Unit</th>
-                        <th>Max</th>
-                        <th>Min</th>
-                        <th>Stock</th>
-                        <th>Added By</th>
-                        <th>Date</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($items as $index => $item)
-                    <tr class=" @if($item->stock_on_hand <= $item->minimum_quantity) table-danger @elseif($item->stock_on_hand > $item->maximum_quantity) table-warning @endif">
-                        <td>{{ $items->firstItem() + $index }}</td>
-                        <td>{{ $item->item_name }}</td>
-                        <td>{{ $item->unit }}</td>
-                        <td>{{ $item->maximum_quantity }}</td>
-                        <td>{{ $item->minimum_quantity }}</td>
-                        <td>
-                            @if($item->stock_on_hand <= $item->minimum_quantity)
-                                <span style="color:red; font-weight:bold;">
-                                    ⚠ {{ $item->stock_on_hand }}
-                                </span>
-                            @elseif($item->stock_on_hand > $item->maximum_quantity)
-                                <span style="color:orange; font-weight:bold;">
-                                    ▲ {{ $item->stock_on_hand }}
-                                </span>
-                            @else
-                                {{ $item->stock_on_hand }}
-                            @endif
-                        </td>
-                        <td>
-                            {{ $item->user 
-                                ? $item->user->name . ' ' . $item->user->lastname 
-                                : 'N/A' 
-                            }}
-                        </td>
-                        <td>{{ $item->created_at->format('Y-m-d') }}</td>
-                        <td>
-                            @if($item->status == 1)
-                                <span style="color:green;">Active</span>
-                            @else
-                                <span style="color:red;">Inactive</span>
-                            @endif
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="9" class="text-center">No data found</td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-
-            <!-- Pagination -->
-            {{ $items->links() }}
-
-        </div>
-    </div>
-
-</div>
-
-<!-- 🧾 MODAL -->
-<div id="itemModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5);">
-    <div style="background:white; width:400px; margin:10% auto; padding:20px; border-radius:10px;">
-
-        <h5>Add Item</h5>
-
-        <form method="POST" action="{{ route('jmv.inventory.store') }}">
-            @csrf
-
-            <input type="text" name="item_name" placeholder="Item Name" required class="form-control mb-2">
-            <input type="text" name="unit" placeholder="Unit" required class="form-control mb-2">
-            <input type="number" name="maximum_quantity" placeholder="Max Qty" required class="form-control mb-2">
-            <input type="number" name="minimum_quantity" placeholder="Min Qty" required class="form-control mb-2">
-            <input type="number" name="stock_on_hand" placeholder="Stock" required class="form-control mb-2">
-
-            <button type="submit" class="btn btn-success">Save</button>
-            <button type="button" onclick="closeModal()" class="btn btn-secondary">Cancel</button>
-        </form>
-
-    </div>
-</div>
-
-<script>
-function openModal() {
-    document.getElementById('itemModal').style.display = 'block';
-}
-
-function closeModal() {
-    document.getElementById('itemModal').style.display = 'none';
-}
-</script>
-
+@if($canManageItems)<div class="modal fade" id="addItemModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable"><div class="modal-content rounded-4 border-0"><div class="modal-header"><div><h2 class="modal-title fs-5 fw-bold">Add Inventory Item</h2><small class="text-muted">A unique JMV item code will be generated automatically.</small></div><button class="btn-close" data-bs-dismiss="modal"></button></div><form method="POST" action="{{ route('jmv.inventory.store') }}">@csrf<div class="modal-body"><div class="row g-3">@include('jmv.inventory.partials.item-fields',['editingItem'=>null])</div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary">Save Item</button></div></form></div></div></div>@endif
 @endsection

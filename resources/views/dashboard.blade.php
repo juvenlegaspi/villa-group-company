@@ -52,9 +52,8 @@
 </div>
 --}}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
+document.addEventListener('DOMContentLoaded', () => {
     const ctx = document.getElementById('statusChart');
 
     const anchored = {{ $anchored }};
@@ -90,6 +89,7 @@
             }
         }
     });
+});
 </script>
 @endsection
 

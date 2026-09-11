@@ -34,7 +34,7 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ url('/shipping/dry-docking/' . $header->id . '/details/store') }}">
+    <form method="POST" action="{{ route('dry-docking.details.store', $header->id) }}">
         @csrf
         <input type="hidden" name="vessel_id" value="{{ $header->vessel_id }}">
 
@@ -73,9 +73,16 @@
                                     <option value="completed">Completed</option>
                                 </select>
                             </td>
-                            <td><input name="items[0][daily_status]" class="form-control"></td>
-                            <td><input type="number" name="items[0][weight]" class="form-control"></td>
-                            <td><input type="number" name="items[0][actual_progress]" class="form-control"></td>
+                            <td>
+                                <select name="items[0][daily_status]" class="form-control">
+                                    <option value="not started">Not Started</option>
+                                    <option value="ahead of schedule">Ahead of Schedule</option>
+                                    <option value="on schedule">On Schedule</option>
+                                    <option value="delayed">Delayed</option>
+                                </select>
+                            </td>
+                            <td><input type="number" min="0" max="100" step="0.01" name="items[0][weight]" class="form-control"></td>
+                            <td><input type="number" min="0" max="100" step="0.01" name="items[0][actual_progress]" class="form-control"></td>
                             <td><input name="items[0][activity]" class="form-control"></td>
                             <td><input name="items[0][remarks]" class="form-control"></td>
                             <td>
@@ -112,9 +119,16 @@ document.addEventListener('click', function (event) {
                         <option value="completed">Completed</option>
                     </select>
                 </td>
-                <td><input name="items[${index}][daily_status]" class="form-control"></td>
-                <td><input name="items[${index}][weight]" class="form-control"></td>
-                <td><input name="items[${index}][actual_progress]" class="form-control"></td>
+                <td>
+                    <select name="items[${index}][daily_status]" class="form-control">
+                        <option value="not started">Not Started</option>
+                        <option value="ahead of schedule">Ahead of Schedule</option>
+                        <option value="on schedule">On Schedule</option>
+                        <option value="delayed">Delayed</option>
+                    </select>
+                </td>
+                <td><input type="number" min="0" max="100" step="0.01" name="items[${index}][weight]" class="form-control"></td>
+                <td><input type="number" min="0" max="100" step="0.01" name="items[${index}][actual_progress]" class="form-control"></td>
                 <td><input name="items[${index}][activity]" class="form-control"></td>
                 <td><input name="items[${index}][remarks]" class="form-control"></td>
                 <td><button type="button" class="btn btn-danger removeRow">Remove</button></td>

@@ -20,13 +20,14 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('cell_number')->nullable();
             $table->string('password');
+            $table->rememberToken();
 
             $table->unsignedBigInteger('created_by')->nullable();
 
             $table->boolean('is_admin')->default(0);
 
-            $table->unsignedBigInteger('role');
-            $table->unsignedBigInteger('department');
+            $table->string('role');
+            $table->foreignId('department_id')->constrained()->restrictOnDelete();
 
             $table->boolean('must_change_password')->default(0);
             $table->boolean('status')->default(1);

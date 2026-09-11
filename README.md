@@ -1,59 +1,112 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Villa Group Operations System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel application for Villa Group division dashboards and operational workflows: Villa Shipping Lines, Yatira, JMV, Corporate, and HYVE.
 
-## About Laravel
+## Requirements
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP 8.2 or newer with PDO MySQL, Mbstring, OpenSSL, Fileinfo, and GD
+- MySQL 8
+- Composer 2
+- Node.js 20 or newer (only required when building Vite assets)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Local setup
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+composer install
+copy .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan storage:link
+php artisan serve
+```
 
-## Learning Laravel
+Configure the database, SMTP mailer, application URL, and a non-debug production environment in `.env`. Never commit `.env`.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Production deployment
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Use these minimum settings:
 
-## Laravel Sponsors
+```dotenv
+APP_ENV=production
+APP_DEBUG=false
+SESSION_SECURE_COOKIE=true
+SESSION_ENCRYPT=true
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Then deploy with:
 
-### Premium Partners
+```bash
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan optimize
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Run a queue worker under a process supervisor when queued jobs are introduced. Configure the Laravel scheduler to run every minute:
 
-## Contributing
+```cron
+* * * * * cd /path/to/villa && php artisan schedule:run >> /dev/null 2>&1
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Certificate expiry alerts run daily at 08:00 Asia/Manila and are deduplicated per certificate, recipient, and day.
 
-## Code of Conduct
+Certificate reminders use SMTP email and optional Semaphore SMS. Configure Semaphore after obtaining the API key; the sender name may remain blank until the requested name is approved and set as the account default:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```dotenv
+SEMAPHORE_ENABLED=true
+SEMAPHORE_API_KEY=your-api-key
+SEMAPHORE_SENDER_NAME=
+SEMAPHORE_ENDPOINT=https://api.semaphore.co/api/v4/messages
+```
 
-## Security Vulnerabilities
+When the custom sender becomes active, place its exact approved value in `SEMAPHORE_SENDER_NAME` and run `php artisan optimize:clear`. On Windows Server, create a Task Scheduler entry that runs `php artisan schedule:run` every minute from the project directory; on Linux use the cron entry above.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Villa Shipping checklist reminders run every minute in Asia/Manila. They are delivered to active Marine Operations Managers and the active Captain assigned to the event vessel. Delivery is deduplicated per event occurrence, recipient, and channel. A missed scheduler run is recovered within the configured catch-up window, and failed delivery is retried up to the configured limit:
 
-## License
+```dotenv
+SHIPPING_CALENDAR_CATCH_UP_MINUTES=1440
+SHIPPING_CALENDAR_MAX_DELIVERY_ATTEMPTS=5
+SHIPPING_CALENDAR_MAX_ATTACHMENTS=10
+SHIPPING_CALENDAR_MAX_ATTACHMENT_BYTES=52428800
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Monitor failed or exhausted delivery attempts in `shipping_calendar_reminder_logs`. Checklist attachments are stored on the private `local` disk and are available only through vessel-authorized download routes.
+
+Password recovery sends a single-use link to the user's registered email. Set `APP_URL` to the public HTTPS address and configure a working SMTP mailer and sender address before deployment. Reset links expire after 60 minutes and requests are rate-limited.
+
+## Access model
+
+- Administrators/owners can access every division.
+- Non-admin users are restricted to their assigned division.
+- Vessel managers can manage shipping records; captains are restricted to assigned vessels.
+- User administration and dry docking are administrator-only.
+- Temporary passwords force a password change before module access.
+- HYVE, Yatira, JMV, and Shipping routes enforce division access server-side.
+
+## Storage
+
+Certificate documents and voyage activity edit attachments are stored on Laravel's private `local` disk and downloaded only through authenticated, authorized controllers.
+
+To migrate legacy public certificate files safely:
+
+```bash
+php artisan certificates:migrate-private
+php artisan voyages:migrate-private-attachments
+```
+
+The command copies each file, verifies its SHA-256 checksum, updates certificate records, and only then removes the public copy. The `public/uploads` directory is ignored by Git. Existing repository history may still contain old documents; purge sensitive blobs from remote Git history separately if that repository has been shared.
+
+## HYVE integration
+
+This application reads the HYVE booking tables from the configured Villa database and serves local payment proofs from the sibling `../hyve/storage/app/public` directory. Deploy both applications with that directory relationship or replace it with a configured shared private filesystem before separating the services.
+
+## Verification
+
+```bash
+php artisan test
+php artisan route:list --except-vendor
+php artisan schedule:list
+php artisan migrate:status
+php artisan view:cache
+```
+
+Do not deploy unless tests pass, no migrations are pending, `APP_DEBUG` is false, HTTPS cookies are enabled, SMTP is verified, and a database/private-storage backup has been tested.

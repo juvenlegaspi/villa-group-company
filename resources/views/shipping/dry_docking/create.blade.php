@@ -12,7 +12,7 @@
                 <div class="alert alert-success">{{ session('success') }}</div>
             @endif
 
-            <form method="POST" action="{{ url('/shipping/dry-docking/store') }}">
+            <form method="POST" action="{{ route('dry-docking.store') }}">
                 @csrf
 
                 <div class="row">

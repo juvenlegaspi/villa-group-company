@@ -45,6 +45,58 @@
         gap: 16px;
     }
 
+    .vsli-filter-card {
+        border: 1px solid #dbe7f3;
+        border-radius: 20px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+    }
+
+    .vsli-filter-form {
+        display: grid;
+        grid-template-columns: minmax(190px, 1.2fr) repeat(2, minmax(150px, 1fr)) auto;
+        gap: 12px;
+        align-items: end;
+    }
+
+    .vsli-filter-form label {
+        color: #334155;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .vsli-filter-form .form-select,
+    .vsli-filter-form .form-control {
+        min-height: 44px;
+        border-color: #cbd5e1;
+        border-radius: 12px;
+    }
+
+    .vsli-filter-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .vsli-filter-actions .btn {
+        min-height: 44px;
+        border-radius: 12px;
+        white-space: nowrap;
+    }
+
+    .vsli-period-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border-radius: 999px;
+        background: #e8f4ff;
+        color: #075985;
+        padding: 7px 12px;
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
     .vsli-card {
         border: 0;
         border-radius: 22px;
@@ -204,6 +256,12 @@
         color: #0f172a;
     }
 
+    @media (max-width: 1100px) {
+        .vsli-filter-form {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
     @media (max-width: 768px) {
         .vsli-hero {
             padding: 24px;
@@ -217,26 +275,39 @@
             align-items: flex-start;
             flex-direction: column;
         }
+
+        .vsli-filter-form {
+            grid-template-columns: 1fr;
+        }
+
+        .vsli-filter-actions .btn {
+            flex: 1;
+        }
     }
 </style>
 
 <div class="container-fluid px-0">
     <div class="vsli-shell">
         <section class="vsli-hero">
+            @if(auth()->user()->isExecutiveViewer())
+                <span class="mb-3 d-inline-flex align-items-center gap-2 rounded-pill bg-white bg-opacity-10 px-3 py-2 small fw-bold"><i class="bi bi-eye"></i> Read-only executive dashboard</span>
+            @endif
             <h2 class="fw-bold mb-2">Villa Shipping Lines Command Center</h2>
             <p class="mb-0" style="max-width: 760px;">
-                Central view sa vessels, voyages, defects, certificates, ug fuel monitoring.
+                Central view of vessels, voyages, defects, certificates, and fuel monitoring.
             </p>
 
             <div class="vsli-actions">
+                @unless(auth()->user()->isExecutiveViewer())
                 <a href="{{ route('vessels.index') }}" class="btn btn-light btn-sm">
                     <i class="bi bi-ship me-1"></i> Vessels
                 </a>
+                @endunless
                 <a href="{{ route('voyage-logs.dashboard') }}" class="btn btn-outline-light btn-sm">
                     <i class="bi bi-map me-1"></i> Voyage Dashboard
                 </a>
                 <a href="#monthly-vessel-insights" class="btn btn-outline-light btn-sm">
-                    <i class="bi bi-bar-chart-line me-1"></i> Monthly Vessel Insights
+                    <i class="bi bi-bar-chart-line me-1"></i> Period Vessel Insights
                 </a>
                 <a href="{{ route('tech-defects.dashboard') }}" class="btn btn-outline-light btn-sm">
                     <i class="bi bi-tools me-1"></i> Defects Dashboard
@@ -250,18 +321,60 @@
             </div>
         </section>
 
+        <section class="vsli-filter-card" aria-labelledby="dashboard-range-title">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <div>
+                    <h5 id="dashboard-range-title" class="mb-1 fw-bold text-dark">Dashboard time range</h5>
+                    <p class="mb-0 small text-muted">Voyages, fuel, defects and operational activity follow this period.</p>
+                </div>
+                <span class="vsli-period-chip"><i class="bi bi-calendar3"></i>{{ $dashboardRange['label'] }}</span>
+            </div>
+
+            @if($errors->any())
+                <div class="alert alert-danger py-2 mb-3" role="alert">{{ $errors->first() }}</div>
+            @endif
+
+            <form method="GET" action="{{ route('division.dashboard', 'Villa Shipping Lines') }}" class="vsli-filter-form" id="shipping-dashboard-filter">
+                <div>
+                    <label for="dashboard-range">Time range</label>
+                    <select class="form-select" id="dashboard-range" name="range">
+                        <option value="today" @selected($dashboardRange['key'] === 'today')>Today</option>
+                        <option value="last_7_days" @selected($dashboardRange['key'] === 'last_7_days')>Last 7 days</option>
+                        <option value="last_30_days" @selected($dashboardRange['key'] === 'last_30_days')>Last 30 days</option>
+                        <option value="this_month" @selected($dashboardRange['key'] === 'this_month')>This month</option>
+                        <option value="last_month" @selected($dashboardRange['key'] === 'last_month')>Last month</option>
+                        <option value="this_year" @selected($dashboardRange['key'] === 'this_year')>This year</option>
+                        <option value="all_time" @selected($dashboardRange['key'] === 'all_time')>All time</option>
+                        <option value="custom" @selected($dashboardRange['key'] === 'custom')>Custom range</option>
+                    </select>
+                </div>
+                <div class="vsli-custom-date">
+                    <label for="dashboard-date-from">From</label>
+                    <input class="form-control" id="dashboard-date-from" type="date" name="date_from" value="{{ old('date_from', $dashboardRange['key'] === 'custom' ? $dashboardRange['from'] : '') }}">
+                </div>
+                <div class="vsli-custom-date">
+                    <label for="dashboard-date-to">To</label>
+                    <input class="form-control" id="dashboard-date-to" type="date" name="date_to" value="{{ old('date_to', $dashboardRange['key'] === 'custom' ? $dashboardRange['to'] : '') }}">
+                </div>
+                <div class="vsli-filter-actions">
+                    <a href="{{ route('division.dashboard', 'Villa Shipping Lines') }}" class="btn btn-outline-secondary">Reset</a>
+                    <button class="btn btn-primary px-4" type="submit"><i class="bi bi-funnel me-1"></i>Apply</button>
+                </div>
+            </form>
+        </section>
+
         <section class="vsli-grid">
             <div class="vsli-card">
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Fleet</div>
+                            <div class="vsli-stat-label">Fleet <span class="badge bg-light text-secondary ms-1">Live</span></div>
                             <div class="vsli-stat-value">{{ number_format($totalVessels) }}</div>
-                            <p class="vsli-stat-note">{{ number_format($activeVessels) }} vessels currently tied to open voyages</p>
+                            <p class="vsli-stat-note">{{ number_format($activeVessels) }} vessels marked active or operational</p>
                         </div>
                         <span class="vsli-icon bg-soft-blue"><i class="bi bi-ship"></i></span>
                     </div>
-                    <a href="{{ route('vessels.index') }}" class="small text-decoration-none">Open vessel monitoring</a>
+                    @unless(auth()->user()->isExecutiveViewer())<a href="{{ route('vessels.index') }}" class="small text-decoration-none">Open vessel monitoring</a>@endunless
                 </div>
             </div>
 
@@ -283,7 +396,7 @@
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Crew Logged</div>
+                            <div class="vsli-stat-label">Crew Logged <span class="badge bg-light text-secondary ms-1">Live</span></div>
                             <div class="vsli-stat-value">{{ number_format($totalCrew) }}</div>
                             <p class="vsli-stat-note">Combined crew counts recorded across voyage headers</p>
                         </div>
@@ -303,7 +416,7 @@
                         </div>
                         <span class="vsli-icon bg-soft-red"><i class="bi bi-cone-striped"></i></span>
                     </div>
-                    <a href="{{ route('tech-defects.dashboard') }}" class="small text-decoration-none">Inspect defect status</a>
+                    <a href="{{ route('tech-defects.dashboard') }}" class="small text-decoration-none">Inspect defect dashboard</a>
                 </div>
             </div>
 
@@ -311,13 +424,51 @@
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Certificate Risk</div>
+                            <div class="vsli-stat-label">Certificate Risk <span class="badge bg-light text-secondary ms-1">Live</span></div>
                             <div class="vsli-stat-value">{{ number_format($expiredCertificates + $expiringCertificates) }}</div>
                             <p class="vsli-stat-note">{{ number_format($expiredCertificates) }} expired, {{ number_format($expiringCertificates) }} due within 30 days</p>
                         </div>
                         <span class="vsli-icon bg-soft-orange"><i class="bi bi-file-earmark-text"></i></span>
                     </div>
                     <a href="{{ route('vessel-certificates.dashboard') }}" class="small text-decoration-none">Open certificate dashboard</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="card vsli-card vsli-section-card">
+            <div class="card-body">
+                <div class="vsli-section-title">
+                    <div>
+                        <h4>Selected-period health</h4>
+                        <p class="vsli-subtext">Decision-ready indicators for {{ $dashboardRange['label'] }}. Certificate compliance is a live fleet snapshot.</p>
+                    </div>
+                </div>
+                <div class="vsli-mini-grid">
+                    <div class="vsli-mini-card">
+                        <div class="label">Active Defects</div>
+                        <div class="value">{{ number_format($activeDefects) }}</div>
+                        <div class="small text-muted">Reports not yet closed</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Overdue Defects</div>
+                        <div class="value text-danger">{{ number_format($overdueDefects) }}</div>
+                        <div class="small text-muted">Past target completion date</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Defect Closure Rate</div>
+                        <div class="value">{{ number_format($defectClosureRate, 1) }}%</div>
+                        <div class="small text-muted">Closed reports in selected period</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Certificate Compliance <span class="badge bg-light text-secondary ms-1">Live</span></div>
+                        <div class="value">{{ number_format($certificateComplianceRate, 1) }}%</div>
+                        <div class="small text-muted">Effective certificates valid beyond 30 days</div>
+                    </div>
+                    <div class="vsli-mini-card">
+                        <div class="label">Fuel per Completed Voyage</div>
+                        <div class="value">{{ number_format($fuelPerCompletedVoyage, 2) }} L</div>
+                        <div class="small text-muted">Selected-period consumption efficiency</div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -329,7 +480,7 @@
                         <div class="vsli-section-title">
                             <div>
                                 <h4>Operations Overview</h4>
-                                <p class="vsli-subtext">Quick pulse sa voyage volume ug defect distribution.</p>
+                                <p class="vsli-subtext">Quick overview of voyage volume and defect distribution.</p>
                             </div>
                         </div>
 
@@ -355,7 +506,7 @@
                         <div class="vsli-section-title">
                             <div>
                                 <h4>Compliance Snapshot</h4>
-                                <p class="vsli-subtext">Certificate health summary para sa fleet compliance.</p>
+                                <p class="vsli-subtext">Certificate health summary for fleet compliance.</p>
                             </div>
                         </div>
 
@@ -394,7 +545,7 @@
                             @empty
                                 <div class="vsli-alert-item">
                                     <strong>No immediate certificate alerts.</strong><br>
-                                    <span class="small text-muted">Walay due or expired certificate sa current summary.</span>
+                                    <span class="small text-muted">No due or expired certificates in the current summary.</span>
                                 </div>
                             @endforelse
                         </div>
@@ -409,8 +560,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Monthly Voyages Per Vessel</h5>
-                                <p class="vsli-subtext">Voyage per vessel within {{ $currentMonthLabel }}.</p>
+                                <h5>Voyages Per Vessel</h5>
+                                <p class="vsli-subtext">Voyages per vessel within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -436,7 +587,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="3" class="text-center text-muted py-4">No monthly voyage data found.</td>
+                                            <td colspan="3" class="text-center text-muted py-4">No voyage data found for this period.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
@@ -451,8 +602,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Monthly Fuel Per Vessel</h5>
-                                <p class="vsli-subtext">Fuel consumed ug received per vessel within {{ $currentMonthLabel }}.</p>
+                                <h5>Fuel Per Vessel</h5>
+                                <p class="vsli-subtext">Fuel consumed and received per vessel within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -480,7 +631,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="4" class="text-center text-muted py-4">No monthly fuel data found.</td>
+                                            <td colspan="4" class="text-center text-muted py-4">No fuel data found for this period.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
@@ -497,8 +648,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Average Turnaround Time</h5>
-                                <p class="vsli-subtext">Per port call average turnaround hours for {{ $currentMonthLabel }}.</p>
+                                <h5>Average Voyage Duration by Origin Port</h5>
+                                <p class="vsli-subtext">Average voyage hours grouped by origin port for {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -532,7 +683,7 @@
                 <div class="vsli-section-title">
                     <div>
                         <h4>Fuel Monitoring Dashboard</h4>
-                        <p class="vsli-subtext">Central summary sa consumption, bunkering, ug low fuel exposure.</p>
+                        <p class="vsli-subtext">Consumption and bunkering follow {{ $currentMonthLabel }}; the low-fuel watchlist is live.</p>
                     </div>
                 </div>
 
@@ -553,7 +704,7 @@
                         <div class="small text-muted">Average per fuel monitoring record</div>
                     </div>
                     <div class="vsli-mini-card">
-                        <div class="label">Low Fuel Voyages</div>
+                        <div class="label">Low Fuel Voyages <span class="badge bg-light text-secondary ms-1">Live</span></div>
                         <div class="value">{{ number_format($lowFuelVoyages->count()) }}</div>
                         <div class="small text-muted">Voyages below 1,000 liters remaining</div>
                     </div>
@@ -595,31 +746,31 @@
 
                 <div class="vsli-section-title mb-3">
                     <div>
-                        <h5>Monthly Vessel Snapshot</h5>
-                        <p class="vsli-subtext">Current month focus for vessels, fuel, turnaround, ug loading activities.</p>
+                        <h5>Selected Period Snapshot</h5>
+                        <p class="vsli-subtext">Overview of voyages, fuel, voyage duration, and loading activities for the chosen period.</p>
                     </div>
                 </div>
 
                 <div class="vsli-mini-grid">
                     <div class="vsli-mini-card">
-                        <div class="label">Month Covered</div>
+                        <div class="label">Period Covered</div>
                         <div class="value">{{ $currentMonthLabel }}</div>
-                        <div class="small text-muted">Dashboard focus for the current month</div>
+                        <div class="small text-muted">Current dashboard filter</div>
                     </div>
                     <div class="vsli-mini-card">
-                        <div class="label">Total Voyages This Month</div>
+                        <div class="label">Voyages in Period</div>
                         <div class="value">{{ number_format($monthlyVoyageSummary) }}</div>
                         <div class="small text-muted">All voyage logs created within {{ $currentMonthLabel }}</div>
                     </div>
                     <div class="vsli-mini-card">
                         <div class="label">Vessels With Fuel Logs</div>
                         <div class="value">{{ number_format($monthlyFuelByVessel->count()) }}</div>
-                        <div class="small text-muted">Vessels with fuel activity this month</div>
+                        <div class="small text-muted">Vessels with fuel activity in this period</div>
                     </div>
                     <div class="vsli-mini-card">
-                        <div class="label">Ports With Turnaround</div>
+                        <div class="label">Origin Ports Tracked</div>
                         <div class="value">{{ number_format($turnaroundPerPort->count()) }}</div>
-                        <div class="small text-muted">Port locations with tracked turnaround hours</div>
+                        <div class="small text-muted">Origin ports with recorded voyage hours</div>
                     </div>
                 </div>
             </div>
@@ -631,8 +782,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Turnaround Per Port Location</h5>
-                                <p class="vsli-subtext">Average ug total turnaround hours per port location for {{ $currentMonthLabel }}.</p>
+                                <h5>Voyage Duration by Origin Port</h5>
+                                <p class="vsli-subtext">Average and total voyage hours grouped by origin port for {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -646,7 +797,7 @@
                                     <tr>
                                         <th>Port Location</th>
                                         <th>Voyages</th>
-                                        <th>Avg Turnaround</th>
+                                        <th>Avg Voyage Duration</th>
                                         <th>Total Hours</th>
                                     </tr>
                                 </thead>
@@ -660,7 +811,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="4" class="text-center text-muted py-4">No turnaround data found.</td>
+                                            <td colspan="4" class="text-center text-muted py-4">No voyage-duration data found.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
@@ -759,8 +910,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Recent Voyage Logs</h5>
-                                <p class="vsli-subtext">Latest voyage headers recorded in the system.</p>
+                                <h5>Voyage Logs in Period</h5>
+                                <p class="vsli-subtext">Latest voyage headers within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -805,7 +956,7 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Monthly Cargo Voyages</h5>
+                                <h5>Cargo Voyages in Period</h5>
                                 <p class="vsli-subtext">Cargo movements recorded within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
@@ -849,8 +1000,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Recent Fuel Monitoring</h5>
-                                <p class="vsli-subtext">Latest ROB and bunkering related entries.</p>
+                                <h5>Fuel Monitoring in Period</h5>
+                                <p class="vsli-subtext">Latest ROB and bunkering entries within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -893,8 +1044,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Recent Activities</h5>
-                                <p class="vsli-subtext">Latest movement gikan sa voyage operations.</p>
+                                <h5>Activities in Period</h5>
+                                <p class="vsli-subtext">Latest voyage activities within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -914,8 +1065,8 @@
                                             <td>{{ $activity->activity?->name ?? '-' }}</td>
                                             <td>{{ $activity->vessel?->vessel_name ?? '-' }}</td>
                                             <td>
-                                                <span class="badge {{ $activity->detail?->main_status === 'COMPLETED' ? 'bg-success' : 'bg-primary' }}">
-                                                    {{ $activity->detail?->main_status ?? 'ONGOING' }}
+                                                <span class="badge {{ strtoupper((string) $activity->main_status) === 'COMPLETED' ? 'bg-success' : 'bg-primary' }}">
+                                                    {{ $activity->main_status ?? 'ONGOING' }}
                                                 </span>
                                             </td>
                                             <td>{{ optional($activity->start_date_time)->format('M d, Y h:i A') ?? '-' }}</td>
@@ -937,8 +1088,8 @@
                     <div class="card-body">
                         <div class="vsli-section-title">
                             <div>
-                                <h5>Recent Tech Defects</h5>
-                                <p class="vsli-subtext">Fresh defect reports that may need follow-up.</p>
+                                <h5>Tech Defects in Period</h5>
+                                <p class="vsli-subtext">Latest defect reports within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -979,25 +1130,41 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const monthlyVoyageLabels = {!! json_encode($monthlyVoyages->pluck('label')->values()) !!};
-    const monthlyVoyageData = {!! json_encode($monthlyVoyages->pluck('total')->values()) !!};
-    const defectStatusLabels = {!! json_encode($defectStatusLabels) !!};
-    const defectStatusData = {!! json_encode($defectStatusData) !!};
-    const fuelEngineLabels = {!! json_encode($fuelEngineLabels) !!};
-    const fuelEngineData = {!! json_encode($fuelEngineData) !!};
-    const topFuelVesselLabels = {!! json_encode($topFuelVesselLabels) !!};
-    const topFuelVesselData = {!! json_encode($topFuelVesselData) !!};
-    const monthlyVoyageVesselLabels = {!! json_encode($monthlyVoyageVesselLabels) !!};
-    const monthlyVoyageVesselData = {!! json_encode($monthlyVoyageVesselData) !!};
-    const monthlyFuelVesselLabels = {!! json_encode($monthlyFuelVesselLabels) !!};
-    const monthlyFuelVesselData = {!! json_encode($monthlyFuelVesselData) !!};
-    const turnaroundPortLabels = {!! json_encode($turnaroundPortLabels) !!};
-    const turnaroundPortData = {!! json_encode($turnaroundPortData) !!};
-    const loadingUnloadingLabels = {!! json_encode($loadingUnloadingLabels) !!};
-    const loadingDurationChartData = {!! json_encode($loadingDurationChartData) !!};
-    const unloadingDurationChartData = {!! json_encode($unloadingDurationChartData) !!};
+document.addEventListener('DOMContentLoaded', () => {
+    const rangeSelect = document.getElementById('dashboard-range');
+    const customDateFields = document.querySelectorAll('.vsli-custom-date');
+    const customDateInputs = document.querySelectorAll('.vsli-custom-date input');
+    const syncCustomDateFields = () => {
+        const customSelected = rangeSelect?.value === 'custom';
+
+        customDateFields.forEach((field) => field.classList.toggle('d-none', !customSelected));
+        customDateInputs.forEach((input) => {
+            input.disabled = !customSelected;
+            input.required = customSelected;
+        });
+    };
+
+    rangeSelect?.addEventListener('change', syncCustomDateFields);
+    syncCustomDateFields();
+
+    const monthlyVoyageLabels = {{ Illuminate\Support\Js::from($monthlyVoyages->pluck('label')->values()) }};
+    const monthlyVoyageData = {{ Illuminate\Support\Js::from($monthlyVoyages->pluck('total')->values()) }};
+    const defectStatusLabels = {{ Illuminate\Support\Js::from($defectStatusLabels) }};
+    const defectStatusData = {{ Illuminate\Support\Js::from($defectStatusData) }};
+    const fuelEngineLabels = {{ Illuminate\Support\Js::from($fuelEngineLabels) }};
+    const fuelEngineData = {{ Illuminate\Support\Js::from($fuelEngineData) }};
+    const topFuelVesselLabels = {{ Illuminate\Support\Js::from($topFuelVesselLabels) }};
+    const topFuelVesselData = {{ Illuminate\Support\Js::from($topFuelVesselData) }};
+    const monthlyVoyageVesselLabels = {{ Illuminate\Support\Js::from($monthlyVoyageVesselLabels) }};
+    const monthlyVoyageVesselData = {{ Illuminate\Support\Js::from($monthlyVoyageVesselData) }};
+    const monthlyFuelVesselLabels = {{ Illuminate\Support\Js::from($monthlyFuelVesselLabels) }};
+    const monthlyFuelVesselData = {{ Illuminate\Support\Js::from($monthlyFuelVesselData) }};
+    const turnaroundPortLabels = {{ Illuminate\Support\Js::from($turnaroundPortLabels) }};
+    const turnaroundPortData = {{ Illuminate\Support\Js::from($turnaroundPortData) }};
+    const loadingUnloadingLabels = {{ Illuminate\Support\Js::from($loadingUnloadingLabels) }};
+    const loadingDurationChartData = {{ Illuminate\Support\Js::from($loadingDurationChartData) }};
+    const unloadingDurationChartData = {{ Illuminate\Support\Js::from($unloadingDurationChartData) }};
 
     new Chart(document.getElementById('voyageTrendChart'), {
         type: 'bar',
@@ -1032,7 +1199,7 @@
             labels: defectStatusLabels,
             datasets: [{
                 data: defectStatusData,
-                backgroundColor: ['#dc3545', '#fd7e14', '#ffc107', '#198754'],
+                backgroundColor: ['#2563eb', '#7c3aed', '#0891b2', '#f59e0b', '#ea580c', '#dc2626', '#16a34a'],
                 borderWidth: 0
             }]
         },
@@ -1158,7 +1325,7 @@
         data: {
             labels: turnaroundPortLabels,
             datasets: [{
-                label: 'Avg Turnaround Hours',
+                label: 'Avg Voyage Hours',
                 data: turnaroundPortData,
                 backgroundColor: '#14b8a6',
                 borderRadius: 10,
@@ -1185,7 +1352,7 @@
         data: {
             labels: turnaroundPortLabels,
             datasets: [{
-                label: 'Average Turnaround Hours',
+                label: 'Average Voyage Hours',
                 data: turnaroundPortData,
                 backgroundColor: ['#0f4c81', '#155e9c', '#1d70b8', '#2d87d3', '#4a9ce0', '#72b4ea', '#99caf3', '#bedef9'],
                 borderRadius: 10,
@@ -1244,5 +1411,6 @@
             }
         }
     });
+});
 </script>
 @endsection

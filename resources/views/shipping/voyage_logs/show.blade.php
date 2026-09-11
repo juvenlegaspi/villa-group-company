@@ -1,130 +1,77 @@
 @extends('layouts.app')
 
+@section('title', $voyage->voyage_code.' | '.$voyage->vessel->vessel_name)
+
 @section('content')
-@if($voyage->status === 'COMPLETED')
-    <div class="alert alert-success">
-        Voyage completed successfully.
-    </div>
-@endif
+@php
+    $details = $voyage->details;
+    $voyageCompleted = strtoupper((string) $voyage->status) === 'COMPLETED';
+@endphp
 
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <nav aria-label="breadcrumb" class="mb-3">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item">
-                    <a href="{{ route('vessels.index') }}">Vessels</a>
-                </li>
-                <li class="breadcrumb-item">
-                    <a href="{{ url('/shipping/vessels/' . $voyage->vessel_id) }}">{{ $voyage->vessel->vessel_name }}</a>
-                </li>
-                <li class="breadcrumb-item active">{{ $voyage->voyage_code }}</li>
-            </ol>
-        </nav>
-    </div>
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-white to-slate-100 px-4 py-6 sm:px-7 lg:px-12">
+    <div class="mx-auto max-w-7xl">
+        @if($errors->any())
+            <div class="alert alert-danger mb-5" role="alert">
+                <div class="flex items-start gap-3"><i class="bi bi-compass mt-0.5 shrink-0" aria-hidden="true"></i><div><p class="mb-1 font-extrabold">Unable to save the activity</p><ul class="m-0 list-disc space-y-1 pl-5 text-sm">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div></div>
+            </div>
+        @endif
+        @if(session('success'))
+            <div class="alert alert-success mb-5" role="status"><i class="bi bi-check2-circle mr-2" aria-hidden="true"></i>{{ session('success') }}</div>
+        @endif
+        @if($voyageCompleted)
+            <div class="alert alert-success mb-5" role="status"><i class="bi bi-check2-circle mr-2" aria-hidden="true"></i>Voyage completed successfully.</div>
+        @endif
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4 class="mb-0">Voyage Information</h4>
-                @if($voyage->status != 'COMPLETED' && $voyage->details->count() > 0 && $voyage->details->where('main_status', '!=', 'COMPLETED')->count() == 0 )
-                    <form method="POST" action="{{ url('/shipping/voyage-logs/' . $voyage->voyage_id . '/complete-voyage') }}">
-                        @csrf
-                        <button class="btn btn-danger btn-sm">Complete Voyage</button>
-                    </form>
+        <header class="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <nav class="flex min-w-0 items-center gap-2" aria-label="Voyage navigation">
+                <a class="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-extrabold text-slate-700 no-underline shadow-sm hover:border-villa-500 hover:bg-villa-50 hover:text-villa-800" href="{{ route('vessels.index') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i><span class="hidden sm:inline">Vessels</span></a>
+                <svg class="h-4 w-4 shrink-0 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                <a class="min-w-0 truncate rounded-lg px-2 py-1 text-sm font-bold text-villa-700 no-underline hover:bg-villa-50 hover:text-villa-900" href="{{ route('vessels.show', $voyage->vessel_id) }}">{{ $voyage->vessel->vessel_name }}</a>
+                <svg class="h-4 w-4 shrink-0 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                <span class="shrink-0 rounded-lg bg-villa-700 px-3 py-1.5 text-xs font-extrabold text-white shadow-sm">{{ $voyage->voyage_code }}</span>
+            </nav>
+            <span class="inline-flex w-fit rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider ring-1 ring-inset {{ $voyageCompleted ? 'bg-emerald-100 text-emerald-800 ring-emerald-600/20' : 'bg-blue-100 text-blue-800 ring-blue-600/20' }}">{{ $voyage->status ?: 'OPEN' }}</span>
+        </header>
+
+        <article class="relative mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-villa-gold via-villa-600 to-villa-900"></div>
+            <header class="flex flex-col justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:px-6">
+                <div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-2xl bg-villa-50 text-xl text-villa-700"><i class="bi bi-compass"></i></span><div><p class="mb-0.5 text-xs font-extrabold uppercase tracking-wider text-villa-600">{{ $voyage->voyage_code }}</p><h1 class="text-xl font-extrabold text-slate-950">Voyage Information</h1></div></div>
+                @if(!$voyageCompleted && $details->count() > 0 && $details->where('main_status', '!=', 'COMPLETED')->count() == 0)
+                    <form method="POST" action="{{ url('/shipping/voyage-logs/' . $voyage->voyage_id . '/complete-voyage') }}">@csrf<button class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-extrabold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-100"><i class="bi bi-check2-circle"></i>Complete Voyage</button></form>
                 @endif
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-2">
-                    <b>Date Created</b><br>
-                    {{ optional($voyage->date_created)->format('M d, Y') }}
-                </div>
-                <div class="col-md-2">
-                    <b>Voyage ID</b><br>
-                    {{ $voyage->voyage_id }}
-                </div>
-                <div class="col-md-2">
-                    <b>Port Origin</b><br>
-                    {{ $voyage->port_location }}
-                </div>
+            </header>
 
-                <div class="col-md-2">
-                    <b>Port Destination</b><br>
-                    {{ $voyage->port_destination }}
-                </div>
-                <div class="col-md-2">
-                    <b>Current Location</b><br>
-                    {{ $voyage->current_location }}
-                </div>
-                <div class="col-md-2">
-                    <b>Voyage Number</b><br>
-                    {{ $voyage->voyage_no }}
-                </div>
-            </div>
-            <hr>
-            <div class="row">
-                <div class="col-md-2">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <b>Fuel ROB</b>
-                        @if($voyage->status != 'COMPLETED')
-                            <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#updateFuelModal">
-                                Update Fuel
-                            </button>
-                        @endif
-                    </div>
-                    {{ $voyage->fuel_rob }}
-                </div>
-                <div class="col-md-2">
-                    <b>Cargo Type</b><br>
-                    {{ $voyage->cargo_type }}
-                </div>
-                <div class="col-md-2">
-                    <b>Cargo Volume</b><br>
-                    {{ $voyage->cargo_volume }}
-                </div>
-                <div class="col-md-3">
-                    <b>Crew on Board</b><br>
-                    {{ $voyage->crew_on_board }}
-                </div>
-                <div class="col-md-2">
-                    <b>ETA Next Port</b><br>
-                    {{ $voyage->arrival_date ? $voyage->arrival_date->format('M d, Y') : '-' }}
-                </div>
-            </div>
-        </div>
-    </div>
-    </div>
-        <div class="card shadow-sm">
-            <div class="card-header">
-                @php
-                    $details = $voyage->details;
-                @endphp
-            <div class="d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Tracking Timeline</h5>
-                <div class="d-flex gap-2">
-                    @if($voyage->status != 'COMPLETED' && ($voyage->details->count() == 0 || $voyage->details->where('main_status', '!=', 'COMPLETED')->count() == 0))
-                        <button class="btn btn-primary btn-sm"
-                                data-bs-toggle="modal"
-                                data-bs-target="#addStatusModal">
-                            Add Status
-                        </button>
+            <dl class="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 sm:p-6 lg:grid-cols-4 xl:grid-cols-6">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Date Created</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ optional($voyage->date_created)->format('M d, Y') ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Voyage ID</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->voyage_id }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Port Origin</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->port_location ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Port Destination</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->port_destination ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Current Location</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->current_location ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Voyage Number</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->voyage_no ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5"><div class="flex items-start justify-between gap-2"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-amber-700">Fuel ROB</dt>@if(!$voyageCompleted)<button class="rounded-lg bg-amber-500 px-2 py-1 text-[.62rem] font-extrabold text-slate-950 shadow-sm hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100" data-bs-toggle="modal" data-bs-target="#updateFuelModal">Update</button>@endif</div><dd class="mt-1 text-sm font-extrabold text-slate-900">{{ $voyage->fuel_rob ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Cargo Type</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->cargo_type ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Cargo Volume</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->cargo_volume ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Crew on Board</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->crew_on_board ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">ETA Next Port</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->arrival_date ? $voyage->arrival_date->format('M d, Y') : '-' }}</dd></div>
+            </dl>
+        </article>
+
+        <article class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <header class="flex flex-col justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:px-6">
+                <div><p class="mb-0.5 text-xs font-extrabold uppercase tracking-wider text-villa-600">Operational progress</p><h2 class="text-lg font-extrabold text-slate-950">Tracking Timeline</h2></div>
+                <div class="flex flex-wrap gap-2">
+                    @if(!$voyageCompleted && ($details->count() == 0 || $details->where('main_status', '!=', 'COMPLETED')->count() == 0))
+                        <button class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white shadow-sm hover:bg-villa-900 focus:outline-none focus:ring-4 focus:ring-villa-100" data-bs-toggle="modal" data-bs-target="#addStatusModal"><i class="bi bi-plus"></i>Add Status</button>
                     @endif
-                    <a href="{{ route('voyage.pdf', $voyage->voyage_id) }}"
-                    class="btn btn-danger btn-sm">
-                        Download PDF
-                    </a>
+                    <a href="{{ route('voyage.pdf', $voyage->voyage_id) }}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-extrabold text-rose-700 no-underline shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800 focus:outline-none focus:ring-4 focus:ring-rose-100"><i class="bi bi-file-earmark-text"></i>Download PDF</a>
                 </div>
-            </div>
-        </div>
-        <div class="card-body custom-scroll">
-            @if($voyage->details->count() == 0 && $voyage->status !== 'COMPLETED')
-                <div class="text-center p-3">
-                    <p class="text-muted">No status yet.</p>
-                    <!-- <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addStatusModal">Add First Status</button> -->
-                </div>
-            @endif
-            <div class="timeline">
+            </header>
+            <div class="custom-scroll p-5 sm:p-6">
+                @if($details->count() == 0)
+                    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center"><span class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-white text-xl text-slate-400 shadow-sm"><i class="bi bi-compass"></i></span><p class="font-extrabold text-slate-700">No tracking status yet</p><p class="mt-1 text-xs text-slate-500">The vessel's operational timeline will appear here.</p></div>
+                @endif
+                <div class="timeline">
                 @foreach($voyage->details as $detail)
                     @php
                         $statusName = optional(
@@ -137,15 +84,15 @@
                         });
                         $isCompleted = $detail->main_status === 'COMPLETED';
                     @endphp
-                    <div class="activity-table-container border-top pt-4 mt-4 bg-light rounded p-3">
+                    <div class="activity-table-container timeline-entry">
                         {{-- HEADER --}}
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="mb-1">Status: {{ $statusName }}</h6>
+                        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                            <div><span class="mb-1 block text-[.65rem] font-extrabold uppercase tracking-wider text-villa-600">Voyage status</span><h3 class="text-base font-extrabold text-slate-900">{{ $statusName ?: 'Unspecified Status' }}</h3></div>
                             @php
                                 $hasRunning = $detail->activities->whereNull('end_date_time')->count();
                             @endphp
                             @if($loop->last && $hasRunning == 0 && $detail->main_status != 'COMPLETED')
-                                <button class="btn btn-success btn-sm py-1 px-2"
+                                <button class="btn btn-success btn-sm"
                                     data-bs-toggle="modal"
                                     data-bs-target="#addActivityModal{{ $detail->dtl_id }}">
                                     Start Activity
@@ -153,7 +100,7 @@
                             @endif
                         </div>
                         {{-- TABLE --}}
-                        <table class="table table-sm table-bordered mb-0">
+                        <table class="table table-sm table-hover mb-0 min-w-[1000px]">
                             <thead>
                                 <tr>
                                     <th>Activity</th>
@@ -198,8 +145,7 @@
                                                     {{ \Carbon\Carbon::parse($act->edited_at)->format('M d, Y h:i A') }}
                                                 </div>
                                                 @if($act->edit_attachment)
-                                                    <a href="{{ asset('storage/' . $act->edit_attachment) }}"
-                                                    target="_blank"
+                                                    <a href="{{ route('voyage.activity.attachment', $act->activity_id) }}"
                                                     class="btn btn-info btn-sm py-0 px-2"
                                                     style="font-size:11px;">
                                                         Attachment
@@ -560,22 +506,23 @@
                         </div>
                     </div>
                     <div class="modal fade" id="addActivityModal{{ $detail->dtl_id }}" tabindex="-1">
-                        <div class="modal-dialog">
+                        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
                             <div class="modal-content">
                                 <div class="modal-header">
-                                    <h5 class="modal-title">Add Activity</h5>
+                                    <div><p class="mb-1 text-[.65rem] font-extrabold uppercase tracking-wider text-villa-600">{{ $statusName ?: 'Voyage status' }}</p><h5 class="modal-title">Start Activity</h5></div>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
                                 <div class="modal-body">
                                     <form method="POST" action="{{ route('voyage.addActivity', $detail->dtl_id) }}">
                                         @csrf
+                                        <input type="hidden" name="voyage_detail_id" value="{{ $detail->dtl_id }}">
                                         {{-- ACTIVITY DROPDOWN --}}
                                         <div class="mb-3">
-                                            <label>Activity</label>
-                                            <select name="activity_id" class="form-control activity-select" required>
+                                            <label for="activity-{{ $detail->dtl_id }}">Activity</label>
+                                            <select id="activity-{{ $detail->dtl_id }}" name="activity_id" class="form-select activity-select" required>
                                                 <option value="">-- SELECT ACTIVITY --</option>
                                                     @foreach($activities->where('activity_status_voyage_id', $detail->status) as $act)
-                                                        <option value="{{ $act->id }}">
+                                                        <option value="{{ $act->id }}" data-cargo-movement="{{ $act->cargoMovementType() }}" @selected(old('activity_id') == $act->id)>
                                                             {{ $act->name }}
                                                         </option>
                                                     @endforeach
@@ -583,61 +530,62 @@
                                         </div>
                                         {{-- LOCATION --}}
                                         <div class="mb-3">
-                                            <label>Current Port Location</label>
-                                            <select name="port_location_id" class="form-control" required>
+                                            <label for="port-{{ $detail->dtl_id }}">Current Port Location</label>
+                                            <select id="port-{{ $detail->dtl_id }}" name="port_location_id" class="form-select" required>
                                                 <option value="">-- SELECT PORT --</option>
 
                                                 @foreach($ports as $port)
-                                                    <option value="{{ $port->id }}">
+                                                    <option value="{{ $port->id }}" @selected(old('port_location_id') == $port->id)>
                                                         {{ $port->port_name }}
                                                     </option>
                                                 @endforeach
                                             </select>
                                         </div>
                                         <div class="mb-3">
-                                            <label>Remarks</label>
+                                            <label for="remarks-{{ $detail->dtl_id }}">Remarks</label>
                                             <textarea
+                                                id="remarks-{{ $detail->dtl_id }}"
                                                 name="remarks"
                                                 class="form-control"
                                                 rows="3"
-                                                placeholder="Enter remarks"></textarea>
+                                                placeholder="Enter remarks">{{ old('remarks') }}</textarea>
                                         </div>
-                                        <div class="mb-3 cargo-load-section d-none">
-                                            <div class="mb-3 cargo-load-section">
-                                                <label>Running Load</label>
-                                                <div class="row">
-                                                    <div class="col-md-8">
+                                        <div class="cargo-load-section d-none mb-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                                            <div>
+                                                <div class="mb-3"><p class="mb-1 text-sm font-extrabold text-amber-900">Cargo Operation</p><p class="m-0 text-xs leading-5 text-amber-800">Enter the running quantity and its measurement unit.</p></div>
+                                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+                                                    <div>
+                                                        <label for="running-load-{{ $detail->dtl_id }}">Running Total Load</label>
                                                         <input type="number"
+                                                            id="running-load-{{ $detail->dtl_id }}"
                                                             step="0.01"
                                                             name="running_load"
                                                             class="form-control"
+                                                            value="{{ old('running_load') }}"
                                                             placeholder="Enter running load">
                                                     </div>
-                                                    <div class="col-md-4">
-                                                        <select name="load_unit" class="form-control">
+                                                    <div>
+                                                        <label for="load-unit-{{ $detail->dtl_id }}">Unit</label>
+                                                        <select id="load-unit-{{ $detail->dtl_id }}" name="load_unit" class="form-select">
                                                             <option value="">-- SELECT UNIT --</option>
-                                                            <option value="Crates">Crates</option>
-                                                            <option value="MT">MT</option>
-                                                            <option value="LB">LB</option>
-                                                            <option value="CBM">CBM</option>
-                                                            <option value="L">L</option>
-                                                            <option value="BBL">BBL</option>
-                                                            <option value="Bushel">Bushel</option>
-                                                            <option value="Bag/Sacks">Bag/Sacks</option>
-                                                            <option value="Piece/Unit">Piece/Unit</option>
+                                                            @foreach(['Crates', 'MT', 'LB', 'CBM', 'L', 'BBL', 'Bushel', 'Bag/Sacks', 'Piece/Unit'] as $unit)
+                                                                <option value="{{ $unit }}" @selected(old('load_unit') === $unit)>{{ $unit }}</option>
+                                                            @endforeach
                                                         </select>
                                                     </div>
-                                                    <div class="mb-3">
-                                                        <label>Cargo Type</label>
+                                                    <div class="sm:col-span-2">
+                                                        <label for="cargo-type-{{ $detail->dtl_id }}">Cargo Type</label>
                                                         <input type="text"
+                                                            id="cargo-type-{{ $detail->dtl_id }}"
                                                             name="cargo_type"
                                                             class="form-control"
+                                                            value="{{ old('cargo_type') }}"
                                                             placeholder="Enter cargo type">
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <button class="btn btn-primary">Start</button>
+                                        <div class="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary"><i class="bi bi-plus"></i>Start Activity</button></div>
                                     </form>
                                 </div>
                             </div>
@@ -649,38 +597,40 @@
     </div>
 
     <div class="modal fade" id="addStatusModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add Status</h5>
+                    <div><p class="mb-1 text-[.65rem] font-extrabold uppercase tracking-wider text-villa-600">Tracking Timeline</p><h5 class="modal-title">Add Voyage Status</h5></div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form method="POST" action="{{ route('voyage.addDetail', $voyage->voyage_id) }}">
                         @csrf
-                        <div class="row">
-                            <div class="col-md-4">
-                                <select name="status_id" id="status" class="form-control">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="status">Status</label>
+                                <select name="status_id" id="status" class="form-select" required>
                                     <option value="">-- SELECT ONE --</option>
                                     @foreach($statuses as $status)
                                         <option value="{{ $status->id }}">{{ $status->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-4">
-                                <input type="text" name="remarks" class="form-control" placeholder="Remarks (optional)">
+                            <div>
+                                <label for="status-remarks">Remarks <span class="font-normal text-slate-400">(optional)</span></label>
+                                <textarea id="status-remarks" name="remarks" class="form-control" rows="3" placeholder="Enter status remarks"></textarea>
                             </div>
                         </div>
-                        <br>
-                        <button class="btn btn-primary">Add</button>
+                        <div class="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary"><i class="bi bi-plus"></i>Add Status</button></div>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 </div>
+</section>
 <div class="modal fade" id="updateFuelModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -798,7 +748,7 @@ document.querySelectorAll('input[name="end_time"]').forEach(function (input) {
     input.addEventListener('input', function () {
         let value = this.value.replace(/[^\d:]/g, '');
 
-        // Kung walay colon ug naka-type na ug 2 ka digits
+        // Insert the separator after the user enters the first two digits.
         if (!value.includes(':') && value.length >= 2) {
             value = value.substring(0, 2) + ':' + value.substring(2);
         }
@@ -818,27 +768,34 @@ document.addEventListener('DOMContentLoaded', function () {
         select.addEventListener('change', function() {
             let modal = this.closest('.modal');
             let cargoSection = modal.querySelector('.cargo-load-section');
-            let activityId = parseInt(this.value);
-            // loading/unloading activities
-            let allowedActivities = [34, 35, 36, 37];
-            if (allowedActivities.includes(activityId)) {
+            const selectedOption = this.options[this.selectedIndex];
+            const tracksCargo = Boolean(selectedOption?.dataset.cargoMovement);
+            if (tracksCargo) {
                 cargoSection.classList.remove('d-none');
             } else {
                 cargoSection.classList.add('d-none');
             }
         });
+        select.dispatchEvent(new Event('change'));
     });
+
+    const failedDetailId = @js(old('voyage_detail_id'));
+    if (failedDetailId) {
+        const failedModal = document.getElementById(`addActivityModal${failedDetailId}`);
+        if (failedModal) bootstrap.Modal.getOrCreateInstance(failedModal).show();
+    }
 });
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @if(session('invalidEndTime'))
 
 <script>
-Swal.fire({
-    icon: 'error',
-    title: 'Invalid Date Time',
-    text: 'End datetime must be ahead of start datetime.'
+document.addEventListener('DOMContentLoaded', () => {
+    VillaDialog.alert({
+        title: 'Invalid Date Time',
+        text: 'End datetime must be ahead of start datetime.',
+        tone: 'danger'
+    });
 });
 </script>
 
@@ -940,77 +897,91 @@ document.addEventListener('DOMContentLoaded', function () {
 <style>
 .timeline {
     position: relative;
-    padding-left: 30px;
+    padding-left: 34px;
 }
 
-.timeline:before {
+.timeline::before {
     content: '';
     position: absolute;
-    left: 10px;
-    top: 0;
-    width: 3px;
-    height: 100%;
-    background: #0d6efd;
+    left: 9px;
+    top: 20px;
+    bottom: 20px;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(#285794, #a9bdd8);
 }
 
-.timeline-row {
+.timeline-entry {
     position: relative;
-    margin-bottom: 30px;
+    margin: 0 0 18px;
+    padding: 18px;
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(30, 55, 90, .06);
 }
 
-.timeline-dot {
+.timeline-entry::before {
+    content: '';
     position: absolute;
-    left: -3px;
-    top: 6px;
-    width: 16px;
-    height: 16px;
-    background: #0d6efd;
-    border-radius: 50%;
-}
-
-.timeline-content {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 6px;
-    border: 1px solid #e5e5e5;
-}
-.activity-table-container {
-    max-height: 180px;   /* pwede nimo usbon */
-    overflow-y: auto;
-    font-size: 12px;
+    left: -33px;
+    top: 24px;
+    width: 17px;
+    height: 17px;
+    border: 4px solid #dbeafe;
+    border-radius: 999px;
+    background: #285794;
+    box-shadow: 0 0 0 4px #fff;
 }
 
 .activity-table-container table th,
 .activity-table-container table td {
-    padding: 4px 8px;
+    padding: 10px 12px;
     vertical-align: middle;
 }
 
 .activity-table-container table th {
-    font-size: 12px;
-    background: #f8f9fa;
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
 }
 
 .activity-table-container table td {
     font-size: 12px;
-}
-.custom-scroll{
-    max-height:300px;
-    overflow-y:auto;
-    padding-right:5px;
+    border-color: #edf2f7;
+    color: #334155;
 }
 
-.custom-scroll::-webkit-scrollbar{
-    width:8px;
+.custom-scroll {
+    max-height: 680px;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
-.custom-scroll::-webkit-scrollbar-thumb{
-    background:#bcbcbc;
-    border-radius:10px;
+.custom-scroll::-webkit-scrollbar {
+    width: 8px;
 }
 
-.custom-scroll::-webkit-scrollbar-track{
-    background:#f1f1f1;
+.custom-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid #fff;
+    border-radius: 999px;
+    background: #b6c4d7;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+@media (max-width: 640px) {
+    .timeline { padding-left: 24px; }
+    .timeline::before { left: 5px; }
+    .timeline-entry { padding: 14px; border-radius: 15px; }
+    .timeline-entry::before { left: -25px; width: 14px; height: 14px; border-width: 3px; }
 }
 </style>
 @endsection

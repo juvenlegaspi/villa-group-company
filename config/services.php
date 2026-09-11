@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    'semaphore' => [
+        'enabled' => env('SEMAPHORE_ENABLED', false),
+        'api_key' => env('SEMAPHORE_API_KEY'),
+        'sender_name' => env('SEMAPHORE_SENDER_NAME'),
+        'endpoint' => env('SEMAPHORE_ENDPOINT', 'https://api.semaphore.co/api/v4/messages'),
+    ],
+
+    'shipping_calendar' => [
+        'catch_up_minutes' => (int) env('SHIPPING_CALENDAR_CATCH_UP_MINUTES', 1440),
+        'max_delivery_attempts' => (int) env('SHIPPING_CALENDAR_MAX_DELIVERY_ATTEMPTS', 5),
+        'max_attachments' => (int) env('SHIPPING_CALENDAR_MAX_ATTACHMENTS', 10),
+        'max_attachment_bytes' => (int) env('SHIPPING_CALENDAR_MAX_ATTACHMENT_BYTES', 52428800),
+    ],
+
 ];

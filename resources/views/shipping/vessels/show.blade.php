@@ -1,206 +1,130 @@
 @extends('layouts.app')
 
+@section('title', $vessel->vessel_name.' | Vessel Management')
+
 @section('content')
-<div class="container-fluid">
-    <div class="card shadow-sm mb-4 border-0">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center flex-wrap">
-                <div>
-                    <div class="d-flex align-items-center mb-3">
-                        <div
-                            class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3"
-                            style="width:50px;height:50px;"
-                        >
-                            V
+@php
+    $status = strtoupper(trim((string) $vessel->vessel_status));
+    $statusClass = match ($status) {
+        'OPERATIONAL' => 'bg-emerald-100 text-emerald-800 ring-emerald-600/20',
+        'DRY DOCKING' => 'bg-amber-100 text-amber-900 ring-amber-600/20',
+        'NON-OPERATIONAL', 'DECOMMISSIONED' => 'bg-rose-100 text-rose-800 ring-rose-600/20',
+        default => 'bg-slate-100 text-slate-700 ring-slate-500/20',
+    };
+@endphp
+
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-white to-slate-100 px-4 py-6 sm:px-7 lg:px-12">
+    <div class="mx-auto max-w-7xl">
+        <article class="relative mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-villa-gold via-villa-600 to-villa-900"></div>
+            <div class="p-5 sm:p-7">
+                <div class="flex flex-col justify-between gap-6 xl:flex-row xl:items-start">
+                    <div class="min-w-0 flex-1">
+                        <div class="mb-6 flex items-center gap-4">
+                            <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-villa-50 text-villa-700 ring-1 ring-villa-100">
+                                <i class="bi bi-ship text-2xl" aria-hidden="true"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <p class="mb-1 text-xs font-extrabold uppercase tracking-[.14em] text-villa-600">Vessel Information</p>
+                                <h1 class="truncate text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{{ $vessel->vessel_name }}</h1>
+                            </div>
                         </div>
-                        <div>
-                            <h4 class="mb-0 fw-bold text-primary">{{ $vessel->vessel_name }}</h4>
-                            <small class="text-muted">Vessel Information</small>
-                        </div>
+
+                        <dl class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.68rem] font-extrabold uppercase tracking-wider text-slate-400">IMO Number</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $vessel->imo_number ?: '—' }}</dd></div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.68rem] font-extrabold uppercase tracking-wider text-slate-400">Call Sign</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $vessel->call_sign ?: '—' }}</dd></div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.68rem] font-extrabold uppercase tracking-wider text-slate-400">Vessel Type</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $vessel->vessel_type ?: '—' }}</dd></div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.68rem] font-extrabold uppercase tracking-wider text-slate-400">DWT</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $vessel->dwt ?: '—' }}</dd></div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.68rem] font-extrabold uppercase tracking-wider text-slate-400">Fuel Type</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $vessel->fuel_type ?: '—' }}</dd></div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.68rem] font-extrabold uppercase tracking-wider text-slate-400">Service Speed</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $vessel->service_speed ? $vessel->service_speed.' knots' : '—' }}</dd></div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.68rem] font-extrabold uppercase tracking-wider text-slate-400">Status</dt><dd class="mt-1.5"><span class="inline-flex rounded-full px-2.5 py-1 text-[.68rem] font-extrabold uppercase tracking-wide ring-1 ring-inset {{ $statusClass }}">{{ $vessel->vessel_status ?: 'Not set' }}</span></dd></div>
+                        </dl>
                     </div>
 
-                    <div class="row g-2">
-                        <div class="col-md-3">
-                            <div class="info-box">
-                                <small>IMO</small>
-                                <div>{{ $vessel->imo_number }}</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="info-box">
-                                <small>Call Sign</small>
-                                <div>{{ $vessel->call_sign }}</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="info-box">
-                                <small>Type</small>
-                                <div>{{ $vessel->vessel_type }}</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="info-box">
-                                <small>DWT</small>
-                                <div>{{ $vessel->dwt }}</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="info-box">
-                                <small>Fuel</small>
-                                <div>{{ $vessel->fuel_type }}</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="info-box">
-                                <small>Average Speed</small>
-                                <div>{{ $vessel->service_speed }} knots</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="info-box">
-                                <small>Status</small>
-                                <div>
-                                    <span class="badge bg-info text-dark px-2 py-1">
-                                        {{ $vessel->vessel_status }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-3 mt-md-0">
-                    <a href="{{ route('vessels.index') }}" class="btn btn-light border me-2">Back</a>
-                    @if(!$hasOpenVoyage)
-                        <a href="{{ url('/shipping/vessels/' . $vessel->id . '/logs/create') }}" class="btn btn-primary shadow-sm">
-                            Add Voyage
+                    <div class="flex shrink-0 flex-wrap gap-2 xl:pt-1">
+                        <a href="{{ route('vessels.index') }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-700 no-underline shadow-sm hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-slate-200">
+                            <i class="bi bi-arrow-left" aria-hidden="true"></i> Back
                         </a>
-                    @endif
+                        @if(!$hasOpenVoyage)
+                            <a href="{{ url('/shipping/vessels/' . $vessel->id . '/logs/create') }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white no-underline shadow-md shadow-villa-900/15 hover:bg-villa-900 hover:text-white focus:outline-none focus:ring-4 focus:ring-villa-100">
+                                <i class="bi bi-plus" aria-hidden="true"></i> Add Voyage
+                            </a>
+                        @endif
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
+        </article>
 
-    <div class="card shadow-sm mb-3 border-0">
-        <div class="card-body">
-            <form method="GET" action="{{ url('/shipping/vessels/' . $vessel->id) }}" class="row g-2">
-                <div class="col-md-4">
-                    <input
-                        type="text"
-                        name="search"
-                        class="form-control"
-                        placeholder="Search voyage, port, or cargo"
-                        value="{{ request('search') }}"
-                    >
+        <div class="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <form method="GET" action="{{ route('vessels.show', $vessel->id) }}" class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(180px,240px)_auto_auto] md:items-end">
+                <div class="min-w-0">
+                    <label class="form-label" for="voyage-search">Search voyages</label>
+                    <div class="relative">
+                        <i class="bi bi-search pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true"></i>
+                        <input id="voyage-search" type="search" name="search" class="form-control pl-11" placeholder="Voyage, port, or cargo" value="{{ request('search') }}">
+                    </div>
                 </div>
-
-                <div class="col-md-3">
-                    <select name="sort" class="form-select">
-                        <option value="">Sort by</option>
-                        <option value="activity" {{ request('sort') == 'activity' ? 'selected' : '' }}>Activity</option>
-                        <option value="date" {{ request('sort') == 'date' ? 'selected' : '' }}>Date</option>
+                <div class="min-w-0">
+                    <label class="form-label" for="voyage-sort">Sort records</label>
+                    <select id="voyage-sort" name="sort" class="form-select">
+                        <option value="">Latest voyage</option>
+                        <option value="activity" @selected(request('sort') === 'activity')>Activity</option>
+                        <option value="date" @selected(request('sort') === 'date')>Date</option>
                     </select>
                 </div>
-
-                <div class="col-md-2">
-                    <button class="btn btn-primary w-100">Search</button>
-                </div>
-
-                <div class="col-md-2">
-                    <a href="{{ url('/shipping/vessels/' . $vessel->id) }}" class="btn btn-secondary w-100">Reset</a>
-                </div>
+                <button class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-villa-700 px-5 text-sm font-extrabold text-white shadow-sm hover:bg-villa-900 focus:outline-none focus:ring-4 focus:ring-villa-100 md:w-auto" type="submit">
+                    <i class="bi bi-search" aria-hidden="true"></i> Search
+                </button>
+                <a href="{{ route('vessels.show', $vessel->id) }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-extrabold text-slate-700 no-underline shadow-sm hover:border-slate-400 hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-slate-200 md:w-auto">Reset</a>
             </form>
         </div>
+
+        <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div><h2 class="text-base font-extrabold text-slate-900">Voyage Records</h2><p class="mt-0.5 text-xs text-slate-500">Click a record to open its activities and details.</p></div>
+                <span class="rounded-full bg-villa-50 px-3 py-1.5 text-xs font-extrabold text-villa-700">{{ $voyages->total() }} {{ Str::plural('voyage', $voyages->total()) }}</span>
+            </header>
+
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1050px] border-collapse text-left text-sm">
+                    <thead><tr class="bg-slate-50 text-[.68rem] font-extrabold uppercase tracking-wider text-slate-500">
+                        <th class="px-5 py-3.5">Voyage ID</th><th class="px-4 py-3.5">Date Start</th><th class="px-4 py-3.5">Date End</th><th class="px-4 py-3.5">Port Origin</th><th class="px-4 py-3.5">Port Destination</th><th class="px-4 py-3.5">Voyage No.</th><th class="px-4 py-3.5 text-center">Activities</th><th class="px-4 py-3.5">Voyage Hours</th><th class="px-5 py-3.5">Status</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @forelse($voyages as $voyage)
+                            @php
+                                $isCompleted = strtoupper((string) $voyage->status) === 'COMPLETED';
+                            @endphp
+                            <tr class="voyage-row cursor-pointer transition hover:bg-villa-50/60 focus-within:bg-villa-50/60" data-url="{{ url('/shipping/voyage-logs/' . $voyage->voyage_id) }}" tabindex="0">
+                                <td class="whitespace-nowrap px-5 py-4"><a class="inline-flex rounded-lg bg-villa-700 px-2.5 py-1.5 text-xs font-extrabold text-white no-underline hover:bg-villa-900 hover:text-white" href="{{ url('/shipping/voyage-logs/' . $voyage->voyage_id) }}">{{ $voyage->voyage_code }}</a></td>
+                                <td class="whitespace-nowrap px-4 py-4 font-semibold text-slate-700">{{ optional($voyage->date_created)->format('M d, Y') ?: '—' }}</td>
+                                <td class="whitespace-nowrap px-4 py-4 text-slate-600">{{ optional($voyage->date_completed)->format('M d, Y') ?: '—' }}</td>
+                                <td class="px-4 py-4 text-slate-700">{{ $voyage->port_location ?: '—' }}</td>
+                                <td class="px-4 py-4 text-slate-700">{{ $voyage->port_destination ?: '—' }}</td>
+                                <td class="px-4 py-4 font-semibold text-slate-700">{{ $voyage->voyage_no ?: '—' }}</td>
+                                <td class="px-4 py-4 text-center"><span class="inline-flex min-w-8 justify-center rounded-full bg-slate-100 px-2 py-1 text-xs font-extrabold text-slate-700 ring-1 ring-inset ring-slate-200">{{ $voyage->details->count() }}</span></td>
+                                <td class="whitespace-nowrap px-4 py-4">@if($isCompleted)<span class="font-semibold text-slate-700">{{ number_format($voyage->total_hours_voyage, 2) }} hrs</span>@else<span class="rounded-full bg-amber-100 px-2.5 py-1 text-[.68rem] font-extrabold text-amber-900 ring-1 ring-inset ring-amber-600/20">ONGOING</span>@endif</td>
+                                <td class="whitespace-nowrap px-5 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[.68rem] font-extrabold uppercase tracking-wide ring-1 ring-inset {{ $isCompleted ? 'bg-emerald-100 text-emerald-800 ring-emerald-600/20' : 'bg-blue-100 text-blue-800 ring-blue-600/20' }}">{{ $voyage->status ?: 'OPEN' }}</span></td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="9" class="px-6 py-14 text-center"><span class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-xl text-slate-400"><i class="bi bi-map"></i></span><p class="font-extrabold text-slate-700">No voyage records found</p><p class="mt-1 text-xs text-slate-500">Try changing the search or sort filters.</p></td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            @if($voyages->hasPages())<div class="border-t border-slate-100 px-5 py-4">{{ $voyages->links() }}</div>@endif
+        </article>
     </div>
-
-    <div class="card shadow-sm border-0">
-        <div class="table-responsive">
-            <table class="table align-middle mb-0 custom-table">
-                <thead>
-                    <tr>
-                        <th>Voyage ID</th>
-                        <th>Date Start</th>
-                        <th>Date End</th>
-                        <th>Port Origin</th>
-                        <th>Port Destination</th>
-                        <th>Voyage No.</th>
-                        <th>Activities</th>
-                        <th>Total Voyage Hours</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($voyages as $voyage)
-                        <tr onclick="window.location='{{ url('/shipping/voyage-logs/' . $voyage->voyage_id) }}'">
-                            <td>
-                                <span class="badge bg-primary px-3 py-2">{{ $voyage->voyage_code }}</span>
-                            </td>
-                            <td>{{ optional($voyage->date_created)->format('M d, Y') }}</td>
-                            <td>{{ optional($voyage->date_completed)->format('M d, Y') ?? '-' }}</td>
-                            <td>{{ $voyage->port_location }}</td>
-                            <td>{{ $voyage->port_destination }}</td>
-                            <td>{{ $voyage->voyage_no }}</td>
-                            <td>
-                                <span class="badge bg-light text-dark border">{{ $voyage->details->count() }}</span>
-                            </td>
-                            <td>
-                                @if($voyage->status == 'COMPLETED')
-                                    {{ number_format($voyage->total_hours_voyage, 2) }} hrs
-                                @else
-                                    <span class="badge bg-warning text-dark">
-                                        ONGOING
-                                    </span>
-                                @endif
-                            </td>
-                            <td>
-                                {{ $voyage->status }}
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-        <div class="p-3">
-            {{ $voyages->links() }}
-        </div>
-    </div>
-</div>
-
-<style>
-.info-box {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 8px 12px;
-    border: 1px solid #eee;
-}
-
-.info-box small {
-    color: #6c757d;
-    font-size: 12px;
-}
-
-.info-box div {
-    font-weight: 600;
-}
-
-.custom-table thead {
-    background: #f1f3f5;
-}
-
-.custom-table tbody tr {
-    transition: 0.2s;
-    cursor: pointer;
-}
-
-.custom-table tbody tr:hover {
-    background: #f8f9fa;
-    transform: scale(1.01);
-}
-</style>
+</section>
 @endsection
+
+@push('scripts')
+<script>
+document.querySelectorAll('.voyage-row').forEach((row) => {
+    const openVoyage = () => window.location.assign(row.dataset.url);
+    row.addEventListener('click', (event) => { if (!event.target.closest('a, button')) openVoyage(); });
+    row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openVoyage(); } });
+});
+</script>
+@endpush

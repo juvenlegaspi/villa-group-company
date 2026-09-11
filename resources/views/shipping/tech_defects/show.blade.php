@@ -1,215 +1,53 @@
 @extends('layouts.app')
-
+@section('title', $report->report_code.' | Technical Defect')
 @section('content')
-<div class="container">
+@php
+$statuses=\App\Http\Controllers\TechDefectController::STATUSES; $step=array_search($report->status,$statuses,true);
+$tone=match($report->status){'New Report'=>'bg-slate-100 text-slate-700','For Review'=>'bg-amber-50 text-amber-800','For Assessment'=>'bg-cyan-50 text-cyan-800','For Action'=>'bg-indigo-50 text-indigo-800','Ongoing'=>'bg-blue-50 text-blue-800','For Verification'=>'bg-violet-50 text-violet-800','Closed'=>'bg-emerald-50 text-emerald-800',default=>'bg-slate-100 text-slate-700'};
+$fullName=fn($u)=>$u?trim($u->name.' '.$u->lastname):'—';
+$input='h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100';
+$area='w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100';
+$checklistAttachments=$report->attachments->where('category','Checklist');
+$defectPhotos=$report->attachments->where('category','Before Repair');
+$repairPhotos=$report->attachments->where('category','After Repair');
+$supportingDocuments=$report->attachments->whereNotIn('category',['Checklist','Before Repair','After Repair']);
+$closeoutComplete=filled($report->root_cause) && filled($report->corrective_action) && (!in_array($report->severity_level,['Major','Critical'],true) || filled($report->preventive_action));
+$hasPendingThirdPartySupport=$supports->contains(fn($support)=>strcasecmp((string)$support->status,'Done')!==0);
+$thirdPartyComplete=$supports->every(fn($support)=>strcasecmp((string)$support->status,'Done')===0);
+$readyForVerification=(int)$report->progress_percent===100 && $closeoutComplete && $repairPhotos->isNotEmpty() && $thirdPartyComplete;
+@endphp
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-villa-50 px-4 py-6 sm:px-7 lg:px-10"><div class="mx-auto max-w-7xl">
+@if(session('success'))<div class="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">{{ session('success') }}</div>@endif
+@if($errors->any())<div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><b>Please correct the following:</b><ul class="mb-0 mt-2 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
-    <!-- HEADER -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">Tech & Defect Report Details</h4>
+<header class="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><div class="mb-2 flex items-center gap-2"><span class="text-xs font-extrabold uppercase tracking-[.16em] text-villa-600">Technical defect report</span><span class="rounded-full px-3 py-1 text-xs font-extrabold ring-1 ring-current/10 {{ $tone }}">{{ $report->status }}</span></div><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">{{ $report->report_code }}</h1><p class="mt-1 text-sm text-slate-500">{{ $report->vessel?->vessel_name }} · Reported {{ $report->date_identified?->format('M d, Y') }}</p></div><div class="flex flex-wrap gap-2"><a href="{{ route('tech-defects.index') }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 no-underline">← Back</a>@if($canEdit)<a href="{{ route('tech-defects.edit',$report) }}" class="rounded-xl bg-villa-50 px-4 py-2.5 text-sm font-extrabold text-villa-700 no-underline ring-1 ring-villa-200">Edit report</a>@endif<a href="{{ route('tech-defects.pdf',$report) }}" class="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-extrabold text-white no-underline">PDF</a>@if($canDelete)<form method="POST" action="{{ route('tech-defects.destroy',$report) }}" onsubmit="return confirm('Archive this report?')">@csrf @method('DELETE')<button class="rounded-xl bg-rose-50 px-4 py-2.5 text-sm font-extrabold text-rose-700">Archive</button></form>@endif</div></header>
 
-            <div class="d-flex gap-2">
-                <a href="{{ route('tech-defects.index') }}" class="btn btn-secondary">Back</a>
+<div class="mb-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><ol class="flex min-w-[900px] items-center">@foreach($statuses as $i=>$status)<li class="flex flex-1 items-center last:flex-none"><span class="grid h-8 w-8 place-items-center rounded-full text-xs font-black {{ $i<=$step?'bg-villa-700 text-white':'bg-slate-100 text-slate-400' }}">{{ $i+1 }}</span><span class="ml-2 text-xs font-extrabold {{ $i<=$step?'text-villa-800':'text-slate-400' }}">{{ $status }}</span>@if(!$loop->last)<span class="mx-3 h-0.5 flex-1 {{ $i<$step?'bg-villa-500':'bg-slate-200' }}"></span>@endif</li>@endforeach</ol></div>
 
-                @if($report->status == 'Open')
-                    <button type="submit" form="actionForm" name="action" value="start" class="btn btn-primary">
-                        Start Repair
-                    </button>
-                @endif
+<div class="mb-4 flex justify-end"><button type="button" data-bs-toggle="modal" data-bs-target="#auditTrailModal" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-extrabold text-slate-700 shadow-sm hover:bg-slate-50"><i class="bi bi-list"></i>View audit trail<span class="rounded-full bg-villa-50 px-2 py-0.5 text-xs text-villa-700">{{ $report->audits->count() }}</span></button></div>
+<div class="grid gap-5"><div class="space-y-5">
+<article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div class="mb-5"><h2 class="mb-1 text-lg font-black text-slate-900">Report information</h2><p class="mb-0 text-sm text-slate-500">Original vessel report, accountability details and initial attachments.</p></div><dl class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">@foreach([['Vessel',$report->vessel?->vessel_name],['Reported by',$fullName($report->reporter)],['Date identified',$report->date_identified?->format('M d, Y')],['Port / location',$report->port_location],['System affected',$report->system_affected],['Severity',$report->severity_level],['Operational impact',$report->operational_impact],['Temporary repair',$report->temporary_repair],['Assigned PIC',$fullName($report->assignee)],['PIC position',$report->assignee?->position?->name],['Target',$report->target_completion_date?->format('M d, Y')],['Progress',(int)$report->progress_percent.'%']] as [$label,$value])<div><dt class="text-xs font-extrabold uppercase tracking-wider text-slate-400">{{ $label }}</dt><dd class="mb-0 mt-1 text-sm font-bold text-slate-800">{{ filled($value)?$value:'—' }}</dd></div>@endforeach</dl><div class="mt-5 grid gap-4 sm:grid-cols-2"><div class="rounded-2xl bg-slate-50 p-4"><b class="text-xs uppercase text-slate-500">Defect description</b><p class="mb-0 mt-2 whitespace-pre-line text-sm text-slate-700">{{ $report->defect_description }}</p></div><div class="rounded-2xl bg-slate-50 p-4"><b class="text-xs uppercase text-slate-500">Initial cause</b><p class="mb-0 mt-2 whitespace-pre-line text-sm text-slate-700">{{ $report->initial_cause?:'Not provided' }}</p></div></div>@if($report->review_remarks)<div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><b>Management note:</b> {{ $report->review_remarks }}</div>@endif<div class="mt-5 border-t border-slate-100 pt-4"><div class="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 class="mb-0 text-sm font-black text-slate-900">Report attachments</h3><p class="mb-0 text-xs text-slate-500">Checklist and affected defect photo.</p></div>@if($report->status==='New Report' && $canSubmitReview && $defectPhotos->isEmpty())<form method="POST" enctype="multipart/form-data" action="{{ route('tech-defects.attachments.store',$report) }}" class="flex flex-wrap items-center gap-2">@csrf<input type="hidden" name="category" value="Before Repair"><input type="file" name="attachment" accept="image/jpeg,image/png,image/webp" class="max-w-56 rounded-lg border border-slate-300 bg-white p-1 text-xs" required><button class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-extrabold text-white">Upload defect photo</button></form>@endif</div><div class="flex flex-wrap gap-2">@foreach($checklistAttachments as $file)<a href="{{ route('tech-defects.attachments.show',[$report,$file]) }}" class="inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900 no-underline"><span class="rounded bg-blue-100 px-1.5 py-0.5 text-[.62rem] uppercase text-blue-700">Checklist</span><span class="truncate">{{ $file->original_name }}</span></a>@endforeach @foreach($defectPhotos as $file)<a href="{{ route('tech-defects.attachments.show',[$report,$file]) }}" class="inline-flex max-w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950 no-underline"><span class="rounded bg-amber-100 px-1.5 py-0.5 text-[.62rem] uppercase text-amber-700">Defect photo</span><span class="truncate">{{ $file->original_name }}</span></a>@endforeach @if($checklistAttachments->isEmpty() && $defectPhotos->isEmpty())<span class="text-xs text-slate-500">No initial attachments available.</span>@endif</div>@if($report->status==='New Report' && $canSubmitReview)<div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-villa-50 px-4 py-3"><p class="mb-0 text-xs font-semibold {{ $defectPhotos->isEmpty()?'text-amber-800':'text-emerald-700' }}">{{ $defectPhotos->isEmpty()?'Upload an affected defect photo before review.':'Required photo attached. The report is ready for review.' }}</p><form method="POST" action="{{ route('tech-defects.update',$report) }}" onsubmit="return confirm('Submit this report for review?')">@csrf @method('PUT')<button name="action" value="submit_review" @disabled($defectPhotos->isEmpty()) class="rounded-lg px-4 py-2 text-xs font-extrabold text-white {{ $defectPhotos->isEmpty()?'cursor-not-allowed bg-slate-400':'bg-villa-700' }}">Submit for review</button></form></div>@endif</div></article>
 
-                @if($report->status == 'Ongoing')
-                    <button type="button" class="btn btn-warning"
-                        data-bs-toggle="modal" data-bs-target="#thirdPartyModal">
-                        Need 3rd Party
-                    </button>
+@if($report->status==='For Review' && $canReview)<article class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm"><h2 class="mb-1 text-lg font-black">Vessel manager review</h2><p class="mb-4 text-sm text-slate-500">Confirm for assessment or return with correction instructions.</p><form method="POST" action="{{ route('tech-defects.update',$report) }}">@csrf @method('PUT')<textarea name="review_remarks" rows="3" maxlength="3000" class="{{ $area }}" placeholder="Review note; required when returning"></textarea><div class="mt-3 flex gap-2"><button name="action" value="return_report" class="rounded-xl bg-amber-100 px-4 py-2.5 text-sm font-extrabold text-amber-900">Return for correction</button><button name="action" value="review_confirm" class="rounded-xl bg-villa-700 px-4 py-2.5 text-sm font-extrabold text-white">Review &amp; confirm</button></div></form></article>@endif
 
-                    <button type="submit" form="actionForm" name="action" value="complete" class="btn btn-success">
-                        Complete
-                    </button>
-                @endif
-            </div>
-        </div>
-    </div>
+@if($report->status==='For Assessment')<article class="rounded-2xl border border-cyan-200 bg-white p-5 shadow-sm sm:p-6"><h2 class="mb-1 text-lg font-black">Assess defect</h2><p class="mb-5 text-sm text-slate-500">Technical findings, recommendation and qualified PIC assignment.</p>
+@if($report->informationRequests->isNotEmpty())<div class="mb-5 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/60"><div class="flex items-center justify-between border-b border-amber-200 px-4 py-3"><div><h3 class="mb-0 text-sm font-black text-amber-950">Information request history</h3><p class="mb-0 text-xs text-amber-700">Every technical request and vessel response is preserved.</p></div><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">{{ $report->informationRequests->count() }}</span></div><div class="divide-y divide-amber-200">@foreach($report->informationRequests as $informationRequest)<section class="p-4"><div class="mb-2 flex flex-wrap items-center justify-between gap-2"><span class="rounded-full px-2.5 py-1 text-[.68rem] font-extrabold uppercase {{ $informationRequest->status==='Responded'?'bg-emerald-100 text-emerald-800':'bg-amber-200 text-amber-900' }}">{{ $informationRequest->status }}</span><span class="text-xs text-slate-500">Requested by {{ $fullName($informationRequest->requester) }} · {{ $informationRequest->requested_at?->format('M d, Y, g:i A') }}</span></div><p class="mb-0 whitespace-pre-line text-sm font-semibold text-slate-800">{{ $informationRequest->request_text }}</p>@if($informationRequest->response_text)<div class="mt-3 rounded-xl border border-emerald-200 bg-white p-3"><b class="text-xs uppercase tracking-wide text-emerald-700">Vessel response</b><p class="mb-1 mt-1 whitespace-pre-line text-sm text-slate-700">{{ $informationRequest->response_text }}</p><small class="text-slate-500">Responded by {{ $fullName($informationRequest->responder) }} · {{ $informationRequest->responded_at?->format('M d, Y, g:i A') }}</small></div>@elseif($canSubmitReview)<form method="POST" action="{{ route('tech-defects.update',$report) }}" class="mt-3 rounded-xl border border-amber-200 bg-white p-3">@csrf @method('PUT')<input type="hidden" name="information_request_id" value="{{ $informationRequest->id }}"><label><b class="mb-2 block text-sm text-slate-800">Your response</b><textarea name="information_response" rows="3" maxlength="3000" class="{{ $area }}" required placeholder="Provide the requested information"></textarea></label><button name="action" value="respond_information" class="mt-2 rounded-xl bg-amber-700 px-4 py-2 text-sm font-bold text-white">Send response</button></form>@endif</section>@endforeach</div></div>@endif
+@if($canAssess)<form id="techAssessmentForm" method="POST" action="{{ route('tech-defects.update',$report) }}" class="grid gap-4 sm:grid-cols-2">@csrf @method('PUT')<label class="sm:col-span-2"><b class="mb-2 block text-sm">Assessment</b><textarea name="technical_assessment" rows="4" class="{{ $area }}" required>{{ old('technical_assessment',$report->technical_assessment) }}</textarea></label><label class="sm:col-span-2"><b class="mb-2 block text-sm">Findings</b><textarea name="technical_findings" rows="4" class="{{ $area }}" required>{{ old('technical_findings',$report->technical_findings) }}</textarea></label><label class="sm:col-span-2"><b class="mb-2 block text-sm">Recommendation</b><textarea name="technical_recommendation" rows="4" class="{{ $area }}" required>{{ old('technical_recommendation',$report->technical_recommendation) }}</textarea></label><label><b class="mb-2 block text-sm">Assign technical PIC</b><select name="assigned_to_user_id" class="{{ $input }}" required><option value="">Select qualified personnel</option>@foreach($technicalUsers as $p)<option value="{{ $p->id }}" @selected((string)old('assigned_to_user_id',$report->assigned_to_user_id)===(string)$p->id)>{{ $p->name }} {{ $p->lastname }}{{ $p->position?' — '.$p->position->name:'' }}</option>@endforeach</select></label><label><b class="mb-2 block text-sm">Target completion</b><input type="date" min="{{ today()->toDateString() }}" name="target_completion_date" value="{{ old('target_completion_date',$report->target_completion_date?->toDateString()) }}" class="{{ $input }}" required></label><div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4 sm:col-span-2"><button name="action" value="save_assessment" formnovalidate class="rounded-xl bg-cyan-50 px-4 py-2.5 text-sm font-bold text-cyan-800 ring-1 ring-cyan-200">Save draft</button><button type="button" data-bs-toggle="modal" data-bs-target="#infoRequestModal" class="rounded-xl bg-amber-100 px-4 py-2.5 text-sm font-bold text-amber-900 ring-1 ring-amber-200">Request information</button><button name="action" value="complete_assessment" class="rounded-xl bg-cyan-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm">Complete assessment &amp; assign</button></div></form><div id="infoRequestModal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="infoRequestTitle"><div class="modal-dialog modal-dialog-centered"><form method="POST" action="{{ route('tech-defects.update',$report) }}" class="modal-content">@csrf @method('PUT')<div class="modal-header"><div><h3 id="infoRequestTitle" class="modal-title">Request additional information</h3><p class="mb-0 mt-1 text-sm text-slate-500">Specify the information required from vessel personnel.</p></div><button type="button" data-bs-dismiss="modal" aria-label="Close" class="btn-close ml-auto"></button></div><div class="modal-body"><label for="informationRequestText">Information required <span class="text-rose-600">*</span></label><textarea id="informationRequestText" name="information_request" rows="5" maxlength="3000" class="{{ $area }}" required placeholder="Example: Please provide the latest engine temperature and vibration readings."></textarea></div><div class="modal-footer"><button type="button" data-bs-dismiss="modal" class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button><button name="action" value="request_information" class="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white">Send request</button></div></form></div></div>@endif</article>
+@elseif(in_array($report->status,['For Action','Ongoing','For Verification','Closed'],true))<article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div class="mb-4 flex justify-between"><div><h2 class="mb-1 text-lg font-black">Technical assessment</h2><p class="mb-0 text-sm text-slate-500">Approved basis for corrective action.</p></div><span class="text-xs text-slate-400">By {{ $fullName($report->assessor) }}</span></div><div class="grid gap-4 sm:grid-cols-3">@foreach([['Assessment',$report->technical_assessment],['Findings',$report->technical_findings],['Recommendation',$report->technical_recommendation]] as [$label,$value])<div class="rounded-xl bg-slate-50 p-4"><b class="text-xs uppercase text-slate-500">{{ $label }}</b><p class="mb-0 mt-2 whitespace-pre-line text-sm">{{ $value?:'—' }}</p></div>@endforeach</div></article>@endif
 
-    <!-- MAIN DETAILS -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
+@if($report->status==='For Action' && $canPerformAction)<article class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5"><h2 class="mb-1 text-lg font-black text-indigo-950">Corrective action assigned</h2><p class="mb-4 text-sm text-indigo-700">Assigned to {{ $fullName($report->assignee) }}.</p><form method="POST" action="{{ route('tech-defects.update',$report) }}" onsubmit="return confirm('Start corrective action?')">@csrf @method('PUT')<button name="action" value="start_action" class="rounded-xl bg-indigo-700 px-5 py-3 text-sm font-bold text-white">Start corrective action</button></form></article>@endif
 
-            <div class="row g-3">
+@if(in_array($report->status,['Ongoing','For Verification','Closed'],true))
+    @include('shipping.tech_defects.partials.corrective-action')
+@endif
 
-                <div class="col-md-4">
-                    <label class="form-label">Report ID</label>
-                    <input type="text" class="form-control fw-bold text-primary"
-                        value="TD-{{ str_pad($report->id, 2, '0', STR_PAD_LEFT) }}" readonly>
-                </div>
+@if($report->status==='For Verification')@if($isRepairSubmitter && !$report->verified_at)<article class="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm"><div class="flex items-start gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-800"><i class="bi bi-shield-lock"></i></span><div><h2 class="mb-1 text-lg font-black text-amber-950">Independent verification required</h2><p class="mb-0 text-sm leading-6 text-amber-800">You submitted this repair, so you cannot verify the same resolution. Another authorized Vessel Manager, Chief Engineer, or Operations approver must review the evidence.</p>@if($eligibleVerifiers->isNotEmpty())<div class="mt-3 rounded-xl border border-amber-200 bg-white/70 px-4 py-3"><p class="mb-1 text-xs font-extrabold uppercase tracking-wide text-amber-700">Next responsible verifier</p><p class="mb-0 text-sm font-black text-amber-950">{{ $eligibleVerifiers->map(fn($verifier) => trim($verifier->name.' '.$verifier->lastname))->join(', ') }}</p></div>@else<p class="mb-0 mt-3 text-sm font-bold text-rose-700">No independent verifier is currently configured for Villa Shipping Lines. Assign verification permission and active approval authority to a manager.</p>@endif</div></div></article>@elseif($canVerify)<article class="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm"><h2 class="mb-1 text-lg font-black">Resolution verification</h2><p class="mb-4 text-sm text-slate-500">Review the repair evidence independently before approving the resolution.</p><form method="POST" action="{{ route('tech-defects.update',$report) }}">@csrf @method('PUT')<textarea name="verification_remarks" rows="4" maxlength="2000" class="{{ $area }}" required placeholder="Inspection result or reason for reopening">{{ old('verification_remarks',$report->verification_remarks) }}</textarea><div class="mt-3 flex gap-2"><button name="action" value="reopen_issue" class="rounded-xl bg-amber-100 px-4 py-2.5 text-sm font-bold text-amber-900">Reopen issue</button>@if(!$report->verified_at)<button name="action" value="verify_resolution" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-bold text-white">Verify resolution</button>@else<button name="action" value="confirm_completion" formnovalidate class="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white">Confirm completion</button>@endif</div></form></article>@endif @endif
 
-                <div class="col-md-4">
-                    <label class="form-label">Date Issue Identified</label>
-                    <input type="text" class="form-control"
-                        value="{{ \Carbon\Carbon::parse($report->date_identified)->format('m/d/Y') }}" readonly>
-                </div>
+@if($supports->isNotEmpty())<article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div class="border-b p-5"><h2 class="mb-1 text-lg font-black">Third-party support</h2><p class="mb-0 text-sm text-slate-500">Vendor accountability and actual cost.</p></div>@foreach($supports as $support)<div class="border-b border-slate-100 p-5 last:border-b-0"><div class="flex justify-between gap-3"><div><b>{{ $support->vendor_name }} — {{ $support->reason_for_support }}</b><p class="mb-0 mt-1 text-xs text-slate-500">{{ $support->status }} · Expected {{ $support->expected_completion_date?->format('M d, Y') }} · Actual {{ $support->actual_cost!==null?'₱'.number_format((float)$support->actual_cost,2):'Pending' }}</p></div>@if($report->status==='Ongoing' && $support->status!=='Done' && $canRequestSupport)<form method="POST" action="{{ route('tech-defects.update',$report) }}" class="flex gap-2">@csrf @method('PUT')<input type="number" name="actual_cost" min="0" step=".01" class="h-9 w-28 rounded-lg border px-2 text-xs" required placeholder="Actual cost"><button name="action" value="done_{{ $support->id }}" class="rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white">Mark done</button></form>@endif</div></div>@endforeach</article>@endif
 
-                <div class="col-md-4">
-                    <label class="form-label">Vessel</label>
-                    <input type="text" class="form-control"
-                        value="{{ $report->vessel->vessel_name }}" readonly>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Port / Location</label>
-                    <input type="text" class="form-control" value="{{ $report->port_location }}" readonly>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Reported By</label>
-                    <input type="text" class="form-control" value="{{ $report->reported_by }}" readonly>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">System Affected</label>
-                    <input type="text" class="form-control" value="{{ $report->system_affected }}" readonly>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Severity</label>
-                    <input type="text" class="form-control" value="{{ $report->severity_level }}" readonly>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Operational Impact</label>
-                    <input type="text" class="form-control" value="{{ $report->operational_impact }}" readonly>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Temporary Repair</label>
-                    <input type="text" class="form-control" value="{{ $report->temporary_repair }}" readonly>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Defect Description</label>
-                    <textarea class="form-control" rows="3" readonly>{{ $report->defect_description }}</textarea>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Initial Cause</label>
-                    <textarea class="form-control" rows="3" readonly>{{ $report->initial_cause }}</textarea>
-                </div>
-
-                <div class="col-md-12">
-                    <label class="form-label">Remarks</label>
-                    <textarea class="form-control" rows="2" readonly>{{ $report->remarks }}</textarea>
-                </div>
-
-            </div>
-
-        </div>
-    </div>
-
-    <!-- 3RD PARTY SUPPORT -->
-    @if($report->supports->count() > 0)
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-light">
-            <strong>3rd Party Support History</strong>
-        </div>
-
-        <div class="card-body p-0">
-            <table class="table table-bordered mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Reason</th>
-                        <th>Spares</th>
-                        <th>Tools</th>
-                        <th>Status</th>
-                        <th width="120">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($report->supports as $s)
-                    <tr>
-                        <td>{{ $s->reason_for_support }}</td>
-                        <td>{{ $s->spares_required }}</td>
-                        <td>{{ $s->tools_required }}</td>
-                        <td>
-                            <span class="badge bg-{{ $s->status == 'Done' ? 'success' : 'warning' }}">
-                                {{ $s->status }}
-                            </span>
-                        </td>
-                        <td>
-                            @if($s->status != 'Done')
-                                <form method="POST" action="{{ route('tech-defects.update',$report->id) }}">
-                                    @csrf
-                                    @method('PUT')
-                                    <button class="btn btn-success btn-sm" name="action" value="done_{{ $s->id }}">
-                                        Done
-                                    </button>
-                                </form>
-                            @endif
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    </div>
-    @endif
-
+@if($report->status==='Ongoing' && $canRequestSupport && !$hasPendingThirdPartySupport && (int)$report->progress_percent < 100)<div id="supportForm" class="modal" role="dialog" aria-hidden="true" aria-labelledby="supportFormTitle"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><form method="POST" action="{{ route('tech-defects.update',$report) }}" class="modal-content">@csrf @method('PUT')<div class="modal-header"><div><h2 id="supportFormTitle" class="modal-title">Assign third-party support</h2><p class="mb-0 mt-1 text-sm text-slate-500">Record the vendor, scope, requirements and expected completion.</p></div><button type="button" data-bs-dismiss="modal" aria-label="Close" class="btn-close ml-auto"></button></div><div class="modal-body"><div class="grid gap-4 sm:grid-cols-2"><label><b class="mb-2 block text-sm">Vendor name <span class="text-rose-600">*</span></b><input name="vendor_name" class="{{ $input }}" required placeholder="Vendor or service provider"></label><label><b class="mb-2 block text-sm">Contact person</b><input name="contact_person" class="{{ $input }}" placeholder="Contact person"></label><label><b class="mb-2 block text-sm">Contact number</b><input name="contact_number" class="{{ $input }}" placeholder="Contact number"></label><label><b class="mb-2 block text-sm">Expected completion <span class="text-rose-600">*</span></b><input type="date" min="{{ today()->toDateString() }}" name="expected_completion_date" class="{{ $input }}" required></label><label class="sm:col-span-2"><b class="mb-2 block text-sm">Reason / scope of support <span class="text-rose-600">*</span></b><textarea name="reason_for_support" rows="3" class="{{ $area }}" required placeholder="Describe why third-party support is needed"></textarea></label><label><b class="mb-2 block text-sm">Spares required <span class="text-rose-600">*</span></b><select name="spares_required" class="{{ $input }}" required><option value="">Select</option><option>Yes</option><option>No</option></select></label><label><b class="mb-2 block text-sm">Tools required <span class="text-rose-600">*</span></b><input name="tools_required" class="{{ $input }}" required placeholder="Required tools or equipment"></label><label class="sm:col-span-2"><b class="mb-2 block text-sm">Quoted cost</b><input type="number" min="0" step=".01" name="quoted_cost" class="{{ $input }}" placeholder="0.00"></label></div></div><div class="modal-footer"><button type="button" data-bs-dismiss="modal" class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button><button name="action" value="add_support" class="rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-bold text-white">Assign support</button></div></form></div></div>@endif
 </div>
 
-<!-- ACTION FORM -->
-<form id="actionForm" method="POST" action="{{ route('tech-defects.update',$report->id) }}">
-    @csrf
-    @method('PUT')
-</form>
-
-<!-- MODAL -->
-<div class="modal fade" id="thirdPartyModal">
-    <div class="modal-dialog">
-        <div class="modal-content">
-
-            <div class="modal-header">
-                <h5 class="modal-title">3rd Party Support</h5>
-            </div>
-
-            <form method="POST" action="{{ route('tech-defects.update',$report->id) }}">
-                @csrf
-                @method('PUT')
-
-                <div class="modal-body">
-
-                    <div class="mb-3">
-                        <label>Reason</label>
-                        <textarea name="reason_for_support" class="form-control" required></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label>Spares Required</label>
-                        <select name="spares_required" class="form-control" required>
-                            <option>--SELECT--</option>
-                            <option>Yes</option>
-                            <option>No</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label>Tools Required</label>
-                        <input type="text" name="tools_required" class="form-control" required>
-                    </div>
-
-                </div>
-
-                <div class="modal-footer justify-content-between">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        Cancel
-                    </button>
-                    <button class="btn btn-success" name="action" value="add_support">
-                        Add Support
-                    </button>
-                </div>
-
-            </form>
-
-        </div>
-    </div>
-</div>
-
+<div id="auditTrailModal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="auditTrailTitle"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><article class="modal-content"><div class="modal-header"><div><h2 id="auditTrailTitle" class="modal-title">Audit trail</h2><p class="mb-0 mt-1 text-sm text-slate-500">Complete, immutable activity history for {{ $report->report_code }}.</p></div><button type="button" data-bs-dismiss="modal" aria-label="Close" class="btn-close ml-auto"></button></div><div class="modal-body bg-slate-50"><ol class="m-0 list-none rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">@forelse($report->audits as $audit)<li class="relative border-l-2 border-slate-200 pb-6 pl-5 last:border-transparent last:pb-0"><span class="absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white bg-villa-600"></span><div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between"><p class="mb-0 text-sm font-black capitalize text-slate-900">{{ str_replace('_',' ',$audit->action) }}</p><time class="shrink-0 text-xs text-slate-400">{{ $audit->created_at->format('M d, Y, g:i A') }}</time></div><p class="mb-1 mt-1 text-sm text-slate-600">{{ $audit->description }}</p>@if($audit->from_status!==$audit->to_status)<p class="mb-1 text-xs font-bold text-villa-700">{{ $audit->from_status?:'New' }} → {{ $audit->to_status }}</p>@endif<p class="mb-0 text-xs text-slate-400">By {{ $audit->user?trim($audit->user->name.' '.$audit->user->lastname):'System / removed user' }}</p></li>@empty<li class="py-8 text-center text-sm text-slate-500">No recorded actions.</li>@endforelse</ol></div><div class="modal-footer"><button type="button" data-bs-dismiss="modal" class="rounded-xl bg-villa-700 px-4 py-2.5 text-sm font-bold text-white">Close</button></div></article></div></div>
+</div></div></section>
 @endsection

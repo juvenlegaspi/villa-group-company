@@ -26,8 +26,6 @@ class VoyageActivity extends Model
         'end_date_time',
         'total_hours',
         'total_load',
-        'end_date_time',
-        'total_hours',
         'cargo_load',
         'total_unload',
         'cargo_unload',
@@ -35,29 +33,35 @@ class VoyageActivity extends Model
         'fuel_rob',
         'main_status',
     ];
+
     protected $casts = [
         'start_date_time' => 'datetime',
-        'end_date_time'   => 'datetime',
+        'end_date_time' => 'datetime',
     ];
+
     // relation to voyage header
     public function voyage()
     {
         return $this->belongsTo(VoyageLogHeader::class, 'voyage_id', 'voyage_id');
     }
+
     // relation to vessel
     public function vessel()
     {
         return $this->belongsTo(Vessel::class, 'vessel_id');
     }
+
     // relation to status
     public function status()
     {
         return $this->belongsTo(ActivityStatusVoyage::class, 'status_id', 'id');
     }
+
     public function detail()
     {
         return $this->belongsTo(VoyageLogDetail::class, 'voyage_detail_id', 'dtl_id');
     }
+
     public function activity()
     {
         return $this->belongsTo(ActivityVoyage::class, 'status_activity_id');

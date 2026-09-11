@@ -1,0 +1,28 @@
+@extends('layouts.app')
+
+@section('title', 'Repair Close-out · '.$report->report_code)
+
+@section('content')
+@php
+$input = 'h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-villa-500 focus:ring-4 focus:ring-villa-100';
+$defaultDowntimeStarted = $report->downtime_started_at ?? $report->created_at ?? now();
+$defaultDowntimeEnded = $report->downtime_ended_at ?? now();
+@endphp
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-villa-50 px-4 py-6 sm:px-7 lg:px-12"><div class="mx-auto max-w-4xl">
+    <header class="mb-6 flex items-start justify-between gap-4"><div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-villa-600">{{ $report->report_code }} · {{ $report->vessel?->vessel_name }}</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">Repair close-out</h1><p class="mt-1 text-sm text-slate-500">Document the repair findings and downtime before submitting for manager verification.</p></div><a href="{{ route('tech-defects.show',$report) }}" class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 no-underline shadow-sm"><i class="bi bi-arrow-left"></i>Back</a></header>
+
+    @if($errors->any())<div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p class="mb-2 font-extrabold">Please correct the following:</p><ul class="mb-0 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+
+    <form method="POST" action="{{ route('tech-defects.update',$report) }}" class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">@csrf @method('PUT')<input type="hidden" name="action" value="update_closeout">
+        <div class="border-b border-slate-100 px-5 py-5 sm:px-7"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="mb-1 text-lg font-black text-slate-900">Repair findings</h2><p class="mb-0 text-sm text-slate-500">Current status: {{ $report->status }}</p></div><span class="rounded-full {{ in_array($report->severity_level,['Major','Critical'],true)?'bg-rose-50 text-rose-700':'bg-blue-50 text-blue-700' }} px-3 py-1.5 text-xs font-extrabold">{{ $report->severity_level }} defect</span></div></div>
+        <div class="grid gap-5 p-5 sm:grid-cols-2 sm:p-7">
+            <label class="block"><span class="mb-2 block text-sm font-extrabold text-slate-700">Downtime started</span><input type="datetime-local" name="downtime_started_at" value="{{ old('downtime_started_at',$defaultDowntimeStarted->format('Y-m-d\\TH:i')) }}" class="{{ $input }}"><span class="mt-2 block text-xs text-slate-500">Prefilled from the report creation time. Adjust it if the actual downtime started at a different time.</span></label>
+            <label class="block"><span class="mb-2 block text-sm font-extrabold text-slate-700">Downtime ended</span><input type="datetime-local" name="downtime_ended_at" value="{{ old('downtime_ended_at',$defaultDowntimeEnded->format('Y-m-d\\TH:i')) }}" class="{{ $input }}"><span class="mt-2 block text-xs text-slate-500">Prefilled with the current date and time. Adjust it to the actual restoration time when necessary.</span></label>
+            <label class="block sm:col-span-2"><span class="mb-2 block text-sm font-extrabold text-slate-700">Root cause analysis <b class="text-rose-600">*</b></span><span class="mb-2 block text-xs text-slate-500">What was the underlying cause of the defect?</span><textarea name="root_cause" rows="4" maxlength="5000" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100" required>{{ old('root_cause',$report->root_cause) }}</textarea></label>
+            <label class="block sm:col-span-2"><span class="mb-2 block text-sm font-extrabold text-slate-700">Corrective action <b class="text-rose-600">*</b></span><span class="mb-2 block text-xs text-slate-500">What action was taken to correct the problem?</span><textarea name="corrective_action" rows="4" maxlength="5000" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100" required>{{ old('corrective_action',$report->corrective_action) }}</textarea></label>
+            <label class="block sm:col-span-2"><span class="mb-2 block text-sm font-extrabold text-slate-700">Preventive action @if(in_array($report->severity_level,['Major','Critical'],true))<b class="text-rose-600">*</b>@endif</span><span class="mb-2 block text-xs text-slate-500">What preventive measure will help stop this from recurring?</span><textarea name="preventive_action" rows="4" maxlength="5000" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100" @required(in_array($report->severity_level,['Major','Critical'],true))>{{ old('preventive_action',$report->preventive_action) }}</textarea></label>
+        </div>
+        <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-7"><a href="{{ route('tech-defects.show',$report) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 no-underline">Cancel</a><button class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-5 text-sm font-extrabold text-white shadow-lg shadow-villa-700/20"><i class="bi bi-check2-circle"></i>Save repair close-out</button></div>
+    </form>
+</div></section>
+@endsection

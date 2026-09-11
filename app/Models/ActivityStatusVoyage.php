@@ -13,10 +13,7 @@ class ActivityStatusVoyage extends Model
         'description',
         'status',
     ];
-    public function status()
-    {
-        return $this->belongsTo(ActivityStatusVoyage::class, 'activity_status_voyage_id');
-    }
+
     public function activities()
     {
         return $this->hasMany(ActivityVoyage::class, 'activity_status_voyage_id');

@@ -21,7 +21,7 @@ class Vessel extends Model
 
     public function voyageLogs()
     {
-        return $this->hasMany(VoyageLog::class);
+        return $this->hasMany(VoyageLogHeader::class, 'vessel_id');
     }
 
     public function certificates()
@@ -32,5 +32,17 @@ class Vessel extends Model
     public function captain()
     {
         return $this->belongsTo(User::class, 'captain_id');
+    }
+
+    public function userAssignments()
+    {
+        return $this->hasMany(UserVesselAssignment::class);
+    }
+
+    public function assignedUsers()
+    {
+        return $this->belongsToMany(User::class, 'user_vessel_assignments')
+            ->withPivot(['assigned_by', 'is_primary', 'is_active', 'effective_from', 'effective_until'])
+            ->withTimestamps();
     }
 }

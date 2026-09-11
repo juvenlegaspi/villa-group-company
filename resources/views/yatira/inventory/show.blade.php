@@ -9,6 +9,7 @@
         'BUILDING AND FACILITY',
         'FURNITURE AND OFFICE EQUIPMENTS',
         'IT & SYSTEMS INFRASTRUCTURE',
+        'OTHER / LEGACY',
     ];
 @endphp
 @if(session('success'))
@@ -205,7 +206,7 @@
         <div class="sticker-name">{{ $fixedAsset->asset_name }}</div>
         <div class="sticker-code">{{ $fixedAsset->asset_code }}</div>
         <div class="sticker-barcode">
-            <img src="{{ $qrCodeUrl }}" alt="QR code for {{ $fixedAsset->asset_code }}">
+            <img src="{{ $barcodeSvg }}" alt="Barcode for {{ $fixedAsset->asset_code }}">
         </div>
         <div class="sticker-footer">{{ $fixedAsset->location ?: ($fixedAsset->category ?: 'YATIRA') }}</div>
     </div>
@@ -219,7 +220,7 @@
 
             <div class="d-flex gap-2">
                 <a href="{{ route('yatira.inventory.index') }}" class="btn btn-outline-secondary">Back</a>
-                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editFixedAssetModal">Edit</button>
+                @if($canUpdateAssets && ($fixedAsset->status !== 'Disposed' || $canDisposeAssets))<button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editFixedAssetModal">Edit</button>@endif
                 <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
             </div>
         </div>
@@ -234,7 +235,7 @@
                 <div class="asset-header">
                     <div class="asset-title">
                         <h3>{{ $fixedAsset->asset_name }}</h3>
-                        <p>{{ $fixedAsset->category }} · Asset Code: {{ $fixedAsset->asset_code }}</p>
+                        <p>{{ $fixedAsset->category }} · Asset Code: {{ $fixedAsset->asset_code }}@if($fixedAsset->serial_number) · Serial: {{ $fixedAsset->serial_number }}@endif</p>
                     </div>
 
                     <span class="badge text-bg-light border px-3 py-2">{{ $fixedAsset->status }}</span>
@@ -243,8 +244,9 @@
                 <div class="asset-meta mb-4">
                     <div class="asset-meta-box">
                         <div class="label">Assigned To</div>
-                        <div class="value">{{ $fixedAsset->assigned_to ?: 'N/A' }}</div>
+                        <div class="value">{{ $fixedAsset->assignedUser ? $fixedAsset->assignedUser->name.' '.$fixedAsset->assignedUser->lastname : ($fixedAsset->assigned_to ?: 'N/A') }}</div>
                     </div>
+                    <div class="asset-meta-box"><div class="label">Department</div><div class="value">{{ $fixedAsset->assignedDepartment?->name ?: 'N/A' }}</div></div>
                     <div class="asset-meta-box">
                         <div class="label">Location</div>
                         <div class="value">{{ $fixedAsset->location ?: 'N/A' }}</div>
@@ -265,30 +267,36 @@
                         <div class="label">Remarks</div>
                         <div class="value">{{ $fixedAsset->remarks ?: 'N/A' }}</div>
                     </div>
+                    <div class="asset-meta-box"><div class="label">Acquisition Cost</div><div class="value">{{ is_null($fixedAsset->acquisition_cost) ? 'N/A' : number_format((float)$fixedAsset->acquisition_cost, 2) }}</div></div>
                 </div>
+
+                @if($fixedAsset->documents->isNotEmpty())<div class="mb-4 rounded-3 border bg-light p-3"><strong>Supporting Document Versions</strong><div class="mt-2 d-grid gap-2">@foreach($fixedAsset->documents as $document)<a class="btn btn-sm btn-outline-primary d-flex justify-content-between align-items-center" href="{{ route('yatira.inventory.fixed-assets.documents.show', [$fixedAsset, $document]) }}"><span>{{ $document->original_name }}</span><small>{{ optional($document->created_at)->format('M d, Y') }} &middot; {{ $document->uploader?->name ?? 'System' }}</small></a>@endforeach</div></div>@elseif($fixedAsset->document_path)<div class="mb-4 rounded-3 border bg-light p-3"><strong>Supporting Document</strong><div class="mt-2"><a class="btn btn-sm btn-outline-primary" href="{{ route('yatira.inventory.fixed-assets.document', $fixedAsset) }}">Download {{ $fixedAsset->document_original_name ?: 'document' }}</a></div></div>@endif
 
                 <div class="asset-barcode">
                     <div class="mb-3">
-                        <h5 class="mb-1">QR Code</h5>
-                        <p class="text-muted mb-0">Scan this code to open the full fixed asset details payload.</p>
+                        <h5 class="mb-1">Asset Barcode</h5>
+                        <p class="text-muted mb-0">Scan the locally generated asset code to identify this record. No asset data is sent to an external service.</p>
                     </div>
 
-                    <img src="{{ $qrCodeUrl }}" alt="QR code for {{ $fixedAsset->asset_code }}">
+                    <img src="{{ $barcodeSvg }}" alt="Barcode for {{ $fixedAsset->asset_code }}">
                 </div>
             </div>
         </section>
     </div>
 </div>
 
+<details class="no-print mx-auto mb-4 rounded-3 border bg-white" style="max-width:1180px"><summary class="cursor-pointer p-3 fw-bold">Audit Trail ({{ $fixedAsset->audits->count() }})</summary><div class="border-top p-3">@forelse($fixedAsset->audits as $audit)<div class="border-start border-2 ps-3 mb-3"><strong class="text-capitalize">{{ str_replace('_', ' ', $audit->action) }}</strong><div class="small text-muted">{{ $audit->user?->name ?? 'System' }} · {{ optional($audit->created_at)->format('M d, Y h:i A') }}</div></div>@empty<p class="text-muted mb-0">No audit activity recorded.</p>@endforelse</div></details>
+
+@if($canUpdateAssets && ($fixedAsset->status !== 'Disposed' || $canDisposeAssets))
 <div class="modal fade" id="editFixedAssetModal" tabindex="-1" aria-labelledby="editFixedAssetModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="editFixedAssetModalLabel">Edit Fixed Asset</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <form method="POST" action="{{ route('yatira.inventory.fixed-assets.update', $fixedAsset->id) }}">
+            <form method="POST" action="{{ route('yatira.inventory.fixed-assets.update', $fixedAsset->id) }}" enctype="multipart/form-data">
                 @csrf
                 @method('PUT')
 
@@ -298,12 +306,13 @@
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Asset Code</label>
                             <input type="text" class="form-control" value="{{ $fixedAsset->asset_code }}" readonly>
-                            <small class="text-muted">Asset code is system-generated and cannot be edited.</small>
+                            <small class="text-muted">The permanent asset code cannot be edited after registration.</small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Asset Name</label>
                             <input type="text" name="asset_name" class="form-control" value="{{ old('asset_name', $fixedAsset->asset_name) }}" required>
                         </div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Serial Number</label><input type="text" name="serial_number" class="form-control" value="{{ old('serial_number', $fixedAsset->serial_number) }}"></div>
                     </div>
 
                     <div class="row">
@@ -316,10 +325,8 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Assigned To</label>
-                            <input type="text" name="assigned_to" class="form-control" value="{{ old('assigned_to', $fixedAsset->assigned_to) }}">
-                        </div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Assigned User</label><select name="assigned_user_id" class="form-select"><option value="">None</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected((string)old('assigned_user_id',$fixedAsset->assigned_user_id)===(string)$user->id)>{{ $user->name }} {{ $user->lastname }}</option>@endforeach</select></div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Assigned Department</label><select name="assigned_department_id" class="form-select"><option value="">None</option>@foreach($departments as $department)<option value="{{ $department->id }}" @selected((string)old('assigned_department_id',$fixedAsset->assigned_department_id)===(string)$department->id)>{{ $department->name }}</option>@endforeach</select></div>
                     </div>
 
                     <div class="row">
@@ -338,7 +345,7 @@
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Status</label>
                             <select name="status" class="form-select" required>
-                                @foreach(['Active', 'In Use', 'Under Maintenance', 'Disposed'] as $status)
+                                @foreach($canDisposeAssets ? ['Active', 'In Use', 'Under Maintenance', 'Disposed'] : ['Active', 'In Use', 'Under Maintenance'] as $status)
                                     <option value="{{ $status }}" @selected(old('status', $fixedAsset->status) === $status)>{{ $status }}</option>
                                 @endforeach
                             </select>
@@ -348,12 +355,15 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Date Acquired</label>
-                            <input type="date" name="date_acquired" class="form-control" value="{{ old('date_acquired', optional($fixedAsset->date_acquired)->format('Y-m-d')) }}">
+                            <input type="date" name="date_acquired" max="{{ today()->toDateString() }}" class="form-control" value="{{ old('date_acquired', optional($fixedAsset->date_acquired)->format('Y-m-d')) }}">
                         </div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Acquisition Cost</label><input type="number" min="0" step="0.01" name="acquisition_cost" class="form-control" value="{{ old('acquisition_cost', $fixedAsset->acquisition_cost) }}"></div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Remarks</label>
                             <textarea name="remarks" class="form-control" rows="2">{{ old('remarks', $fixedAsset->remarks) }}</textarea>
                         </div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Disposal Reason</label><textarea name="disposal_reason" class="form-control" rows="2">{{ old('disposal_reason', $fixedAsset->disposal_reason) }}</textarea><small class="text-muted">Required when status is Disposed.</small></div>
+                        <div class="col-12 mb-3"><label class="form-label">Replace Supporting Document</label><input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" class="form-control"><small class="text-muted">PDF, JPG or PNG · Maximum 5 MB</small></div>
                     </div>
                 </div>
 
@@ -365,6 +375,7 @@
         </div>
     </div>
 </div>
+@endif
 
 @if($errors->any())
 <script>

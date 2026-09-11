@@ -14,14 +14,16 @@ return new class extends Migration
         Schema::create('voyage_logs_details', function (Blueprint $table) {
             $table->id('dtl_id');
             $table->unsignedBigInteger('voyage_id');
+            $table->unsignedBigInteger('vessel_id')->nullable();
             $table->string('voyage_status')->nullable();
             $table->string('activity')->nullable();
             $table->text('remarks')->nullable();
             $table->dateTime('date_time_started')->nullable();
             $table->dateTime('date_time_ended')->nullable();
-            $table->decimal('total_hours',8,2)->nullable();
+            $table->decimal('total_hours', 8, 2)->nullable();
             $table->date('date_complete')->nullable();
             $table->string('status')->nullable();
+            $table->string('main_status')->default('ONGOING');
             $table->timestamps();
             $table->foreign('voyage_id')->references('voyage_id')->on('voyage_logs_header')->onDelete('cascade');
         });
@@ -32,6 +34,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('voyage_logs_header');
+        Schema::dropIfExists('voyage_logs_details');
     }
 };

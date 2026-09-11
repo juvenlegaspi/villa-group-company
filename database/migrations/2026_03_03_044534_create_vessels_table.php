@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('vessel_name');
             $table->string('imo_number')->nullable();
             $table->string('call_sign')->nullable();
+            $table->foreignId('captain_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
         });
     }

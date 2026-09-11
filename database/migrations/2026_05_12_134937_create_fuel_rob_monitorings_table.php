@@ -28,6 +28,7 @@ return new class extends Migration
             $table->decimal('main_engine', 10, 2)->default(0);
             $table->decimal('auxiliary_engine', 10, 2)->default(0);
             $table->decimal('others', 10, 2)->default(0);
+            $table->decimal('boiler', 10, 2)->default(0);
 
             $table->decimal('total_consumed', 10, 2)->default(0);
 

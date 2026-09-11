@@ -1,103 +1,33 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4>Edit Certificate</h4>
-        <a href="{{ route('vessel.certificates.show', $certificate->vessel_id) }}" class="btn btn-secondary btn-sm">
-            Back
-        </a>
+<main class="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:py-8">
+    <a href="{{ route('vessel.certificates.show', $certificate->vessel) }}" class="mb-4 inline-flex text-sm font-bold text-villa-700 no-underline hover:text-villa-900">← Back to certificate register</a>
+    @if(session('success'))<div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{{ session('success') }}</div>@endif
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <header class="border-b border-slate-100 px-6 py-5"><p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-villa-600">Current record</p><h1 class="mb-1 text-2xl font-extrabold text-slate-950">Edit certificate</h1><p class="mb-0 text-sm text-slate-500">{{ $certificate->vessel->vessel_name }}</p></header>
+            <form action="{{ route('vessel-certificates.update', $certificate) }}" method="POST" enctype="multipart/form-data" class="p-6">
+                @csrf
+                <input type="hidden" name="vessel_id" value="{{ $certificate->vessel_id }}">
+                <div class="grid gap-5 md:grid-cols-2">
+                    <div class="md:col-span-2"><label class="mb-2 block text-sm font-bold text-slate-700">Certificate name</label><input name="certificate_name" value="{{ old('certificate_name', $certificate->certificate_name) }}" required class="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 outline-none focus:border-villa-500 focus:bg-white focus:ring-4 focus:ring-villa-100">@error('certificate_name')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror</div>
+                    <div><label class="mb-2 block text-sm font-bold text-slate-700">Certificate number</label><input name="certificate_number" value="{{ old('certificate_number', $certificate->certificate_number) }}" class="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100"></div>
+                    <div><label class="mb-2 block text-sm font-bold text-slate-700">Certificate type</label><input name="certificate_type" value="{{ old('certificate_type', $certificate->certificate_type) }}" class="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100"></div>
+                    <div class="md:col-span-2"><label class="mb-2 block text-sm font-bold text-slate-700">Issuing authority</label><input name="issuing_authority" value="{{ old('issuing_authority', $certificate->issuing_authority) }}" class="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100"></div>
+                    <div><label class="mb-2 block text-sm font-bold text-slate-700">Issue date</label><input type="date" name="issue_date" value="{{ old('issue_date', optional($certificate->issue_date)->format('Y-m-d')) }}" required class="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100">@error('issue_date')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror</div>
+                    <div><label class="mb-2 block text-sm font-bold text-slate-700">Expiry date</label><input type="date" name="expiry_date" value="{{ old('expiry_date', optional($certificate->expiry_date)->format('Y-m-d')) }}" required class="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100">@error('expiry_date')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror</div>
+                    <div class="md:col-span-2"><label class="mb-2 block text-sm font-bold text-slate-700">Remarks <span class="font-normal text-slate-400">(optional)</span></label><textarea name="remarks" rows="3" maxlength="2000" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100">{{ old('remarks', $certificate->remarks) }}</textarea>@error('remarks')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror</div>
+                    <div class="md:col-span-2"><label class="mb-2 block text-sm font-bold text-slate-700">Replace document <span class="font-normal text-slate-400">(optional)</span></label><input type="file" name="document" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" class="block w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-villa-700 file:px-3 file:py-2 file:font-bold file:text-white"><p class="mb-0 mt-2 text-xs text-slate-500">Replacing does not delete the previous document. It remains in version history.</p>@error('document')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror</div>
+                </div>
+                <div class="mt-6 flex justify-end"><button class="min-h-11 rounded-xl bg-villa-700 px-5 text-sm font-bold text-white shadow-md hover:bg-villa-800">Save changes</button></div>
+            </form>
+        </section>
+
+        <aside class="space-y-5">
+            <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div class="mb-4 flex items-center justify-between"><h2 class="mb-0 text-base font-extrabold text-slate-900">Document history</h2><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">{{ $certificate->documents->count() }}</span></div><div class="space-y-3">@forelse($certificate->documents as $document)<div class="rounded-xl border border-slate-200 p-3"><div class="flex items-start justify-between gap-2"><p class="mb-1 break-all text-xs font-bold text-slate-800">{{ $document->original_name ?: basename($document->path) }}</p>@if($document->is_current)<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Current</span>@endif</div><p class="mb-2 text-[11px] text-slate-500">{{ optional($document->created_at)->format('M d, Y h:i A') }}@if($document->size) · {{ number_format($document->size / 1024, 1) }} KB @endif</p><a href="{{ route('vessel-certificates.documents.version', [$certificate, $document]) }}" class="text-xs font-bold text-villa-700 no-underline hover:underline">Download version</a></div>@empty<p class="mb-0 text-sm text-slate-500">No version metadata is available.</p>@endforelse</div></section>
+            <details class="rounded-2xl border border-slate-200 bg-white shadow-sm"><summary class="cursor-pointer list-none px-5 py-4 text-sm font-extrabold text-slate-900">Audit trail <span class="float-right text-slate-400">{{ $certificate->audits->count() }} ▾</span></summary><div class="max-h-80 space-y-3 overflow-y-auto border-t border-slate-100 p-5">@forelse($certificate->audits as $audit)<div class="border-l-2 border-villa-200 pl-3"><p class="mb-0 text-xs font-extrabold capitalize text-slate-800">{{ str_replace('_', ' ', $audit->action) }}</p><p class="mb-0 mt-1 text-[11px] text-slate-500">{{ $audit->user?->name ?? 'System' }} · {{ optional($audit->created_at)->format('M d, Y h:i A') }}</p></div>@empty<p class="mb-0 text-sm text-slate-500">No activity recorded yet.</p>@endforelse</div></details>
+        </aside>
     </div>
-
-    <div class="card shadow-sm border-0 p-4">
-        <form action="{{ route('vessel-certificates.update', $certificate->id) }}" method="POST" enctype="multipart/form-data">
-            @csrf
-
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Vessel</label>
-                    <input type="text" class="form-control" value="{{ $certificate->vessel->vessel_name }}" readonly>
-                    <input type="hidden" name="vessel_id" value="{{ $certificate->vessel_id }}">
-                </div>
-
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Certificate Name</label>
-                    <input
-                        type="text"
-                        name="certificate_name"
-                        class="form-control"
-                        value="{{ old('certificate_name', $certificate->certificate_name) }}"
-                        required
-                    >
-                </div>
-
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Issue Date</label>
-                    <input
-                        type="date"
-                        name="issue_date"
-                        class="form-control"
-                        value="{{ old('issue_date', optional($certificate->issue_date)->format('Y-m-d')) }}"
-                        required
-                    >
-                </div>
-
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Expiry Date</label>
-                    <input
-                        type="date"
-                        name="expiry_date"
-                        class="form-control"
-                        value="{{ old('expiry_date', optional($certificate->expiry_date)->format('Y-m-d')) }}"
-                        required
-                    >
-                </div>
-
-                <div class="col-md-8 mb-3">
-                    <label class="form-label">Remarks</label>
-                    <input
-                        type="text"
-                        name="remarks"
-                        class="form-control"
-                        value="{{ old('remarks', $certificate->remarks) }}"
-                    >
-                </div>
-
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Current Document</label><br>
-
-                    @if($certificate->document)
-                        <a
-                            href="{{ asset('public/uploads/certificates/' . $certificate->document) }}"
-                            target="_blank"
-                            class="btn btn-sm btn-outline-primary"
-                        >
-                            View
-                        </a>
-
-                        <a
-                            href="{{ asset('public/uploads/certificates/' . $certificate->document) }}"
-                            download
-                            class="btn btn-sm btn-outline-success"
-                        >
-                            Download
-                        </a>
-                    @else
-                        <span class="text-muted">No file uploaded.</span>
-                    @endif
-                </div>
-
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Upload New Document</label>
-                    <input type="file" name="document" class="form-control">
-                    <small class="text-muted">
-                        Allowed: PDF, Word, Excel, or image files up to 5 MB.
-                    </small>
-                </div>
-            </div>
-
-            <button class="btn btn-success mt-2">Update Certificate</button>
-        </form>
-    </div>
-</div>
+</main>
 @endsection

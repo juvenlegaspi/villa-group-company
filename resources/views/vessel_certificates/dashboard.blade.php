@@ -115,7 +115,7 @@
     <div class="cert-shell">
         <section class="cert-hero">
             <h2 class="fw-bold mb-2">Certificate Compliance Dashboard</h2>
-            <p class="mb-0">Fleet-wide visibility sa certificate status, expiry exposure, ug vessels needing immediate compliance follow-up.</p>
+            <p class="mb-0">Fleet-wide visibility of certificate status, expiry exposure, and vessels requiring immediate compliance follow-up.</p>
         </section>
 
         <section class="cert-grid">
@@ -352,24 +352,26 @@
             </div>
         </section>
 
+        @unless(auth()->user()->isExecutiveViewer())
         <div>
             <a href="{{ route('vessel-certificates.index') }}" class="btn btn-primary">
                 <i class="bi bi-folder2-open me-1"></i> View Certificates
             </a>
         </div>
+        @endunless
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const certificateStatusLabels = {!! json_encode($certificateStatusLabels) !!};
-    const certificateStatusData = {!! json_encode($certificateStatusData) !!};
-    const vesselRiskLabels = {!! json_encode($vesselRiskLabels) !!};
-    const vesselRiskData = {!! json_encode($vesselRiskData) !!};
-    const expiryTrendLabels = {!! json_encode($expiryTrend->pluck('label')->values()) !!};
-    const expiryTrendData = {!! json_encode($expiryTrend->pluck('total')->values()) !!};
-    const certificateTypeLabels = {!! json_encode($certificateTypeLabels) !!};
-    const certificateTypeData = {!! json_encode($certificateTypeData) !!};
+document.addEventListener('DOMContentLoaded', () => {
+    const certificateStatusLabels = {{ Illuminate\Support\Js::from($certificateStatusLabels) }};
+    const certificateStatusData = {{ Illuminate\Support\Js::from($certificateStatusData) }};
+    const vesselRiskLabels = {{ Illuminate\Support\Js::from($vesselRiskLabels) }};
+    const vesselRiskData = {{ Illuminate\Support\Js::from($vesselRiskData) }};
+    const expiryTrendLabels = {{ Illuminate\Support\Js::from($expiryTrend->pluck('label')->values()) }};
+    const expiryTrendData = {{ Illuminate\Support\Js::from($expiryTrend->pluck('total')->values()) }};
+    const certificateTypeLabels = {{ Illuminate\Support\Js::from($certificateTypeLabels) }};
+    const certificateTypeData = {{ Illuminate\Support\Js::from($certificateTypeData) }};
 
     new Chart(document.getElementById('certificateStatusChart'), {
         type: 'doughnut',
@@ -475,5 +477,6 @@
             }
         }
     });
+});
 </script>
 @endsection

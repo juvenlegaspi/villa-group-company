@@ -4,9 +4,9 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">Dry Docking Monitoring</h3>
-        <a href="{{ url('/shipping/dry-docking/create') }}" class="btn btn-primary">
-            Add Dry Docking
-        </a>
+        @if(app(\App\Services\VesselAccessService::class)->canAccessAllVessels(auth()->user()))
+            <a href="{{ url('/shipping/dry-docking/create') }}" class="btn btn-primary">Add Dry Docking</a>
+        @endif
     </div>
 
     @if(session('success'))

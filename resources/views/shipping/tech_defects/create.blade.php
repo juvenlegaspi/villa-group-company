@@ -1,156 +1,53 @@
 @extends('layouts.app')
 
+@section('title', 'New Technical Defect | Villa Shipping Lines')
+
 @section('content')
-<div class="container">
-
-    <!-- HEADER -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">Add Tech & Defect Report</h4>
-            <a href="{{ route('tech-defects.index') }}" class="btn btn-secondary">Back</a>
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-villa-50 px-4 py-6 sm:px-7 lg:px-12"><div class="mx-auto max-w-5xl">
+    <header class="mb-6 flex items-start justify-between gap-4"><div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-villa-600">Technical &amp; Defect</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">New defect report</h1><p class="mt-1 text-sm text-slate-500">Record a vessel issue for controlled assessment and repair tracking.</p></div><a href="{{ route('tech-defects.index') }}" class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 no-underline shadow-sm hover:border-villa-500 hover:text-villa-800"><i class="bi bi-arrow-left"></i><span class="hidden sm:inline">Back</span></a></header>
+    @if($errors->any())<div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p class="mb-2 font-extrabold">Please correct the following:</p><ul class="mb-0 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+    @if($vessels->isEmpty())<div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900"><h2 class="mb-1 font-black">No vessel is assigned to your account</h2><p class="mb-0 text-sm">Contact a manager before creating a technical defect report.</p></div>@else
+    <form method="POST" action="{{ route('tech-defects.store') }}" enctype="multipart/form-data" class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">@csrf
+        <div class="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-7"><div><h2 class="mb-0 text-lg font-black text-slate-900">Report details</h2><p class="mb-0 mt-1 text-sm text-slate-500">The Technical Team assigns the qualified PIC after assessment.</p></div><span class="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-extrabold text-slate-700">Initial status: New Report</span></div>
+        <div class="grid gap-5 p-5 sm:grid-cols-2 sm:p-7">
+            @include('shipping.tech_defects.partials.form-fields', ['report' => null])
+            <div class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                <label class="block">
+                    <span class="mb-2 block text-sm font-extrabold text-slate-700">Completed checklist / Initial evidence <b class="text-rose-600">*</b></span>
+                    <span class="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-sky-200 bg-sky-50/70 px-5 py-6 text-center transition hover:border-sky-400 hover:bg-sky-50">
+                        <i class="bi bi-file-earmark-check mb-2 text-3xl text-sky-700"></i>
+                        <strong class="text-sm text-slate-800">Choose checklist document</strong>
+                        <span id="checklistFileName" class="mt-1 text-xs text-slate-500">PDF, Word, Excel, or image — maximum 10 MB</span>
+                        <input id="checklistDocument" type="file" name="checklist_document" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx" class="sr-only" required>
+                    </span>
+                </label>
+                <label class="block">
+                    <span class="mb-2 block text-sm font-extrabold text-slate-700">Affected defect photo <b class="text-rose-600">*</b></span>
+                    <span class="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/70 px-5 py-6 text-center transition hover:border-amber-400 hover:bg-amber-50">
+                        <i class="bi bi-camera mb-2 text-3xl text-amber-700"></i>
+                        <strong class="text-sm text-slate-800">Choose defect photo</strong>
+                        <span id="defectPhotoFileName" class="mt-1 text-xs text-slate-500">JPG, PNG, or WEBP — maximum 10 MB</span>
+                        <input id="defectPhoto" type="file" name="defect_photo" accept="image/jpeg,image/png,image/webp" class="sr-only" required>
+                    </span>
+                </label>
+            </div>
         </div>
-    </div>
+        <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-7"><a href="{{ route('tech-defects.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 no-underline hover:bg-slate-100">Cancel</a><button class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-5 text-sm font-extrabold text-white shadow-lg shadow-villa-700/20 hover:bg-villa-800 focus:outline-none focus:ring-4 focus:ring-villa-100"><i class="bi bi-shield-check"></i>Save report</button></div>
+    </form>@endif
+</div></section>
+@endsection
 
-    <!-- FORM CARD -->
-    <div class="card shadow-sm">
-        <div class="card-body">
-
-            <form method="POST" action="{{ route('tech-defects.store') }}">
-                @csrf
-
-                <div class="row g-3">
-
-                    <!-- Report ID -->
-                    <div class="col-md-4">
-                        <label class="form-label">Report ID</label>
-                        <input type="text" class="form-control" value="AUTO GENERATED" readonly>
-                    </div>
-
-                    <!-- Date -->
-                    <div class="col-md-4">
-                        <label class="form-label">Date Issue Identified</label>
-                        <input type="date" name="date_identified" class="form-control" required>
-                    </div>
-
-                    <!-- Vessel -->
-                    <div class="col-md-4">
-                        <label class="form-label">Vessel</label>
-                        <select name="vessel_id" class="form-select" required>
-                            @foreach($vessels as $v)
-                                <option value="{{ $v->id }}">{{ $v->vessel_name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Port -->
-                    <div class="col-md-4">
-                        <label class="form-label">Port / Location</label>
-                        <input type="text" name="port_location" class="form-control text-uppercase">
-                    </div>
-
-                    <!-- Reported -->
-                    <div class="col-md-4">
-                        <label class="form-label">Reported By</label>
-                        <select name="reported_by" class="form-control">
-                            <option value="">-- Select Personnel --</option>
-
-                            @foreach($shippingUsers as $user)
-                                <option value="{{ strtoupper($user->name) }}">
-                                    {{ strtoupper($user->name) }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- System -->
-                    <div class="col-md-4">
-                        <label class="form-label">System Affected</label>
-                        <select name="system_affected" class="form-select">
-                            <option value="">-- Select System --</option>
-                            <option value="Deck">Deck</option>
-                            <option value="Main Engine">Main Engine</option>
-                            <option value="Auxiliary Engine">Auxiliary Engine</option>
-                            <option value="Crane">Crane</option>
-                            <option value="Safety Equipment">Safety Equipment</option>
-                            <option value="Cargo Handling">Cargo Handling</option>
-                            <option value="Accommodation">Accommodation</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-
-                    <!-- Severity -->
-                    <div class="col-md-4">
-                        <label class="form-label">Severity Level</label>
-                        <select name="severity_level" class="form-select">
-                            <option value="">-- Select Severity --</option>
-                            <option>Minor</option>
-                            <option>Major</option>
-                            <option>Critical</option>
-                        </select>
-                    </div>
-
-                    <!-- Impact -->
-                    <div class="col-md-4">
-                        <label class="form-label">Operational Impact</label>
-                        <select name="operational_impact" class="form-select">
-                            <option value="">-- Select Impact --</option>
-                            <option>None</option>
-                            <option>Limited</option>
-                            <option>Stopped</option>
-                        </select>
-                    </div>
-
-                    <!-- Temporary -->
-                    <div class="col-md-4">
-                        <label class="form-label">Temporary Repair Done?</label>
-                        <select name="temporary_repair" class="form-select">
-                            <option>Yes</option>
-                            <option>No</option>
-                        </select>
-                    </div>
-
-                    <!-- Description -->
-                    <div class="col-md-6">
-                        <label class="form-label">Defect Description</label>
-                        <textarea name="defect_description" class="form-control text-uppercase" rows="3" required></textarea>
-                    </div>
-
-                    <!-- Initial Cause -->
-                    <div class="col-md-6">
-                        <label class="form-label">Initial Cause</label>
-                        <textarea name="initial_cause" class="form-control" rows="3"></textarea>
-                    </div>
-
-                    <!-- Remarks -->
-                    <div class="col-md-12">
-                        <label class="form-label">Remarks</label>
-                        <textarea name="remarks" class="form-control text-uppercase" rows="2"></textarea>
-                    </div>
-
-                </div>
-
-                <!-- BUTTONS -->
-                <div class="mt-4 d-flex gap-2">
-                    <button type="submit" class="btn btn-success px-4">
-                        Save Report
-                    </button>
-
-                    <a href="{{ route('tech-defects.index') }}" class="btn btn-secondary px-4">
-                        Cancel
-                    </a>
-                </div>
-
-            </form>
-
-        </div>
-    </div>
-
-</div>
+@push('scripts')
 <script>
-document.querySelectorAll('.text-uppercase').forEach(el => {
-    el.addEventListener('input', () => {
-        el.value = el.value.toUpperCase();
+document.addEventListener('DOMContentLoaded', () => {
+    [
+        ['checklistDocument', 'checklistFileName', 'PDF, Word, Excel, or image — maximum 10 MB'],
+        ['defectPhoto', 'defectPhotoFileName', 'JPG, PNG, or WEBP — maximum 10 MB'],
+    ].forEach(([inputId, nameId, fallback]) => {
+        const input = document.getElementById(inputId);
+        const name = document.getElementById(nameId);
+        input?.addEventListener('change', () => { name.textContent = input.files?.[0]?.name || fallback; });
     });
 });
 </script>
-@endsection
+@endpush

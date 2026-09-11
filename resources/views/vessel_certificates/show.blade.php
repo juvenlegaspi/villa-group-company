@@ -1,176 +1,83 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+<main class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+    @if(session('success'))<div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{{ session('success') }}</div>@endif
+    <header class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-            <h3 class="fw-bold mb-0">Vessel Certificate Monitoring</h3>
-            <small class="text-muted">
-                Vessel: <strong>{{ $vessel->vessel_name }}</strong> |
-                Today: {{ $today->format('F d, Y') }}
-            </small>
+            <a href="{{ route('vessel-certificates.index') }}" class="mb-3 inline-flex items-center gap-1 text-sm font-bold text-villa-700 no-underline hover:text-villa-900">← All vessels</a>
+            <p class="mb-1 text-xs font-bold uppercase tracking-[.2em] text-villa-600">Certificate register</p>
+            <h1 class="mb-1 text-2xl font-extrabold text-slate-950 sm:text-3xl">{{ $vessel->vessel_name }}</h1>
+            <p class="mb-0 text-sm text-slate-500">Compliance position as of {{ $today->format('F d, Y') }}</p>
         </div>
+        @if($canManage)
+            <a href="{{ route('vessel-certificates.add', $vessel) }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 py-2.5 text-sm font-bold text-white no-underline shadow-md shadow-blue-900/15 hover:bg-villa-800">+ Add certificate</a>
+        @endif
+    </header>
 
-        <a href="{{ route('vessel-certificates.index') }}" class="btn btn-outline-secondary">
-            Back
-        </a>
-    </div>
-
-    <div class="mb-3">
-        <a href="{{ route('vessel-certificates.add', $vessel->id) }}" class="btn btn-success shadow">
-            Add Certificate
-        </a>
-    </div>
-
-    @php
-        $validCount = $certificates->filter(fn ($certificate) => $certificate->expiry_date->gt(now()->copy()->addDays(30)))->count();
-        $expiringCount = $certificates->filter(fn ($certificate) => $certificate->expiry_date->between(now(), now()->copy()->addDays(30)))->count();
-        $expiredCount = $certificates->filter(fn ($certificate) => $certificate->expiry_date->lt(now()))->count();
-    @endphp
-
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 text-center p-3">
-                <h6>Total</h6>
-                <h4>{{ $certificates->count() }}</h4>
+    <section class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        @foreach([['Total', $counts['total'], 'slate'], ['Valid', $counts['valid'], 'emerald'], ['Expiring', $counts['expiring'], 'amber'], ['Expired', $counts['expired'], 'rose']] as [$label,$value,$tone])
+            <div class="rounded-2xl border border-{{ $tone }}-200 bg-{{ $tone }}-50 p-4">
+                <p class="mb-1 text-xs font-bold uppercase tracking-wide text-{{ $tone }}-700">{{ $label }}</p>
+                <p class="mb-0 text-2xl font-extrabold text-slate-950">{{ $value }}</p>
             </div>
-        </div>
+        @endforeach
+    </section>
 
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 text-center p-3 bg-success text-white">
-                <h6>Valid</h6>
-                <h4>{{ $validCount }}</h4>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 text-center p-3 bg-warning">
-                <h6>Expiring</h6>
-                <h4>{{ $expiringCount }}</h4>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 text-center p-3 bg-danger text-white">
-                <h6>Expired</h6>
-                <h4>{{ $expiredCount }}</h4>
-            </div>
-        </div>
-    </div>
-
-    <div class="card shadow-sm border-0 mb-3 p-3">
-        <form method="GET">
-            <div class="row">
-                <div class="col-md-5">
-                    <input
-                        type="text"
-                        name="search"
-                        value="{{ request('search') }}"
-                        class="form-control"
-                        placeholder="Search certificate..."
-                    >
-                </div>
-
-                <div class="col-md-4">
-                    <select name="filter" class="form-control">
-                        <option value="">All Certificates</option>
-                        <option value="valid" {{ request('filter') == 'valid' ? 'selected' : '' }}>Valid</option>
-                        <option value="expiring" {{ request('filter') == 'expiring' ? 'selected' : '' }}>Expiring</option>
-                        <option value="expired" {{ request('filter') == 'expired' ? 'selected' : '' }}>Expired</option>
-                    </select>
-                </div>
-
-                <div class="col-md-3 d-flex gap-2">
-                    <button class="btn btn-primary w-100">Search</button>
-                    <a href="{{ route('vessel.certificates.show', $vessel->id) }}" class="btn btn-secondary w-100">Reset</a>
-                </div>
+    <section class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <form method="GET" class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+            <input type="search" name="search" value="{{ request('search') }}" class="min-h-11 rounded-xl border border-slate-300 bg-slate-50 px-4 text-sm outline-none focus:border-villa-500 focus:bg-white focus:ring-4 focus:ring-villa-100" placeholder="Search certificate name">
+            <select name="filter" class="min-h-11 rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100">
+                <option value="">Current certificates</option>
+                @foreach(['valid'=>'Valid','expiring'=>'Expiring within 30 days','expired'=>'Expired','superseded'=>'Renewal history'] as $value=>$label)
+                    <option value="{{ $value }}" @selected(request('filter') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <div class="flex gap-2">
+                <button class="min-h-11 flex-1 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800">Apply</button>
+                <a href="{{ route('vessel.certificates.show', $vessel) }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 no-underline hover:bg-slate-50">Reset</a>
             </div>
         </form>
-    </div>
+    </section>
 
-    <div class="card shadow-sm border-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Certificate</th>
-                        <th>Created</th>
-                        <th>Issue Date</th>
-                        <th>Expiry Date</th>
-                        <th>Days</th>
-                        <th>Status</th>
-                        <th>Document</th>
-                        <th>Action</th>
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[980px] border-collapse text-left text-sm">
+                <thead class="bg-slate-900 text-xs uppercase tracking-wide text-slate-200"><tr><th class="px-5 py-4">Certificate</th><th class="px-4 py-4">Issue date</th><th class="px-4 py-4">Expiry date</th><th class="px-4 py-4">Remaining</th><th class="px-4 py-4">Status</th><th class="px-4 py-4">Document</th><th class="px-5 py-4 text-right">Actions</th></tr></thead>
+                <tbody class="divide-y divide-slate-100">
+                @forelse($certificates as $certificate)
+                    @php
+                        $days = $certificate->expiry_date ? today()->diffInDays($certificate->expiry_date, false) : null;
+                        [$status,$badge] = match($certificate->workflow_status) {
+                            'draft' => ['Draft','bg-blue-50 text-blue-700'],
+                            'pending_approval' => ['Pending approval','bg-violet-50 text-violet-700'],
+                            'superseded' => ['Superseded','bg-slate-100 text-slate-600'],
+                            default => $days < 0 ? ['Expired','bg-rose-50 text-rose-700'] : ($days <= 30 ? ['Expiring','bg-amber-50 text-amber-700'] : ['Valid','bg-emerald-50 text-emerald-700']),
+                        };
+                    @endphp
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="px-5 py-4"><p class="mb-0 font-extrabold text-slate-900">{{ $certificate->certificate_name }}</p><p class="mb-0 mt-1 text-xs text-slate-500">Updated {{ optional($certificate->updated_at)->format('M d, Y') }}</p></td>
+                        <td class="px-4 py-4 text-slate-700">{{ optional($certificate->issue_date)->format('M d, Y') ?: '—' }}</td>
+                        <td class="px-4 py-4 font-semibold text-slate-800">{{ optional($certificate->expiry_date)->format('M d, Y') ?: '—' }}</td>
+                        <td class="px-4 py-4 text-slate-600">{{ is_null($days) ? '—' : ($days < 0 ? abs($days).' days overdue' : $days.' days') }}</td>
+                        <td class="px-4 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $badge }}">{{ $status }}</span></td>
+                        <td class="px-4 py-4">@if($certificate->document)<a href="{{ route('vessel-certificates.document', $certificate) }}" class="font-bold text-villa-700 no-underline hover:underline">Download</a>@else<span class="text-slate-400">No file</span>@endif</td>
+                        <td class="px-5 py-4"><div class="flex justify-end gap-2">
+                            @if($canManage && $certificate->workflow_status === 'active')
+                                <a href="{{ route('vessel-certificates.edit', $certificate) }}" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 no-underline hover:bg-slate-50">Edit</a>
+                            @endif
+                            @if($canManage && $certificate->workflow_status === 'active')
+                                <a href="{{ route('vessel-certificates.renew', $certificate) }}" class="rounded-lg bg-villa-700 px-3 py-2 text-xs font-bold text-white no-underline hover:bg-villa-800">Renew</a>
+                            @endif
+                        </div></td>
                     </tr>
-                </thead>
-                <tbody>
-                    @forelse($certificates as $certificate)
-                        @php
-                            $days = now()->diffInDays($certificate->expiry_date, false);
-                            $status = 'Valid';
-                            $color = 'success';
-                            $rowClass = '';
-
-                            if ($days < 0) {
-                                $status = 'Expired';
-                                $color = 'danger';
-                                $rowClass = 'table-danger';
-                            } elseif ($days <= 30) {
-                                $status = 'Expiring';
-                                $color = 'warning';
-                                $rowClass = 'table-warning';
-                            }
-                        @endphp
-
-                        <tr class="{{ $rowClass }}">
-                            <td><strong>{{ $certificate->certificate_name }}</strong></td>
-                            <td>{{ optional($certificate->created_at)->format('F d, Y h:i A') }}</td>
-                            <td>{{ optional($certificate->issue_date)->format('F d, Y') }}</td>
-                            <td>{{ optional($certificate->expiry_date)->format('F d, Y') }}</td>
-                            <td>{{ $days }}</td>
-                            <td>
-                                <span class="badge rounded-pill bg-{{ $color }} px-3 py-2">
-                                    {{ $status }}
-                                </span>
-                            </td>
-                            <td>
-                                @if($certificate->document)
-                                    <a
-                                        href="{{ url('public/uploads/certificates/' . $certificate->document) }}"
-                                        target="_blank"
-                                        class="btn btn-sm btn-outline-primary"
-                                    >
-                                        View
-                                    </a>
-
-                                    <a
-                                        href="{{ asset('public/uploads/certificates/' . $certificate->document) }}"
-                                        download
-                                        class="btn btn-sm btn-outline-success"
-                                    >
-                                        Download
-                                    </a>
-                                @else
-                                    <span class="badge bg-secondary">No File</span>
-                                @endif
-                            </td>
-                            <td>
-                                <a href="{{ route('vessel-certificates.edit', $certificate->id) }}" class="btn btn-sm btn-primary">
-                                    Edit
-                                </a>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="8" class="text-center text-muted">No certificates found.</td>
-                        </tr>
-                    @endforelse
+                @empty
+                    <tr><td colspan="7" class="px-5 py-12 text-center text-slate-500">No certificates match the selected filters.</td></tr>
+                @endforelse
                 </tbody>
             </table>
-            <div class="mt-3">
-                {{ $certificates->links() }}
-            </div>
         </div>
-    </div>
-</div>
+        @if($certificates->hasPages())<div class="border-t border-slate-100 px-5 py-4">{{ $certificates->links() }}</div>@endif
+    </section>
+</main>
 @endsection

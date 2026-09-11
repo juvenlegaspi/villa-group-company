@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Paginator::useBootstrap();
+        Paginator::useTailwind();
 
         view()->composer('layouts.app', function ($view) {
             $divisions = collect();
@@ -30,7 +30,7 @@ class AppServiceProvider extends ServiceProvider
             if (Auth::check()) {
                 $user = Auth::user();
 
-                $divisions = $user->isAdmin()
+                $divisions = $user->canManageAllCompanies()
                     ? Division::orderBy('id')->get()
                     : Division::whereKey($user->division_id)->get();
             }

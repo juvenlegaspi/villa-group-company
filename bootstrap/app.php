@@ -14,6 +14,13 @@ return Application::configure(basePath: dirname(__DIR__))
         //
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'admin' => \App\Http\Middleware\AdminMiddleware::class,
+            'division' => \App\Http\Middleware\DivisionMiddleware::class,
+            'password.changed' => \App\Http\Middleware\EnsurePasswordIsChanged::class,
+            'active' => \App\Http\Middleware\EnsureActiveUser::class,
+            'user.manager' => \App\Http\Middleware\UserManagementMiddleware::class,
+            'owner.dashboard-only' => \App\Http\Middleware\OwnerDashboardOnly::class,
+            'module.access' => \App\Http\Middleware\EnsureModuleAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

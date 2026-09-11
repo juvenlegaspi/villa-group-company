@@ -1,146 +1,23 @@
 @extends('layouts.app')
 
+@section('title', 'Edit User | Villa Group')
+
 @section('content')
-<div class="d-flex align-items-center mb-3">
-    <a href="{{ url('/users') }}" class="btn btn-outline-secondary me-2">Back</a>
-    <h3 class="mb-0">Edit User</h3>
-</div>
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-villa-50 px-4 py-6 sm:px-7 lg:px-12">
+    <div class="mx-auto max-w-5xl">
+        <header class="mb-6 flex items-start justify-between gap-4"><div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-villa-600">User Management</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">Edit User</h1><p class="mt-1 text-sm text-slate-500">Update {{ $user->name }} {{ $user->lastname }}'s organization assignment and system access.</p></div><a href="{{ route('users.index') }}" class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 no-underline shadow-sm hover:border-villa-500 hover:text-villa-800"><i class="bi bi-arrow-left"></i><span class="hidden sm:inline">Back</span></a></header>
 
-@if ($errors->any())
-    <div class="alert alert-danger">
-        <ul class="mb-0">
-            @foreach ($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
+        @if ($errors->any())<div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p class="mb-2 font-extrabold">Please correct the following:</p><ul class="mb-0 list-disc pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+
+        <form method="POST" action="{{ route('users.update', $user->id) }}" class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">@csrf
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-5 sm:px-7"><div><h2 class="mb-0 text-lg font-black text-slate-900">Account Information</h2><p class="mb-0 mt-1 text-sm text-slate-500">Changes to access take effect immediately.</p></div><button type="button" data-bs-toggle="modal" data-bs-target="#changePasswordModal" class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-extrabold text-amber-800 hover:bg-amber-100"><i class="bi bi-key"></i>Change Password</button></div>
+            <div class="grid gap-5 p-5 sm:grid-cols-2 sm:p-7 lg:grid-cols-3">@include('users.partials.fields', ['user' => $user])</div>
+            <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-7"><a href="{{ route('users.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 no-underline hover:bg-slate-100">Cancel</a><button class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-5 text-sm font-extrabold text-white shadow-lg shadow-villa-700/20 hover:bg-villa-800 focus:outline-none focus:ring-4 focus:ring-villa-100"><i class="bi bi-check2-circle"></i>Update User</button></div>
+        </form>
     </div>
-@endif
 
-<form method="POST" action="{{ url('/users/' . $user->id . '/update') }}">
-    @csrf
-
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-primary text-white">
-            <strong>User Information</strong>
-        </div>
-
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="fw-bold">First Name</label>
-                    <input type="text" name="name" value="{{ $user->name }}" class="form-control" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="fw-bold">Last Name</label>
-                    <input type="text" name="lastname" value="{{ $user->lastname }}" class="form-control" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="fw-bold">Username</label>
-                    <input type="text" name="username" value="{{ $user->username }}" class="form-control" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="fw-bold">Cell Number</label>
-                    <input type="text" name="cell_number" value="{{ $user->cell_number }}" class="form-control" required>
-                </div>
-
-                <div class="col-md-12">
-                    <label class="fw-bold">Email Address</label>
-                    <input type="email" name="email" value="{{ $user->email }}" class="form-control" required>
-                </div>
-
-                @if(auth()->user()->is_admin == 1)
-                    <div class="col-md-4">
-                        <label class="fw-bold">Status</label>
-                        <select name="status" class="form-control">
-                            <option value="1" {{ $user->status == 1 ? 'selected' : '' }}>Active</option>
-                            <option value="0" {{ $user->status == 0 ? 'selected' : '' }}>Inactive</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="fw-bold">Division</label>
-                        <select name="division_id" class="form-control" required>
-                            <option value="">Select Division</option>
-                            @foreach($divisions as $div)
-                                <option 
-                                    value="{{ $div->id }}" {{ $user->division_id == $div->id ? 'selected' : '' }}>
-                                    {{ $div->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="fw-bold">Department</label>
-                        <select name="department_id" class="form-control">
-                            @foreach($departments as $dept)
-                                <option value="{{ $dept->id }}" {{ $user->department_id == $dept->id ? 'selected' : '' }}>
-                                    {{ $dept->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="fw-bold">Role</label>
-                        <select name="role" class="form-control">
-                            <option value="it" {{ $user->role == 'it' ? 'selected' : '' }}>IT</option>
-                            <option value="manager" {{ $user->role == 'manager' ? 'selected' : '' }}>Manager</option>
-                            <option value="captain" {{ $user->role == 'captain' ? 'selected' : '' }}>Captain</option>
-                            <option value="staff" {{ $user->role == 'staff' ? 'selected' : '' }}>Staff</option>
-                            <option value="r&d" {{ $user->role == 'r&d' ? 'selected' : '' }}>R & D</option>
-                            <option value="hr" {{ $user->role == 'hr' ? 'selected' : '' }}>HR</option>
-                            <option value="purchaser" {{ $user->role == 'purchaser' ? 'selected' : '' }}>Purchaser</option>
-                            <option value="owner" {{ $user->role == 'owner' ? 'selected' : '' }}>Owner</option>
-                        </select>
-                    </div>
-                    <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin" value="1" {{ $user->is_admin ? 'checked' : '' }}>
-                        <label class="form-check-label" for="is_admin">Grant Admin Access</label>
-                    </div>
-                @endif
-
-                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
-                    Change Password
-                </button>
-            </div>
-        </div>
-
-        <div class="card-footer text-end">
-            <button class="btn btn-success px-4">Update User</button>
-        </div>
-    </div>
-</form>
-
-<div class="modal fade" id="changePasswordModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{{ url('/users/' . $user->id . '/change-password') }}">
-                @csrf
-
-                <div class="modal-header bg-warning">
-                    <h5 class="modal-title">Change Password</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="fw-bold">New Password</label>
-                        <input type="password" name="password" class="form-control" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="fw-bold">Confirm Password</label>
-                        <input type="password" name="password_confirmation" class="form-control" required>
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Update Password</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content overflow-hidden rounded-2xl border-0"><form method="POST" action="{{ route('users.change-password', $user->id) }}">@csrf<div class="modal-header border-b border-slate-100 px-6 py-5"><div><h2 id="changePasswordTitle" class="modal-title mb-0 text-lg font-black text-slate-900">Change Password</h2><p class="mb-0 mt-1 text-xs text-slate-500">Use at least 12 characters.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body space-y-5 p-6"><label class="block"><span class="mb-2 block text-sm font-bold text-slate-700">New Password</span><input type="password" name="password" minlength="12" autocomplete="new-password" class="h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100" required></label><label class="block"><span class="mb-2 block text-sm font-bold text-slate-700">Confirm Password</span><input type="password" name="password_confirmation" minlength="12" autocomplete="new-password" class="h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100" required></label></div><div class="modal-footer border-t border-slate-100 bg-slate-50 px-6 py-4"><button type="button" class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-bold text-slate-600" data-bs-dismiss="modal">Cancel</button><button type="submit" class="rounded-xl bg-villa-700 px-4 py-2.5 font-extrabold text-white">Update Password</button></div></form></div></div></div>
+</section>
 @endsection
+
+@include('users.partials.assignment-script')

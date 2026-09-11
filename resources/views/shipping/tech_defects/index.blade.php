@@ -1,136 +1,16 @@
 @extends('layouts.app')
 
+@section('title', 'Technical & Defect | Villa Shipping Lines')
+
 @section('content')
-<div class="container-fluid">
-    <div class="card shadow-sm border-0 mb-3">
-        <div class="card-body d-flex justify-content-between align-items-center">
-            <div>
-                <h4 class="fw-bold mb-0 text-primary">Tech & Defect Reports</h4>
-                <small class="text-muted">Manage and monitor vessel defects.</small>
-            </div>
-
-            <a href="{{ route('tech-defects.create') }}" class="btn btn-primary shadow-sm">
-                Add Report
-            </a>
-        </div>
-    </div>
-
-    <div class="card shadow-sm border-0 mb-3">
-        <div class="card-body">
-            <form method="GET" action="{{ route('tech-defects.index') }}">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-3">
-                        <label class="form-label">Status</label>
-                        <select name="status" class="form-select" onchange="this.form.submit()">
-                            <option value="">All Status</option>
-                            <option value="Open" {{ request('status') == 'Open' ? 'selected' : '' }}>Open</option>
-                            <option value="Ongoing" {{ request('status') == 'Ongoing' ? 'selected' : '' }}>Ongoing</option>
-                            <option value="Waiting 3rd Party" {{ request('status') == 'Waiting 3rd Party' ? 'selected' : '' }}>Waiting 3rd Party</option>
-                            <option value="Completed" {{ request('status') == 'Completed' ? 'selected' : '' }}>Completed</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label">Search</label>
-                        <input
-                            type="text"
-                            name="search"
-                            value="{{ request('search') }}"
-                            class="form-control"
-                            placeholder="Search by report ID or vessel"
-                        >
-                    </div>
-
-                    <div class="col-md-2">
-                        <button class="btn btn-primary w-100">Search</button>
-                    </div>
-
-                    <div class="col-md-2">
-                        <a href="{{ route('tech-defects.index') }}" class="btn btn-secondary w-100">Reset</a>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>ID</th>
-                            <th>Status</th>
-                            <th>3rd Party</th>
-                            <th>Date Created</th>
-                            <th>Date Identified</th>
-                            <th>Date Completed</th>
-                            <th>Vessel</th>
-                            <th>Description</th>
-                            <th>Severity</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($reports as $report)
-                            @php
-                                $openSupports = $report->supports->where('status', '!=', 'Done')->count();
-                            @endphp
-                            <tr>
-                                <td>
-                                    <a href="{{ route('tech-defects.show', $report->id) }}" class="fw-bold text-primary">
-                                        TDR-{{ $report->created_at->format('Y') }}-{{ str_pad($report->id, 4, '0', STR_PAD_LEFT) }}
-                                    </a>
-                                </td>
-                                <td>
-                                    @if($report->status === 'Open')
-                                        <span class="badge bg-danger">Open</span>
-                                    @elseif($report->status === 'Ongoing')
-                                        <span class="badge bg-primary">Ongoing</span>
-                                    @elseif($report->status === 'Waiting 3rd Party')
-                                        <span class="badge bg-warning text-dark">Waiting 3rd Party</span>
-                                    @elseif($report->status === 'Completed')
-                                        <span class="badge bg-success">Completed</span>
-                                    @else
-                                        <span class="badge bg-secondary">{{ $report->status }}</span>
-                                    @endif
-                                </td>
-                                <td>
-                                    @if($report->supports->isEmpty())
-                                        <span class="badge bg-secondary">N/A</span>
-                                    @elseif($openSupports > 0)
-                                        <span class="badge bg-warning text-dark">Ongoing</span>
-                                    @else
-                                        <span class="badge bg-success">Done</span>
-                                    @endif
-                                </td>
-                                <td>{{ optional($report->created_at)->format('M d, Y') }}</td>
-                                <td>{{ optional($report->date_identified)->format('M d, Y') }}</td>
-                                <td>{{ optional($report->date_completed)->format('M d, Y') ?? '-' }}</td>
-                                <td><span class="fw-semibold">{{ $report->vessel->vessel_name ?? '-' }}</span></td>
-                                <td>{{ \Illuminate\Support\Str::limit($report->defect_description, 40) }}</td>
-                                <td>
-                                    @if(strtolower($report->severity_level) === 'critical')
-                                        <span class="badge bg-danger">Critical</span>
-                                    @elseif(strtolower($report->severity_level) === 'major')
-                                        <span class="badge bg-warning text-dark">Major</span>
-                                    @else
-                                        <span class="badge bg-info text-dark">Minor</span>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="9" class="text-center p-4 text-muted">No reports found.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <div class="mt-3">
-        {{ $reports->links() }}
-    </div>
-</div>
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-villa-50 px-4 py-6 sm:px-7 lg:px-12"><div class="mx-auto max-w-7xl">
+    <header class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-villa-600">Villa Shipping Lines</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">Technical &amp; Defect</h1><p class="mt-1 text-sm text-slate-500">Controlled reporting, assessment, corrective action and verification.</p></div><div class="flex flex-wrap gap-2">@if($canDashboard)<a href="{{ route('tech-defects.dashboard') }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-extrabold text-villa-700 no-underline shadow-sm"><i class="bi bi-bar-chart"></i>Dashboard</a><a href="{{ route('tech-defects.reports.pdf',['month'=>now()->format('Y-m')]) }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-extrabold text-slate-700 no-underline"><i class="bi bi-file-earmark-pdf"></i>Monthly PDF</a><a href="{{ route('tech-defects.reports.csv',['month'=>now()->format('Y-m')]) }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-extrabold text-emerald-700 no-underline"><i class="bi bi-file-earmark-spreadsheet"></i>Excel CSV</a>@endif @if($canCreate)<a href="{{ route('tech-defects.create') }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white no-underline shadow-lg shadow-villa-700/20"><i class="bi bi-plus-lg"></i>New report</a>@endif</div></header>
+    @if(session('success'))<div class="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">{{ session('success') }}</div>@endif
+    <div class="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><form method="GET" action="{{ route('tech-defects.index') }}" class="grid gap-3 sm:grid-cols-[1fr_220px_auto]"><label class="relative"><span class="sr-only">Search reports</span><i class="bi bi-search pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="search" name="search" value="{{ request('search') }}" class="h-12 w-full rounded-xl border border-slate-300 pl-11 pr-4 text-sm outline-none focus:border-villa-500 focus:ring-4 focus:ring-villa-100" placeholder="Report ID, vessel or description"></label><select name="status" class="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm"><option value="">All statuses</option>@foreach(\App\Http\Controllers\TechDefectController::STATUSES as $status)<option value="{{ $status }}" @selected(request('status') === $status)>{{ $status }}</option>@endforeach</select><button class="h-12 rounded-xl bg-slate-900 px-5 text-sm font-extrabold text-white">Apply filters</button>@if($showArchived)<input type="hidden" name="archived" value="1">@endif</form><div class="mt-3 flex justify-between"><a href="{{ route('tech-defects.index') }}" class="text-xs font-bold text-slate-500 no-underline">Clear filters</a>@if($canArchive)<a href="{{ route('tech-defects.index',$showArchived?[]:['archived'=>1]) }}" class="rounded-lg px-3 py-2 text-xs font-extrabold no-underline {{ $showArchived?'bg-villa-700 text-white':'bg-slate-100 text-slate-600' }}">{{ $showArchived?'Show active reports':'View archived reports' }}</a>@endif</div></div>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50"><div class="overflow-x-auto"><table class="w-full min-w-[980px] border-collapse text-left"><thead class="bg-slate-50 text-xs font-extrabold uppercase tracking-wider text-slate-500"><tr><th class="px-5 py-4">Report</th><th class="px-4 py-4">Vessel / Issue</th><th class="px-4 py-4">Status</th><th class="px-4 py-4">Severity</th><th class="px-4 py-4">Third party</th><th class="px-4 py-4">Dates</th><th class="px-5 py-4 text-right">Action</th></tr></thead><tbody class="divide-y divide-slate-100">
+    @forelse($reports as $report)@php $openSupports=$report->supports->where('status','!=','Done')->count(); $statusTone=match($report->status){'New Report'=>'bg-slate-100 text-slate-700','For Review'=>'bg-amber-50 text-amber-800','For Assessment'=>'bg-cyan-50 text-cyan-800','For Action'=>'bg-indigo-50 text-indigo-800','Ongoing'=>'bg-blue-50 text-blue-700','For Verification'=>'bg-violet-50 text-violet-700','Closed'=>'bg-emerald-50 text-emerald-700',default=>'bg-slate-100 text-slate-600'}; $severityTone=match(strtolower((string)$report->severity_level)){'critical'=>'bg-rose-100 text-rose-800','major'=>'bg-amber-100 text-amber-800',default=>'bg-sky-100 text-sky-800'};@endphp
+    <tr class="transition hover:bg-slate-50/80"><td class="px-5 py-4"><span class="font-black text-villa-800">{{ $report->report_code }}</span><p class="mb-0 mt-1 text-xs text-slate-400">Created {{ optional($report->created_at)->format('M d, Y') }}</p></td><td class="max-w-sm px-4 py-4"><p class="mb-1 text-sm font-extrabold text-slate-800">{{ $report->vessel?->vessel_name ?? 'Unknown vessel' }}</p><p class="mb-0 truncate text-xs text-slate-500">{{ $report->defect_description }}</p></td><td class="px-4 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-extrabold {{ $statusTone }}">{{ $report->status }}</span></td><td class="px-4 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-extrabold {{ $severityTone }}">{{ $report->severity_level }}</span></td><td class="px-4 py-4">@if($report->supports->isEmpty())<span class="text-xs font-bold text-slate-400">Not required</span>@elseif($openSupports)<span class="text-xs font-extrabold text-amber-700">{{ $openSupports }} pending</span>@else<span class="text-xs font-extrabold text-emerald-700">All done</span>@endif</td><td class="px-4 py-4 text-xs text-slate-600"><p class="mb-1">Identified: {{ optional($report->date_identified)->format('M d, Y') }}</p><p class="mb-0">Completed: {{ optional($report->date_completed)->format('M d, Y') ?? '—' }}</p></td><td class="px-5 py-4 text-right">@if($showArchived)<form method="POST" action="{{ route('tech-defects.restore',$report->id) }}">@csrf<button class="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-50 px-3 text-xs font-extrabold text-emerald-700 hover:bg-emerald-100"><i class="bi bi-arrow-counterclockwise"></i>Restore</button></form>@else<a href="{{ route('tech-defects.show',$report->id) }}" class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-extrabold text-villa-700 no-underline hover:border-villa-400 hover:bg-villa-50">View <i class="bi bi-arrow-right"></i></a>@endif</td></tr>
+    @empty<tr><td colspan="7" class="px-5 py-16 text-center"><i class="bi bi-clipboard2-x block text-4xl text-slate-300"></i><p class="mb-0 mt-3 font-bold text-slate-600">No {{ $showArchived ? 'archived' : '' }} reports found.</p></td></tr>@endforelse
+    </tbody></table></div>@if($reports->hasPages())<div class="border-t border-slate-100 px-5 py-4">{{ $reports->links() }}</div>@endif</div>
+</div></section>
 @endsection

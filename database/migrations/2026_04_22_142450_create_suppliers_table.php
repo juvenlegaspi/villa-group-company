@@ -32,7 +32,8 @@ return new class extends Migration
             $table->string('mobile')->nullable();
             $table->string('email')->nullable();
 
-            $table->string('status')->default('active');
+            $table->boolean('status')->default(true);
+            $table->unsignedBigInteger('added_by')->nullable();
 
             $table->timestamps();
         });

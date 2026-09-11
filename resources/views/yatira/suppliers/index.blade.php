@@ -1,70 +1,74 @@
 @extends('layouts.app')
 
+@section('title', 'Supplier Management | Yatira')
+
 @section('content')
 
-<div class="container">
+<style>
+    .supplier-filter-grid { display:grid; grid-template-columns:minmax(240px,1fr) 190px auto auto; gap:12px; align-items:end; margin-bottom:20px; padding:18px; border:1px solid #e2e8f0; border-radius:18px; background:#f8fafc; }
+    .supplier-filter-grid label { display:block; margin-bottom:7px; color:#475569; font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+    .supplier-table-card { border:1px solid #e2e8f0 !important; border-radius:24px !important; box-shadow:0 14px 36px rgba(15,23,42,.07) !important; }
+    .supplier-table-card thead th { padding:14px 16px; background:#f8fafc; color:#64748b; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; }
+    .supplier-table-card tbody td { padding:15px 16px; border-color:#f1f5f9; }
+    .supplier-table-card tbody tr { transition:background .15s ease; }
+    .supplier-table-card tbody tr:hover { background:#fffbeb; }
+    @media(max-width:860px){.supplier-filter-grid{grid-template-columns:1fr 1fr}.supplier-filter-grid .btn{width:100%}}
+    @media(max-width:560px){.supplier-filter-grid{grid-template-columns:1fr}}
+</style>
+
+<div class="container-fluid px-2 px-sm-4 py-3">
 
     <!-- HEADER -->
-    <div class="d-flex justify-content-between mb-3">
-        <div>
-            <h4>Suppliers</h4>
-            <small class="text-muted">Manage, review, and track supplier records.</small>
-        </div>
-
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
-            + Add Supplier
-        </button>
-    </div>
+    <header class="mb-5 overflow-hidden rounded-3xl bg-gradient-to-r from-villa-900 via-villa-800 to-amber-700 p-6 text-white shadow-xl sm:p-8">
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-amber-200">Yatira Construction, Inc.</p><h1 class="mb-1 text-2xl font-black sm:text-3xl">Supplier Management</h1><p class="mb-0 text-sm text-blue-100">Manage supplier profiles, commercial terms, contact details and history.</p></div><div class="flex flex-wrap gap-2"><a href="{{ route('yatira.applications') }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white no-underline hover:bg-white/20"><i class="bi bi-grid"></i>Applications</a>@if(auth()->user()->hasPermission('yatira.suppliers.manage'))<button class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-white px-4 text-sm font-black text-villa-900 shadow-lg" data-bs-toggle="modal" data-bs-target="#addSupplierModal"><i class="bi bi-plus-lg"></i>Add Supplier</button>@endif</div></div>
+    </header>
 
     <!-- TABLE -->
-    <div class="card">
+    @if($errors->any())
+        <div class="alert alert-danger" role="alert"><strong>Please review the highlighted fields.</strong><ul class="mb-0 mt-2">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+    @endif
+    <div class="card supplier-table-card overflow-hidden">
         <div class="card-body">
-          <form method="GET" action="{{ route('suppliers.index') }}" 
-      style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:20px; background:#f8f9fa; padding:15px; border-radius:10px;">
+          <form method="GET" action="{{ route('suppliers.index') }}" class="supplier-filter-grid">
 
     <!-- 🔍 Search Input -->
     <div>
-        <label style="font-size:12px; color:#555;">Search</label><br>
+        <label>Search</label>
         <input 
             type="text" 
             name="search" 
             placeholder="Supplier, product, or user..." 
             value="{{ request('search') }}"
-            style="padding:8px 10px; width:250px; border:1px solid #ccc; border-radius:5px;"
+            class="form-control"
         >
     </div>
 
     <!-- 📅 Date -->
     <div>
-        <label style="font-size:12px; color:#555;">Date</label><br>
+        <label>Date</label>
         <input 
             type="date" 
             name="date" 
             value="{{ request('date') }}"
-            style="padding:8px 10px; border:1px solid #ccc; border-radius:5px;"
+            class="form-control"
         >
     </div>
 
     <!-- 🔎 Search Button -->
-    <div style="margin-top:18px;">
-        <button type="submit" 
-            style="background:#0d6efd; color:white; padding:8px 15px; border:none; border-radius:5px;">
-            🔍 Search
+    <div>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-search"></i> Search
         </button>
     </div>
 
     <!-- 🔄 Reset Button -->
-    <div style="margin-top:18px;">
-        <a href="{{ route('suppliers.index') }}">
-            <button type="button" 
-                style="background:#6c757d; color:white; padding:8px 15px; border:none; border-radius:5px;">
-                Reset
-            </button>
-        </a>
+    <div>
+        <a href="{{ route('suppliers.index') }}" class="btn btn-outline-secondary">Reset</a>
     </div>
 
 </form>
-            <table class="table">
+            <div class="table-responsive">
+            <table class="table table-hover align-middle text-nowrap mb-0">
                 <thead>
                     <tr>
                         <th>Name</th>
@@ -74,7 +78,8 @@
                         <th>Terms</th>
                         <th>Date</th>
                         <th>Added By</th>
-                        <th>Option</th>
+                        <th>Status</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -91,7 +96,7 @@
                           </span>
                       </td>
 
-                      <td>{{ $supplier->created_at }}</td>
+                      <td>{{ optional($supplier->created_at)->format('M d, Y') }}</td>
 
                       <td>
                           <span class="badge bg-info">
@@ -99,14 +104,14 @@
                           </span>
                       </td>
 
+                      <td><span class="badge {{ $supplier->status ? 'bg-success' : 'bg-secondary' }}">{{ $supplier->status ? 'Active' : 'Inactive' }}</span></td>
+
                       <td>
                         @php
-                            $user = auth()->user();
+                        $user = auth()->user();
                         @endphp
-                    @if(
-                        $user->is_admin == 1 || 
-                        ($user->role === 'manager')
-                    )
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ route('suppliers.show', $supplier) }}">View</a>
+                    @if($user->hasPermission('yatira.suppliers.manage'))
                         <button class="btn btn-sm editBtn"
                             onclick="editSupplier(this)"
                             data-id="{{ $supplier->id }}"
@@ -131,6 +136,7 @@
                   @endforeach
                 </tbody>
             </table>
+            </div>
             <div class="mt-3">
               {{ $suppliers->links() }}
             </div>
@@ -141,7 +147,7 @@
 
 <!-- ================= MODAL ================= -->
 <div class="modal fade" id="addSupplierModal" tabindex="-1">
-  <div class="modal-dialog modal-lg" style="max-height: 90vh;">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
 
       <div class="modal-header">
@@ -149,27 +155,52 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
-      <form method="POST" action="{{ route('suppliers.store') }}">
+      <form method="POST" action="{{ route('suppliers.store') }}" novalidate>
         @csrf
+        <input type="hidden" name="_form_context" value="create_supplier">
 
         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
 
+          @if(old('_form_context') === 'create_supplier' && $errors->any())
+            <div class="alert alert-danger d-flex gap-2 align-items-start" role="alert">
+              <i class="bi bi-exclamation-circle-fill mt-1"></i>
+              <div><strong>Supplier was not saved.</strong><div class="small">Review the highlighted fields below.</div></div>
+            </div>
+          @endif
+
           <!-- SUPPLIER INFO -->
-          <h6 class="border-bottom pb-2">Supplier Information</h6>
+          <h6 class="border-bottom pb-2 mb-3">Supplier Information</h6>
 
-          <input type="text" name="name" class="form-control mb-2 required" placeholder="Name">
+          <div class="mb-3">
+            <label for="add_supplier_name" class="form-label fw-semibold">Supplier Name <span class="text-danger">*</span></label>
+            <input id="add_supplier_name" type="text" name="name" value="{{ old('name') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('name')) is-invalid @endif" placeholder="Enter supplier name" required>
+            @if(old('_form_context') === 'create_supplier') @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
+          </div>
 
-          <div class="row">
+          <div class="row g-3 mb-3">
             <div class="col-md-6">
-              <input type="text" name="business_type" class="form-control mb-2 required" placeholder="Business Type">
+              <label for="add_supplier_business_type" class="form-label fw-semibold">Business Type <span class="text-danger">*</span></label>
+              <input id="add_supplier_business_type" type="text" name="business_type" value="{{ old('business_type') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('business_type')) is-invalid @endif" placeholder="e.g. Corporation" required>
+              @if(old('_form_context') === 'create_supplier') @error('business_type')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
             </div>
             <div class="col-md-6">
-              <input type="text" name="tin" class="form-control mb-2 required" placeholder="TIN">
+              <label for="add_supplier_tin" class="form-label fw-semibold">TIN <span class="text-danger">*</span></label>
+              <input id="add_supplier_tin" type="text" name="tin" value="{{ old('tin') }}" class="form-control @if(old('_form_context') === 'create_supplier' && ($errors->has('tin') || $errors->has('normalized_tin'))) is-invalid @endif" placeholder="Enter tax identification number" required>
+              @if(old('_form_context') === 'create_supplier' && ($errors->has('tin') || $errors->has('normalized_tin')))<div class="invalid-feedback">{{ $errors->first('tin') ?: $errors->first('normalized_tin') }}</div>@endif
             </div>
           </div>
 
-          <input type="text" name="address" class="form-control mb-2 required" placeholder="Address">
-          <textarea name="products" class="form-control mb-2 required" placeholder="Products"></textarea>
+          <div class="mb-3">
+            <label for="add_supplier_address" class="form-label fw-semibold">Address <span class="text-muted fw-normal">(optional)</span></label>
+            <input id="add_supplier_address" type="text" name="address" value="{{ old('address') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('address')) is-invalid @endif" placeholder="Enter business address">
+            @if(old('_form_context') === 'create_supplier') @error('address')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
+          </div>
+
+          <div class="mb-3">
+            <label for="add_supplier_products" class="form-label fw-semibold">Products or Services <span class="text-danger">*</span></label>
+            <textarea id="add_supplier_products" name="products" rows="3" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('products')) is-invalid @endif" placeholder="Describe the products or services supplied" required>{{ old('products') }}</textarea>
+            @if(old('_form_context') === 'create_supplier') @error('products')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
+          </div>
 
           <!--<div class="row">
             <div class="col-md-6">
@@ -180,40 +211,52 @@
             </div>
           </div>-->
 
-          <div class="row">
+          <div class="row g-3">
             <div class="col-md-6">
-              <select name="credit_term" class="form-control mb-2 required">
+              <label for="add_supplier_credit_term" class="form-label fw-semibold">Credit Term <span class="text-muted fw-normal">(optional)</span></label>
+              <select id="add_supplier_credit_term" name="credit_term" class="form-select @if(old('_form_context') === 'create_supplier' && $errors->has('credit_term')) is-invalid @endif">
                 <option value="">Credit Term</option>
-                <option value="15">15 Days</option>
-                <option value="30">30 Days</option>
-                <option value="35">35 Days</option>
-                <option value="40">40 Days</option>
-                <option value="45">45 Days</option>
-                <option value="50">50 Days</option>
-                <option value="55">55 Days</option>
-                <option value="60">60 Days</option>
+                @foreach([15, 30, 35, 40, 45, 50, 55, 60] as $days)<option value="{{ $days }}" @selected((string) old('credit_term') === (string) $days)>{{ $days }} Days</option>@endforeach
               </select>
+              @if(old('_form_context') === 'create_supplier') @error('credit_term')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
             </div>
             <div class="col-md-6">
-              <input type="number" name="limit_advances" class="form-control mb-2 required" placeholder="Limit Advances">
+              <label for="add_supplier_limit" class="form-label fw-semibold">Advance Limit <span class="text-muted fw-normal">(optional)</span></label>
+              <input id="add_supplier_limit" type="number" min="0" step="0.01" name="limit_advances" value="{{ old('limit_advances') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('limit_advances')) is-invalid @endif" placeholder="0.00">
+              @if(old('_form_context') === 'create_supplier') @error('limit_advances')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
             </div>
           </div>
 
           <!-- CONTACT INFO -->
-          <h6 class="border-bottom pb-2 mt-3">Contact Information</h6>
+          <h6 class="border-bottom pb-2 mt-4 mb-3">Contact Information</h6>
 
-          <input type="text" name="contact_person" class="form-control mb-2 required" placeholder="Contact Person">
-
-          <div class="row">
-            <div class="col-md-6">
-              <input type="text" name="telephone" class="form-control mb-2 required" placeholder="Telephone">
-            </div>
-            <div class="col-md-6">
-              <input type="text" name="mobile" class="form-control mb-2 required" placeholder="Mobile">
-            </div>
+          <div class="mb-3">
+            <label for="add_supplier_contact_person" class="form-label fw-semibold">Contact Person <span class="text-danger">*</span></label>
+            <input id="add_supplier_contact_person" type="text" name="contact_person" value="{{ old('contact_person') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('contact_person')) is-invalid @endif" placeholder="Enter contact person's name" required>
+            @if(old('_form_context') === 'create_supplier') @error('contact_person')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
           </div>
 
-          <input type="email" name="email" class="form-control mb-2" placeholder="Email">
+          <div class="rounded-3 border bg-light p-3">
+            <p class="small text-secondary mb-3"><i class="bi bi-info-circle me-1"></i>Provide at least one contact detail: telephone, mobile number, or email.</p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="add_supplier_telephone" class="form-label fw-semibold">Telephone</label>
+              <input id="add_supplier_telephone" type="text" name="telephone" value="{{ old('telephone') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('telephone')) is-invalid @endif" placeholder="Enter telephone number">
+              @if(old('_form_context') === 'create_supplier') @error('telephone')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
+            </div>
+            <div class="col-md-6">
+              <label for="add_supplier_mobile" class="form-label fw-semibold">Mobile</label>
+              <input id="add_supplier_mobile" type="text" name="mobile" value="{{ old('mobile') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('mobile')) is-invalid @endif" placeholder="Enter mobile number">
+              @if(old('_form_context') === 'create_supplier') @error('mobile')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
+            </div>
+          </div>
+          <div class="mt-3">
+            <label for="add_supplier_email" class="form-label fw-semibold">Email</label>
+            <input id="add_supplier_email" type="email" name="email" value="{{ old('email') }}" class="form-control @if(old('_form_context') === 'create_supplier' && $errors->has('email')) is-invalid @endif" placeholder="supplier@example.com">
+            @if(old('_form_context') === 'create_supplier') @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror @endif
+          </div>
+          @if(old('_form_context') === 'create_supplier') @error('contact_details')<div class="text-danger small fw-semibold mt-2"><i class="bi bi-exclamation-circle me-1"></i>{{ $message }}</div>@enderror @endif
+          </div>
           <input type="hidden" name="status" value="1">
         </div>
 
@@ -229,7 +272,7 @@
 </div>
 
 <div class="modal fade" id="editSupplierModal" tabindex="-1">
-    <div class="modal-dialog modal-lg" style="max-height: 90vh;">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
 
             <div class="modal-header">
@@ -237,9 +280,11 @@
                 <button class="btn-close" data-bs-dismiss="modal"></button>
             </div>
 
-             <form method="POST" id="editForm">
+            <form method="POST" id="editForm">
                 @csrf
                 @method('PUT')
+                <input type="hidden" name="_form_context" value="edit_supplier">
+                <input type="hidden" name="_supplier_id" id="editSupplierId">
 
                 <input type="hidden" id="edit_id">
 
@@ -363,6 +408,7 @@ function editSupplier(btn){
     let id = btn.dataset.id;
 
    document.getElementById('editForm').action = `/yatira/suppliers/${id}`;
+   document.getElementById('editSupplierId').value = id;
 
     document.getElementById('edit_id').value = id;
     document.getElementById('edit_name').value = btn.dataset.name;
@@ -384,7 +430,16 @@ function editSupplier(btn){
 }
 </script>
 
-
+@if($errors->any())
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (@json(old('_form_context')) === 'edit_supplier') {
+        const button = document.querySelector(`[data-id="${@json(old('_supplier_id'))}"]`);
+        if (button) { editSupplier(button); return; }
+    }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('addSupplierModal')).show();
+});
 </script>
+@endif
 
 @endsection

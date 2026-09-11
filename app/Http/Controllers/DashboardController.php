@@ -3,21 +3,45 @@
 namespace App\Http\Controllers;
 
 use App\Models\Division;
+use App\Models\BookingHeader;
 use App\Models\FuelRobMonitoring;
+use App\Models\ItemInventoryHeader;
 use App\Models\Supplier;
+use App\Models\YatiraConsumable;
+use App\Models\YatiraFixedAsset;
 use App\Models\TechDefect;
 use App\Models\Vessel;
 use App\Models\VesselCertificate;
 use App\Models\VoyageActivity;
 use App\Models\VoyageLogHeader;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
 {
     public function index()
     {
         $user = auth()->user();
+
+        if (! $user->canViewExecutiveDashboards()) {
+            return redirect()->route('companies');
+        }
+
+        return view('dashboard.owner', [
+            'divisions' => Division::orderBy('id')->get(),
+        ]);
+    }
+
+    public function companies()
+    {
+        $user = auth()->user();
+
+        if ($user->isExecutiveViewer()) {
+            return redirect()->route('dashboard');
+        }
 
         $divisions = $user->isAdmin()
             ? Division::orderBy('id')->get()
@@ -26,8 +50,10 @@ class DashboardController extends Controller
         return view('dashboard.main', compact('divisions'));
     }
 
-    public function divisionDashboard($division)
+    public function divisionDashboard(Request $request, $division)
     {
+        abort_unless(auth()->user()->canViewExecutiveDashboards(), 403, 'Dashboard access is limited to executive viewers and administrators.');
+
         $division = strtolower(trim($division));
 
         $div = Division::whereRaw('LOWER(name) = ?', [$division])->first();
@@ -40,9 +66,7 @@ class DashboardController extends Controller
 
         switch (strtolower($div->name)) {
             case 'villa shipping lines':
-                $metrics = $this->buildShippingMetrics();
-
-                return view('dashboard.vsli', $metrics);
+                return view('dashboard.vsli', $this->buildShippingMetrics($request));
 
             case 'yatira':
                 $metrics = $this->buildSupplierMetrics();
@@ -53,85 +77,139 @@ class DashboardController extends Controller
                 ]);
 
             case 'jmv':
-                return view('dashboard.jmv', ['division' => $div]);
+                return view('dashboard.jmv', [
+                    'division' => $div,
+                    'metrics' => $this->buildJmvMetrics(),
+                ]);
 
             case 'corporate':
+            case 'villa group':
                 return view('dashboard.corporate', ['division' => $div]);
 
+            case 'hyve':
+                return view('dashboard.hyve', [
+                    'division' => $div,
+                    'metrics' => $this->buildHyveMetrics(),
+                ]);
+
             default:
-                abort(404);
+                return view('dashboard.coming-soon', ['division' => $div]);
         }
     }
 
-    protected function buildShippingMetrics(): array
+    public function shippingDashboard(Request $request)
     {
-        $activityDurationSql = 'SUM(TIMESTAMPDIFF(MINUTE, start_date_time, COALESCE(end_date_time, NOW())))';
-        $currentMonthStart = now()->copy()->startOfMonth();
-        $currentMonthEnd = now()->copy()->endOfMonth();
-        $currentMonthLabel = $currentMonthStart->format('F Y');
+        $division = Division::whereRaw('LOWER(name) = ?', ['villa shipping lines'])->firstOrFail();
+
+        return redirect()->route('division.dashboard', ['division' => $division->name, ...$request->query()]);
+    }
+
+    protected function buildShippingMetrics(Request $request): array
+    {
+        $databaseDriver = DB::connection()->getDriverName();
+        [$yearExpression, $monthExpression] = match ($databaseDriver) {
+            'sqlite' => ["strftime('%Y', date_created)", "strftime('%m', date_created)"],
+            'pgsql' => ['EXTRACT(YEAR FROM date_created)', 'EXTRACT(MONTH FROM date_created)'],
+            default => ['YEAR(date_created)', 'MONTH(date_created)'],
+        };
+        $dashboardRange = $this->resolveShippingDashboardRange($request);
+        $rangeStart = $dashboardRange['start'];
+        $rangeEnd = $dashboardRange['end'];
+        $currentMonthLabel = $dashboardRange['label'];
+        $applyDateRange = static function ($query, string $column) use ($rangeStart, $rangeEnd) {
+            return $query
+                ->when($rangeStart, fn ($builder) => $builder->whereDate($column, '>=', $rangeStart->toDateString()))
+                ->when($rangeEnd, fn ($builder) => $builder->whereDate($column, '<=', $rangeEnd->toDateString()));
+        };
+        $applyTimestampRange = static function ($query, string $column) use ($rangeStart, $rangeEnd) {
+            return $query
+                ->when($rangeStart, fn ($builder) => $builder->where($column, '>=', $rangeStart))
+                ->when($rangeEnd, fn ($builder) => $builder->where($column, '<=', $rangeEnd));
+        };
         $normalizeLocation = fn ($value) => filled(trim((string) $value)) ? trim((string) $value) : 'Unassigned';
 
-        $totalVoyages = VoyageLogHeader::count();
-        $openVoyages = VoyageLogHeader::where('status', 'OPEN')->count();
-        $completedVoyages = VoyageLogHeader::where('status', 'COMPLETED')->count();
-        $activeVessels = VoyageLogHeader::where('status', 'OPEN')
-            ->distinct('vessel_id')
-            ->count('vessel_id');
+        $totalVoyages = $applyDateRange(VoyageLogHeader::query(), 'date_created')->count();
+        $openVoyages = $applyDateRange(VoyageLogHeader::query(), 'date_created')->where(function ($query): void {
+            $query->whereNull('status')->orWhereRaw("UPPER(status) != 'COMPLETED'");
+        })->count();
+        $completedVoyages = $applyDateRange(VoyageLogHeader::query(), 'date_created')->where('status', 'COMPLETED')->count();
+        $activeVessels = Vessel::whereRaw("LOWER(COALESCE(vessel_status, '')) IN (?, ?, ?)", ['active', 'operational', 'sailing'])->count();
 
-        $expiredCertificates = VesselCertificate::expired()->count();
-        $expiringCertificates = VesselCertificate::expiringWithinDays()->count();
+        $expiredCertificates = VesselCertificate::effective()->expired()->count();
+        $expiringCertificates = VesselCertificate::effective()->expiringWithinDays()->count();
+        $validCertificates = VesselCertificate::effective()->where('expiry_date', '>', now()->copy()->addDays(30))->count();
+        $effectiveCertificateCount = $expiredCertificates + $expiringCertificates + $validCertificates;
+        $certificateComplianceRate = $effectiveCertificateCount > 0 ? round(($validCertificates / $effectiveCertificateCount) * 100, 1) : 100;
 
-        $totalFuelConsumed = (float) FuelRobMonitoring::sum('total_consumed');
-        $totalFuelReceived = (float) FuelRobMonitoring::sum('received_fuel');
-        $averageFuelConsumed = (float) FuelRobMonitoring::avg('total_consumed');
+        $totalFuelConsumed = (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->sum('total_consumed');
+        $totalFuelReceived = (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->sum('received_fuel');
+        $averageFuelConsumed = (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->avg('total_consumed');
         $fuelUpdatesToday = FuelRobMonitoring::whereDate('created_at', today())->count();
+        $fuelPerCompletedVoyage = $completedVoyages > 0 ? round($totalFuelConsumed / $completedVoyages, 2) : 0;
 
-        $recentVoyages = VoyageLogHeader::with('vessel')
+        $recentVoyages = $applyDateRange(VoyageLogHeader::with('vessel'), 'date_created')
             ->latest('voyage_id')
+            ->limit(10)
             ->get();
 
-        $recentCargoVoyages = VoyageLogHeader::with('vessel')
-            ->whereBetween('date_created', [
-                $currentMonthStart->toDateString(),
-                $currentMonthEnd->toDateString(),
-            ])
+        $recentCargoVoyages = $applyDateRange(VoyageLogHeader::with('vessel'), 'date_created')
             ->where(function ($query) {
                 $query->whereNotNull('cargo_type')
                     ->orWhereNotNull('cargo_volume');
             })
             ->latest('voyage_id')
+            ->limit(10)
             ->get();
 
-        $recentFuelMonitorings = FuelRobMonitoring::with(['vessel', 'voyage'])
+        $recentFuelMonitorings = $applyTimestampRange(FuelRobMonitoring::with(['vessel', 'voyage']), 'created_at')
             ->latest('fuel_id')
             ->limit(6)
             ->get();
 
-        $recentActivities = VoyageActivity::with(['vessel', 'activity', 'detail'])
+        $recentActivities = $applyTimestampRange(VoyageActivity::with(['vessel', 'activity', 'detail']), 'start_date_time')
             ->latest('activity_id')
             ->limit(6)
             ->get();
 
-        $recentDefects = TechDefect::with('vessel')
+        $recentDefects = $applyDateRange(TechDefect::with('vessel'), 'date_identified')
             ->latest('id')
             ->limit(5)
             ->get();
 
-        $certificateAlerts = VesselCertificate::with('vessel')
+        $certificateAlerts = VesselCertificate::with('vessel')->effective()
             ->where('expiry_date', '<=', now()->copy()->addDays(30))
             ->orderBy('expiry_date')
             ->limit(5)
             ->get();
 
-        $lowFuelVoyages = VoyageLogHeader::with('vessel')
-            ->selectRaw("voyage_logs_header.*, CAST(REPLACE(fuel_rob, ' Liters', '') AS DECIMAL(10,2)) as fuel_balance")
-            ->whereNotNull('fuel_rob')
-            ->whereRaw("CAST(REPLACE(fuel_rob, ' Liters', '') AS DECIMAL(10,2)) < 1000")
-            ->orderByRaw("CAST(REPLACE(fuel_rob, ' Liters', '') AS DECIMAL(10,2)) asc")
+        $lowFuelVoyages = FuelRobMonitoring::with(['vessel', 'voyage'])
+            ->whereNotNull('voyage_id')
+            ->where('remaining_fuel', '<', 1000)
+            ->whereIn('fuel_id', function ($query): void {
+                $query->from('fuel_rob_monitorings')
+                    ->selectRaw('MAX(fuel_id)')
+                    ->whereNotNull('voyage_id')
+                    ->groupBy('voyage_id');
+            })
+            ->orderBy('remaining_fuel')
             ->limit(5)
-            ->get();
+            ->get()
+            ->map(function (FuelRobMonitoring $fuel) {
+                $voyage = $fuel->voyage;
 
-        $monthlyVoyages = VoyageLogHeader::selectRaw('YEAR(date_created) as year_num, MONTH(date_created) as month_num, COUNT(*) as total')
+                if (! $voyage) {
+                    return null;
+                }
+
+                $voyage->setRelation('vessel', $fuel->vessel);
+                $voyage->setAttribute('fuel_balance', (float) $fuel->remaining_fuel);
+
+                return $voyage;
+            })
+            ->filter()
+            ->values();
+
+        $monthlyVoyages = $applyDateRange(VoyageLogHeader::selectRaw("{$yearExpression} as year_num, {$monthExpression} as month_num, COUNT(*) as total"), 'date_created')
             ->whereNotNull('date_created')
             ->groupBy('year_num', 'month_num')
             ->orderBy('year_num')
@@ -141,164 +219,41 @@ class DashboardController extends Controller
                 'label' => sprintf('%02d/%d', $row->month_num, $row->year_num),
                 'total' => (int) $row->total,
             ])
-            ->take(-6)
+            ->take(-12)
             ->values();
 
-        $defectStatusCounts = [
-            'Open' => TechDefect::where('status', 'Open')->count(),
-            'Ongoing' => TechDefect::where('status', 'Ongoing')->count(),
-            'Waiting 3rd Party' => TechDefect::where('status', 'Waiting 3rd Party')->count(),
-            'Completed' => TechDefect::where('status', 'Completed')->count(),
-        ];
+        $defectStatusCounts = $applyDateRange(
+            TechDefect::query()->selectRaw('status, COUNT(*) as total'),
+            'date_identified'
+        )->groupBy('status')->pluck('total', 'status')->map(fn ($total) => (int) $total)->all();
+        $activeDefects = collect($defectStatusCounts)->except('Closed')->sum();
+        $overdueDefects = $applyDateRange(TechDefect::query(), 'date_identified')
+            ->where('status', '!=', 'Closed')
+            ->whereNotNull('target_completion_date')
+            ->whereDate('target_completion_date', '<', today())
+            ->count();
+        $closedDefects = (int) ($defectStatusCounts['Closed'] ?? 0);
+        $defectClosureRate = array_sum($defectStatusCounts) > 0
+            ? round(($closedDefects / array_sum($defectStatusCounts)) * 100, 1)
+            : 0;
 
         $fuelConsumptionByEngine = [
-            'Main Engine' => (float) FuelRobMonitoring::sum('main_engine'),
-            'Auxiliary Engine' => (float) FuelRobMonitoring::sum('auxiliary_engine'),
-            'Boiler' => (float) FuelRobMonitoring::sum('boiler'),
-            'Others' => (float) FuelRobMonitoring::sum('others'),
+            'Main Engine' => (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->sum('main_engine'),
+            'Auxiliary Engine' => (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->sum('auxiliary_engine'),
+            'Boiler' => (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->sum('boiler'),
+            'Others' => (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->sum('others'),
         ];
 
-        $topFuelVessels = FuelRobMonitoring::with('vessel')
+        $topFuelVessels = $applyTimestampRange(FuelRobMonitoring::with('vessel'), 'created_at')
             ->selectRaw('vessel_id, SUM(total_consumed) as total_consumed')
             ->groupBy('vessel_id')
             ->orderByDesc('total_consumed')
             ->limit(5)
             ->get();
 
-        $vesselOperatingHours = VoyageActivity::with('vessel')
-            ->selectRaw("vessel_id, {$activityDurationSql} as total_minutes, COUNT(*) as total_activities")
-            ->whereNotNull('start_date_time')
-            ->groupBy('vessel_id')
-            ->orderByDesc('total_minutes')
-            ->limit(8)
-            ->get()
-            ->map(function ($row) {
-                $minutes = (float) ($row->total_minutes ?? 0);
+        $monthlyVoyageSummary = $totalVoyages;
 
-                return [
-                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
-                    'hours' => round($minutes / 60, 2),
-                    'activities' => (int) ($row->total_activities ?? 0),
-                ];
-            });
-
-        $locationHours = VoyageActivity::query()
-            ->selectRaw("port_location, {$activityDurationSql} as total_minutes, COUNT(*) as total_activities")
-            ->whereNotNull('start_date_time')
-            ->groupBy('port_location')
-            ->orderByDesc('total_minutes')
-            ->get()
-            ->groupBy(fn ($row) => $normalizeLocation($row->port_location))
-            ->map(function ($rows, $locationName) {
-                $minutes = (float) $rows->sum('total_minutes');
-                $activities = (int) $rows->sum('total_activities');
-
-                return [
-                    'location_name' => $locationName,
-                    'hours' => round($minutes / 60, 2),
-                    'activities' => $activities,
-                ];
-            })
-            ->sortByDesc('hours')
-            ->take(8)
-            ->values()
-            ->map(function ($row) {
-                return [
-                    'location_name' => $row['location_name'],
-                    'hours' => $row['hours'],
-                    'activities' => $row['activities'],
-                ];
-            });
-
-        $latestFuelByVessel = FuelRobMonitoring::query()
-            ->select('vessel_id', 'remaining_fuel')
-            ->whereIn('fuel_id', function ($query) {
-                $query->from('fuel_rob_monitorings')
-                    ->selectRaw('MAX(fuel_id)')
-                    ->groupBy('vessel_id');
-            })
-            ->get()
-            ->keyBy('vessel_id');
-
-        $fuelByVessel = FuelRobMonitoring::with('vessel')
-            ->selectRaw('vessel_id, SUM(total_consumed) as total_consumed, SUM(received_fuel) as total_received, COUNT(*) as total_entries')
-            ->groupBy('vessel_id')
-            ->orderByDesc('total_consumed')
-            ->limit(8)
-            ->get()
-            ->map(function ($row) use ($latestFuelByVessel) {
-                $latestRemaining = $latestFuelByVessel->get($row->vessel_id);
-
-                return [
-                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
-                    'total_consumed' => round((float) ($row->total_consumed ?? 0), 2),
-                    'total_received' => round((float) ($row->total_received ?? 0), 2),
-                    'remaining_fuel' => round((float) ($latestRemaining?->remaining_fuel ?? 0), 2),
-                    'entries' => (int) ($row->total_entries ?? 0),
-                ];
-            });
-
-        $voyageLogsByVessel = VoyageLogHeader::with('vessel')
-            ->selectRaw('vessel_id, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours, AVG(NULLIF(total_hours_voyage, 0)) as average_voyage_hours')
-            ->groupBy('vessel_id')
-            ->orderByDesc('total_voyages')
-            ->limit(8)
-            ->get()
-            ->map(function ($row) {
-                return [
-                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
-                    'total_voyages' => (int) ($row->total_voyages ?? 0),
-                    'total_voyage_hours' => round((float) ($row->total_voyage_hours ?? 0), 2),
-                    'average_voyage_hours' => round((float) ($row->average_voyage_hours ?? 0), 2),
-                ];
-            });
-
-        $portStayByVessel = VoyageLogHeader::with('vessel')
-            ->selectRaw('vessel_id, port_location, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours')
-            ->groupBy('vessel_id', 'port_location')
-            ->orderByDesc('total_voyage_hours')
-            ->get()
-            ->groupBy(fn ($row) => $row->vessel_id . '|' . $normalizeLocation($row->port_location))
-            ->map(function ($rows) use ($normalizeLocation) {
-                $first = $rows->first();
-
-                return [
-                    'vessel_name' => $first->vessel?->vessel_name ?? 'Unknown Vessel',
-                    'location_name' => $normalizeLocation($first->port_location),
-                    'total_voyages' => (int) $rows->sum('total_voyages'),
-                    'total_voyage_hours' => round((float) $rows->sum('total_voyage_hours'), 2),
-                ];
-            })
-            ->sortByDesc('total_voyage_hours')
-            ->take(10)
-            ->values();
-
-        $activityHoursByVessel = VoyageActivity::with('vessel')
-            ->selectRaw('vessel_id, COUNT(*) as total_activities, SUM(COALESCE(total_hours, 0)) as total_activity_hours, AVG(NULLIF(total_hours, 0)) as average_activity_hours')
-            ->groupBy('vessel_id')
-            ->orderByDesc('total_activity_hours')
-            ->limit(8)
-            ->get()
-            ->map(function ($row) {
-                return [
-                    'vessel_name' => $row->vessel?->vessel_name ?? 'Unknown Vessel',
-                    'total_activities' => (int) ($row->total_activities ?? 0),
-                    'total_activity_hours' => round((float) ($row->total_activity_hours ?? 0), 2),
-                    'average_activity_hours' => round((float) ($row->average_activity_hours ?? 0), 2),
-                ];
-            });
-
-        $monthlyVoyageSummary = VoyageLogHeader::whereBetween('date_created', [
-                $currentMonthStart->toDateString(),
-                $currentMonthEnd->toDateString(),
-            ])
-            ->count();
-
-        $monthlyVoyagesPerVessel = VoyageLogHeader::with('vessel')
-            ->whereBetween('date_created', [
-                $currentMonthStart->toDateString(),
-                $currentMonthEnd->toDateString(),
-            ])
+        $monthlyVoyagesPerVessel = $applyDateRange(VoyageLogHeader::with('vessel'), 'date_created')
             ->selectRaw('vessel_id, COUNT(*) as total_voyages, SUM(COALESCE(total_hours_voyage, 0)) as total_voyage_hours')
             ->groupBy('vessel_id')
             ->orderByDesc('total_voyages')
@@ -312,8 +267,7 @@ class DashboardController extends Controller
                 ];
             });
 
-        $monthlyFuelByVessel = FuelRobMonitoring::with('vessel')
-            ->whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])
+        $monthlyFuelByVessel = $applyTimestampRange(FuelRobMonitoring::with('vessel'), 'created_at')
             ->selectRaw('vessel_id, SUM(total_consumed) as total_consumed, SUM(received_fuel) as total_received, AVG(NULLIF(total_consumed, 0)) as average_consumed')
             ->groupBy('vessel_id')
             ->orderByDesc('total_consumed')
@@ -328,11 +282,7 @@ class DashboardController extends Controller
                 ];
             });
 
-        $turnaroundPerPort = VoyageLogHeader::query()
-            ->whereBetween('date_created', [
-                $currentMonthStart->toDateString(),
-                $currentMonthEnd->toDateString(),
-            ])
+        $turnaroundPerPort = $applyDateRange(VoyageLogHeader::query(), 'date_created')
             ->selectRaw('port_location, COUNT(*) as total_voyages, AVG(NULLIF(total_hours_voyage, 0)) as average_turnaround_hours, SUM(COALESCE(total_hours_voyage, 0)) as total_turnaround_hours')
             ->groupBy('port_location')
             ->orderByDesc('average_turnaround_hours')
@@ -353,8 +303,7 @@ class DashboardController extends Controller
             ->take(8)
             ->values();
 
-        $loadingDurationByVessel = VoyageActivity::with('vessel')
-            ->whereBetween('start_date_time', [$currentMonthStart, $currentMonthEnd])
+        $loadingDurationByVessel = $applyTimestampRange(VoyageActivity::with('vessel'), 'start_date_time')
             ->whereHas('activity', function ($query) {
                 $query->whereRaw("LOWER(name) LIKE '%load%'")
                     ->whereRaw("LOWER(name) NOT LIKE '%unload%'");
@@ -373,8 +322,7 @@ class DashboardController extends Controller
                 ];
             });
 
-        $unloadingDurationByVessel = VoyageActivity::with('vessel')
-            ->whereBetween('start_date_time', [$currentMonthStart, $currentMonthEnd])
+        $unloadingDurationByVessel = $applyTimestampRange(VoyageActivity::with('vessel'), 'start_date_time')
             ->whereHas('activity', function ($query) {
                 $query->whereRaw("LOWER(name) LIKE '%unload%'");
             })
@@ -414,18 +362,25 @@ class DashboardController extends Controller
             'totalLogs' => $totalVoyages,
             'openVoyages' => $openVoyages,
             'completedVoyages' => $completedVoyages,
-            'anchored' => $openVoyages,
-            'sailing' => $completedVoyages,
-            'totalCrew' => VoyageLogHeader::sum('crew_on_board'),
-            'totalDefects' => TechDefect::count(),
-            'criticalDefects' => TechDefect::where('severity_level', 'critical')->count(),
+            'anchored' => $applyDateRange(VoyageLogHeader::query(), 'date_created')->whereRaw("LOWER(COALESCE(status, '')) = ?", ['anchored'])->count(),
+            'sailing' => $applyDateRange(VoyageLogHeader::query(), 'date_created')->whereRaw("LOWER(COALESCE(status, '')) = ?", ['sailing'])->count(),
+            'totalCrew' => VoyageLogHeader::where(function ($query): void {
+                $query->whereNull('status')->orWhereRaw("UPPER(status) != 'COMPLETED'");
+            })->sum('crew_on_board'),
+            'totalDefects' => array_sum($defectStatusCounts),
+            'criticalDefects' => $applyDateRange(TechDefect::query(), 'date_identified')->whereRaw('LOWER(severity_level) = ?', ['critical'])->count(),
+            'activeDefects' => $activeDefects,
+            'overdueDefects' => $overdueDefects,
+            'defectClosureRate' => $defectClosureRate,
             'expiredCertificates' => $expiredCertificates,
             'expiringCertificates' => $expiringCertificates,
-            'validCertificates' => VesselCertificate::where('expiry_date', '>', now()->copy()->addDays(30))->count(),
+            'validCertificates' => $validCertificates,
+            'certificateComplianceRate' => $certificateComplianceRate,
             'totalFuelConsumed' => $totalFuelConsumed,
             'totalFuelReceived' => $totalFuelReceived,
             'averageFuelConsumed' => $averageFuelConsumed,
             'fuelUpdatesToday' => $fuelUpdatesToday,
+            'fuelPerCompletedVoyage' => $fuelPerCompletedVoyage,
             'recentVoyages' => $recentVoyages,
             'recentCargoVoyages' => $recentCargoVoyages,
             'recentFuelMonitorings' => $recentFuelMonitorings,
@@ -440,14 +395,7 @@ class DashboardController extends Controller
             'fuelEngineData' => array_values($fuelConsumptionByEngine),
             'topFuelVesselLabels' => $topFuelVessels->map(fn ($row) => $row->vessel?->vessel_name ?? 'Unknown')->values(),
             'topFuelVesselData' => $topFuelVessels->map(fn ($row) => (float) $row->total_consumed)->values(),
-            'vesselOperatingHours' => $vesselOperatingHours,
-            'locationHours' => $locationHours,
-            'locationHourLabels' => $locationHours->pluck('location_name')->values(),
-            'locationHourData' => $locationHours->pluck('hours')->values(),
-            'fuelByVessel' => $fuelByVessel,
-            'voyageLogsByVessel' => $voyageLogsByVessel,
-            'portStayByVessel' => $portStayByVessel,
-            'activityHoursByVessel' => $activityHoursByVessel,
+            'dashboardRange' => $dashboardRange,
             'currentMonthLabel' => $currentMonthLabel,
             'monthlyVoyageSummary' => $monthlyVoyageSummary,
             'monthlyVoyagesPerVessel' => $monthlyVoyagesPerVessel,
@@ -467,34 +415,139 @@ class DashboardController extends Controller
         ];
     }
 
+    protected function resolveShippingDashboardRange(Request $request): array
+    {
+        $allowedRanges = [
+            'today',
+            'last_7_days',
+            'last_30_days',
+            'this_month',
+            'last_month',
+            'this_year',
+            'all_time',
+            'custom',
+        ];
+        $rangeKey = (string) $request->input('range', 'this_month');
+
+        if (! in_array($rangeKey, $allowedRanges, true)) {
+            $rangeKey = 'this_month';
+        }
+
+        $today = today();
+        [$start, $end, $label] = match ($rangeKey) {
+            'today' => [$today->copy()->startOfDay(), $today->copy()->endOfDay(), 'Today'],
+            'last_7_days' => [$today->copy()->subDays(6)->startOfDay(), $today->copy()->endOfDay(), 'Last 7 Days'],
+            'last_30_days' => [$today->copy()->subDays(29)->startOfDay(), $today->copy()->endOfDay(), 'Last 30 Days'],
+            'last_month' => [
+                $today->copy()->subMonthNoOverflow()->startOfMonth()->startOfDay(),
+                $today->copy()->subMonthNoOverflow()->endOfMonth()->endOfDay(),
+                $today->copy()->subMonthNoOverflow()->format('F Y'),
+            ],
+            'this_year' => [$today->copy()->startOfYear()->startOfDay(), $today->copy()->endOfYear()->endOfDay(), $today->format('Y')],
+            'all_time' => [null, null, 'All Time'],
+            'custom' => $this->resolveCustomShippingDashboardRange($request),
+            default => [$today->copy()->startOfMonth()->startOfDay(), $today->copy()->endOfMonth()->endOfDay(), $today->format('F Y')],
+        };
+
+        return [
+            'key' => $rangeKey,
+            'start' => $start,
+            'end' => $end,
+            'from' => $start?->toDateString(),
+            'to' => $end?->toDateString(),
+            'label' => $label,
+        ];
+    }
+
+    protected function resolveCustomShippingDashboardRange(Request $request): array
+    {
+        $validated = $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date', 'after_or_equal:date_from'],
+        ], [
+            'date_from.required' => 'Select the start date for the custom dashboard range.',
+            'date_to.required' => 'Select the end date for the custom dashboard range.',
+            'date_to.after_or_equal' => 'The end date must be on or after the start date.',
+        ]);
+
+        $start = Carbon::parse($validated['date_from'])->startOfDay();
+        $end = Carbon::parse($validated['date_to'])->endOfDay();
+
+        return [$start, $end, $start->format('M d, Y').' - '.$end->format('M d, Y')];
+    }
+
     protected function buildSupplierMetrics(): array
     {
-        $daily = Supplier::selectRaw('DATE(created_at) as date, COUNT(*) as total')
+        $yatiraId = Division::whereRaw('LOWER(name) = ?', ['yatira'])->value('id');
+        $base = Supplier::query()->where('division_id', $yatiraId);
+        $daily = (clone $base)->selectRaw('DATE(created_at) as date, COUNT(*) as total')
+            ->where('created_at', '>=', now()->subDays(29)->startOfDay())
             ->groupBy('date')
             ->orderBy('date', 'asc')
             ->pluck('total', 'date');
+        $topProducts = (clone $base)->where('status', true)->pluck('products')
+            ->flatMap(fn ($products) => preg_split('/[,;\r\n]+/', (string) $products) ?: [])
+            ->map(fn ($product) => trim($product))->filter()->countBy()->sortDesc()->keys()->take(5)->values();
+        $assets = YatiraFixedAsset::query()->where('division_id', $yatiraId);
+        $consumables = YatiraConsumable::query()->where('division_id', $yatiraId);
 
         return [
-            'totalSuppliers' => Supplier::count(),
-            'todaySuppliers' => Supplier::whereDate('created_at', now())->count(),
-            'thisMonthSuppliers' => Supplier::whereMonth('created_at', now()->month)->count(),
-            'topProducts' => Supplier::select('products')
-                ->groupBy('products')
-                ->orderByRaw('COUNT(*) DESC')
-                ->limit(5)
-                ->pluck('products'),
+            'totalSuppliers' => (clone $base)->count(),
+            'activeSuppliers' => (clone $base)->where('status', true)->count(),
+            'inactiveSuppliers' => (clone $base)->where('status', false)->count(),
+            'todaySuppliers' => (clone $base)->whereDate('created_at', now())->count(),
+            'thisMonthSuppliers' => (clone $base)->whereYear('created_at', now()->year)
+                ->whereMonth('created_at', now()->month)
+                ->count(),
+            'topProducts' => $topProducts,
+            'totalAssets' => (clone $assets)->count(),
+            'maintenanceAssets' => (clone $assets)->where('status', 'Under Maintenance')->count(),
+            'disposedAssets' => (clone $assets)->where('status', 'Disposed')->count(),
+            'totalConsumableItems' => (clone $consumables)->where('status', true)->count(),
+            'lowStockItems' => (clone $consumables)->where('status', true)->whereColumn('stock_on_hand', '<=', 'reorder_level')->count(),
             'chartLabels' => $daily->keys(),
             'chartData' => $daily->values(),
+        ];
+    }
+
+    protected function buildJmvMetrics(): array
+    {
+        if (! Schema::hasTable('item_inventory_header')) {
+            return ['totalItems' => 0, 'stockOnHand' => 0, 'lowStock' => 0, 'outOfStock' => 0];
+        }
+
+        return [
+            'totalItems' => ItemInventoryHeader::where('status', 1)->count(),
+            'stockOnHand' => (int) ItemInventoryHeader::where('status', 1)->sum('stock_on_hand'),
+            'lowStock' => ItemInventoryHeader::where('status', 1)
+                ->whereColumn('stock_on_hand', '<=', 'minimum_quantity')->where('stock_on_hand', '>', 0)->count(),
+            'outOfStock' => ItemInventoryHeader::where('status', 1)->where('stock_on_hand', '<=', 0)->count(),
+        ];
+    }
+
+    protected function buildHyveMetrics(): array
+    {
+        if (! Schema::hasTable('booking_headers')) {
+            return ['totalBookings' => 0, 'confirmedBookings' => 0, 'pendingBookings' => 0, 'totalRevenue' => 0];
+        }
+
+        return [
+            'totalBookings' => BookingHeader::count(),
+            'confirmedBookings' => BookingHeader::where('status', 'confirmed')->count(),
+            'pendingBookings' => BookingHeader::whereIn('status', ['pending', 'pending_verification'])->count(),
+            'totalRevenue' => (float) BookingHeader::where('payment_status', 'verified')->sum('total_amount'),
         ];
     }
 
     public function exportSupplierReport()
     {
         $this->authorizeDivisionNameAccess('yatira');
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->hasPermission('yatira.reports.view'), 403, 'Yatira report access is not assigned to your position.');
 
         $metrics = $this->buildSupplierMetrics();
 
-        $suppliers = Supplier::with('user')
+        $yatiraId = Division::whereRaw('LOWER(name) = ?', ['yatira'])->value('id');
+        $suppliers = Supplier::with('user')->where('division_id', $yatiraId)
             ->orderBy('name', 'asc')
             ->get();
 
@@ -513,7 +566,7 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
 
-        if ($user->isAdmin()) {
+        if ($user->canViewExecutiveDashboards()) {
             return;
         }
 

@@ -24,8 +24,9 @@ class CertificateExpiryNotification extends Mailable
 
     public function envelope(): Envelope
     {
+        $days = today()->diffInDays($this->certificate->expiry_date, false);
         return new Envelope(
-            subject: 'Certificate Expiring Soon',
+            subject: $days < 0 ? 'Overdue Vessel Certificate' : 'Vessel Certificate Expiry Reminder',
         );
     }
 
@@ -40,7 +41,8 @@ class CertificateExpiryNotification extends Mailable
                 'vesselName' => $this->vessel->vessel_name,
                 'certificateName' => $this->certificate->certificate_name,
                 'expiryDate' => optional($this->certificate->expiry_date)->format('F d, Y'),
-                'daysRemaining' => now()->diffInDays($this->certificate->expiry_date, false),
+                'daysRemaining' => today()->diffInDays($this->certificate->expiry_date, false),
+                'isOverdue' => today()->isAfter($this->certificate->expiry_date),
                 'remarks' => $this->certificate->remarks,
             ],
         );

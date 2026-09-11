@@ -21,6 +21,15 @@ class ActivityVoyage extends Model
     }
     public function voyageActivities()
     {
-        return $this->hasMany(VoyageActivity::class, 'activity_id');
+        return $this->hasMany(VoyageActivity::class, 'status_activity_id');
+    }
+
+    public function cargoMovementType(): ?string
+    {
+        return match (strtolower(trim((string) $this->name))) {
+            'loading', 'completed loading' => 'loading',
+            'unloading', 'completed unloading' => 'unloading',
+            default => null,
+        };
     }
 }

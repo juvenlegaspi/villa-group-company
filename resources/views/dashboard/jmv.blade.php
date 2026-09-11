@@ -1,8 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'JMV Dashboard | Villa Group')
+
 @section('content')
-<div class="container">
-    <h2>{{ strtoupper($division->name) }} Dashboard</h2>
-    <p>🚧 Under development...</p>
-</div>
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-amber-50/40 px-4 py-6 sm:px-7 lg:px-12"><div class="mx-auto max-w-7xl"><header class="mb-6"><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-amber-700">JMV Mining &amp; Development</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">Inventory Dashboard</h1><p class="mt-1 text-sm text-slate-500">Stock availability and replenishment indicators.</p></header>
+<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">@foreach([['Active Items',$metrics['totalItems'],'bi-box-seam','bg-blue-50 text-blue-700'],['Stock on Hand',$metrics['stockOnHand'],'bi-stack','bg-emerald-50 text-emerald-700'],['Low Stock',$metrics['lowStock'],'bi-exclamation-triangle','bg-amber-50 text-amber-700'],['Out of Stock',$metrics['outOfStock'],'bi-x-octagon','bg-rose-50 text-rose-700']] as [$label,$value,$icon,$tone])<article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span class="mb-4 grid h-11 w-11 place-items-center rounded-xl text-lg {{ $tone }}"><i class="bi {{ $icon }}"></i></span><p class="mb-1 text-xs font-extrabold uppercase tracking-wider text-slate-500">{{ $label }}</p><p class="mb-0 text-3xl font-black text-slate-900">{{ number_format($value) }}</p></article>@endforeach</div>
+<article class="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="mb-1 text-lg font-black text-slate-900">Stock health</h2><p class="mb-0 text-sm text-slate-500">{{ $metrics['lowStock'] + $metrics['outOfStock'] }} item(s) currently require attention.</p></div>@if(auth()->user()->role !== 'owner')<a href="{{ route('jmv.inventory.index') }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white no-underline"><i class="bi bi-arrow-right"></i>Open inventory</a>@else<span class="inline-flex rounded-full bg-villa-50 px-3 py-2 text-xs font-extrabold text-villa-700"><i class="bi bi-eye mr-1"></i>Read-only dashboard</span>@endif</div></article></div></section>
 @endsection

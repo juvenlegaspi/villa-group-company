@@ -2,6 +2,7 @@
 
 @section('content')
 @php
+    $activeTab = request('tab') === 'consumables' || ! $canViewAssets ? 'consumables' : 'assets';
     $fixedAssetCategories = [
         'HEAVY EQPT/MACHINERY',
         'TRANSPORTATION EQUIPMENT',
@@ -9,6 +10,7 @@
         'BUILDING AND FACILITY',
         'FURNITURE AND OFFICE EQUIPMENTS',
         'IT & SYSTEMS INFRASTRUCTURE',
+        'OTHER / LEGACY',
     ];
 
     $fixedAssetConditionDashboard = [
@@ -173,32 +175,47 @@
     .yatira-dashboard-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-        margin-bottom: 22px;
+        gap: 18px;
+        margin-bottom: 28px;
     }
 
     .yatira-mini-dashboard {
+        position: relative;
         display: grid;
-        grid-template-columns: minmax(130px, 150px) 1fr;
+        grid-template-columns: minmax(112px, 130px) 1fr;
         align-items: center;
-        gap: 16px;
-        padding: 16px 18px;
+        gap: 22px;
+        padding: 24px;
         border: 1px solid #e2e8f0;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #ffffff, #f8fafc);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+        overflow: hidden;
+    }
+
+    .yatira-mini-dashboard::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 5px;
+        content: '';
+        background: linear-gradient(180deg, #2563eb, #38bdf8);
+    }
+
+    .yatira-mini-dashboard--status::before {
+        background: linear-gradient(180deg, #d97706, #facc15);
     }
 
     .yatira-status-chart {
         position: relative;
-        width: 142px;
-        height: 142px;
+        width: 124px;
+        height: 124px;
         margin: auto;
         border-radius: 50%;
     }
 
     .yatira-status-chart::after {
         position: absolute;
-        inset: 31px;
+        inset: 27px;
         content: '';
         border-radius: 50%;
         background: #fff;
@@ -227,9 +244,10 @@
     }
 
     .yatira-dashboard-copy h6 {
-        margin-bottom: 3px;
+        margin-bottom: 4px;
         color: #0f172a;
-        font-weight: 700;
+        font-size: 1.05rem;
+        font-weight: 800;
     }
 
     .yatira-dashboard-copy > p {
@@ -250,8 +268,11 @@
         align-items: center;
         gap: 8px;
         min-width: 0;
+        padding: 8px 10px;
+        border-radius: 11px;
+        background: #f8fafc;
         color: #475569;
-        font-size: 0.88rem;
+        font-size: 0.82rem;
     }
 
     .yatira-status-dot {
@@ -333,33 +354,42 @@
     }
 </style>
 
-<div class="container-fluid px-0">
+<main class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-amber-50/40 px-4 py-6 sm:px-7 lg:px-10">
+    <div class="mx-auto max-w-7xl">
+        <header class="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-villa-900 via-villa-800 to-amber-700 p-6 text-white shadow-xl sm:p-8">
+            <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                <div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-amber-200">Yatira Construction, Inc.</p><h1 class="mb-1 text-2xl font-black sm:text-3xl">Inventory Control Center</h1><p class="mb-0 max-w-2xl text-sm text-blue-100">Monitor fixed-asset condition and status, document custody, and consumable stock movements.</p></div>
+                <div class="flex flex-wrap gap-2"><a href="{{ route('yatira.applications') }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white no-underline hover:bg-white/20"><i class="bi bi-grid"></i>Applications</a>@if($canCreateAssets)<button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-white px-4 text-sm font-black text-villa-900 shadow-lg" data-bs-toggle="modal" data-bs-target="#addFixedAssetModal"><i class="bi bi-plus-lg"></i>Add Asset</button>@endif</div>
+            </div>
+        </header>
     <div class="yatira-inventory-shell">
         <section class="card yatira-inventory-card">
             <div class="card-body p-4">
                 <div class="yatira-toolbar">
                     <ul class="nav nav-pills yatira-tab-nav mb-0" id="yatiraInventoryTabs" role="tablist">
+                        @if($canViewAssets)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="fixed-assets-tab" data-bs-toggle="pill" data-bs-target="#fixed-assets-pane" type="button" role="tab" aria-controls="fixed-assets-pane" aria-selected="true">
+                            <button class="nav-link {{ $activeTab === 'assets' ? 'active' : '' }}" id="fixed-assets-tab" data-bs-toggle="pill" data-bs-target="#fixed-assets-pane" type="button" role="tab" aria-controls="fixed-assets-pane" aria-selected="{{ $activeTab === 'assets' ? 'true' : 'false' }}">
                                 Fixed Asset
                             </button>
                         </li>
+                        @endif
+                        @if($canViewConsumables)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="consumables-tab" data-bs-toggle="pill" data-bs-target="#consumables-pane" type="button" role="tab" aria-controls="consumables-pane" aria-selected="false">
+                            <button class="nav-link {{ $activeTab === 'consumables' ? 'active' : '' }}" id="consumables-tab" data-bs-toggle="pill" data-bs-target="#consumables-pane" type="button" role="tab" aria-controls="consumables-pane" aria-selected="{{ $activeTab === 'consumables' ? 'true' : 'false' }}">
                                 Consumables
                             </button>
                         </li>
+                        @endif
                     </ul>
 
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFixedAssetModal">
-                        + Add
-                    </button>
                 </div>
 
                 <div class="tab-content">
-                    <div class="tab-pane fade show active" id="fixed-assets-pane" role="tabpanel" aria-labelledby="fixed-assets-tab" tabindex="0">
+                    @if($canViewAssets)
+                    <div class="tab-pane fade {{ $activeTab === 'assets' ? 'show active' : '' }}" id="fixed-assets-pane" role="tabpanel" aria-labelledby="fixed-assets-tab" tabindex="0">
                         <div class="yatira-dashboard-grid">
-                            <div class="yatira-mini-dashboard">
+                            <div class="yatira-mini-dashboard yatira-mini-dashboard--condition">
                                 <div
                                     class="yatira-status-chart"
                                     style="background: {{ $fixedAssetChartBackground }};"
@@ -395,7 +425,7 @@
                                 </div>
                             </div>
 
-                            <div class="yatira-mini-dashboard">
+                            <div class="yatira-mini-dashboard yatira-mini-dashboard--status">
                                 <div
                                     class="yatira-status-chart"
                                     style="background: {{ $fixedAssetStatusChartBackground }};"
@@ -527,37 +557,54 @@
                             {{ $fixedAssets->links() }}
                         </div>
                     </div>
+                    @endif
 
-                    <div class="tab-pane fade" id="consumables-pane" role="tabpanel" aria-labelledby="consumables-tab" tabindex="0">
-                        <div class="yatira-placeholder">
-                            <h5>Consumables Inventory</h5>
-                            <p>This tab is ready for items that are regularly used or replenished such as office supplies, packaging, or operating materials.</p>
-                            <div class="yatira-chip-row">
-                                <span class="yatira-chip">Item Name</span>
-                                <span class="yatira-chip">Unit</span>
-                                <span class="yatira-chip">Available Stock</span>
-                                <span class="yatira-chip">Reorder Level</span>
-                            </div>
-                        </div>
+                    @if($canViewConsumables)
+                    <div class="tab-pane fade {{ $activeTab === 'consumables' ? 'show active' : '' }}" id="consumables-pane" role="tabpanel" aria-labelledby="consumables-tab" tabindex="0">
+                        <div class="yatira-section-head"><div><h5>Consumables Inventory</h5><p>Monitor stock balances, reorder thresholds and controlled movements.</p></div>@if($canManageConsumables)<button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addConsumableModal">+ Add Item</button>@endif</div>
+                        <form method="GET" action="{{ route('yatira.inventory.index') }}" class="yatira-filter-bar"><input type="hidden" name="tab" value="consumables"><div style="grid-column:span 3"><label class="form-label">Search</label><input name="consumable_search" value="{{ request('consumable_search') }}" class="form-control" placeholder="Item code or name"></div><div><button class="btn btn-primary w-100">Search</button></div><div><a href="{{ route('yatira.inventory.index', ['tab'=>'consumables']) }}" class="btn btn-outline-secondary w-100">Reset</a></div></form>
+                        <div class="table-responsive yatira-table-wrap"><table class="table table-hover align-middle yatira-table mb-0"><thead><tr><th>Code</th><th>Item</th><th>Unit</th><th>Available</th><th>Reorder</th><th>Status</th><th>Actions</th></tr></thead><tbody>@forelse($consumables as $item)<tr><td class="fw-bold">{{ $item->item_code }}</td><td>{{ $item->item_name }}</td><td>{{ $item->unit }}</td><td>{{ number_format($item->stock_on_hand) }}</td><td>{{ number_format($item->reorder_level) }}</td><td><span class="badge {{ ! $item->status ? 'bg-secondary' : ($item->stock_on_hand <= $item->reorder_level ? 'bg-warning text-dark' : 'bg-success') }}">{{ ! $item->status ? 'Inactive' : ($item->stock_on_hand <= $item->reorder_level ? 'Reorder' : 'Sufficient') }}</span></td><td><div class="d-flex gap-2"><a href="{{ route('yatira.inventory.consumables.show', $item) }}" class="btn btn-sm btn-outline-secondary">History</a>@if($canManageConsumables && $item->status)<button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#movementModal{{ $item->id }}">Stock In / Out</button>@endif</div></td></tr>@empty<tr><td colspan="7" class="yatira-empty">No consumable items recorded yet.</td></tr>@endforelse</tbody></table></div>
+                        <div class="mt-3">{{ $consumables->links() }}</div>
                     </div>
+                    @endif
                 </div>
             </div>
         </section>
     </div>
 </div>
+</main>
 
+@if($canManageConsumables)
+<div class="modal fade" id="addConsumableModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Add Consumable Item</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><form method="POST" action="{{ route('yatira.inventory.consumables.store') }}">@csrf<input type="hidden" name="_form_context" value="create_consumable"><div class="modal-body"><div class="mb-3"><label class="form-label">Item Name</label><input name="item_name" value="{{ old('item_name') }}" class="form-control" required maxlength="255"></div><div class="row"><div class="col-6 mb-3"><label class="form-label">Unit</label><input name="unit" value="{{ old('unit') }}" class="form-control" placeholder="pc, box, kg" required maxlength="50"></div><div class="col-6 mb-3"><label class="form-label">Opening Stock</label><input type="number" name="opening_stock" min="0" value="{{ old('opening_stock', 0) }}" class="form-control" required></div></div><div><label class="form-label">Reorder Level</label><input type="number" name="reorder_level" min="0" value="{{ old('reorder_level', 0) }}" class="form-control" required></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Save Item</button></div></form></div></div></div>
+@foreach($consumables as $item)
+<div class="modal fade" id="movementModal{{ $item->id }}" tabindex="-1" aria-hidden="true"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><div><h5 class="modal-title">Record Stock Movement</h5><small class="text-muted">{{ $item->item_name }} · Available {{ $item->stock_on_hand }} {{ $item->unit }}</small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form method="POST" action="{{ route('yatira.inventory.consumables.movement', $item) }}">@csrf<div class="modal-body"><div class="row"><div class="col-6 mb-3"><label class="form-label">Movement</label><select name="type" class="form-select" required><option value="IN">Stock In</option><option value="OUT">Stock Out</option></select></div><div class="col-6 mb-3"><label class="form-label">Quantity</label><input type="number" name="quantity" min="1" class="form-control" required></div></div><div class="mb-3"><label class="form-label">Reference No.</label><input name="reference_no" maxlength="100" class="form-control"></div><div><label class="form-label">Remarks</label><textarea name="remarks" maxlength="2000" rows="2" class="form-control"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary">Record Movement</button></div></form></div></div></div>
+@endforeach
+@endif
+
+@if($canCreateAssets)
 <div class="modal fade" id="addFixedAssetModal" tabindex="-1" aria-labelledby="addFixedAssetModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="addFixedAssetModalLabel">Add Fixed Asset</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <form method="POST" action="{{ route('yatira.inventory.fixed-assets.store') }}">
+            <form method="POST" action="{{ route('yatira.inventory.fixed-assets.store') }}" enctype="multipart/form-data">
                 @csrf
+                <input type="hidden" name="_form_context" value="create_asset">
 
                 <div class="modal-body">
+                    @if($errors->any() && old('_form_context') === 'create_asset')
+                        <div class="alert alert-danger" role="alert">
+                            <strong>Unable to save the fixed asset.</strong>
+                            <ul class="mb-0 mt-2 ps-3" style="list-style: disc;">
+                                @foreach($errors->all() as $message)
+                                    <li>{{ $message }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
                     <h6 class="yatira-modal-section-title">Asset Information</h6>
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -598,24 +645,26 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Asset Name</label>
-                            <input type="text" name="asset_name" class="form-control" value="{{ old('asset_name') }}" required>
+                            <input type="text" name="asset_name" class="form-control @error('asset_name') is-invalid @enderror" value="{{ old('asset_name') }}" required>
+                            @error('asset_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
+
+                        <div class="col-md-6 mb-3"><label class="form-label">Serial Number</label><input type="text" name="serial_number" class="form-control" value="{{ old('serial_number') }}"></div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Category</label>
-                            <select name="category" class="form-select" required>
+                            <select name="category" class="form-select @error('category') is-invalid @enderror" required>
                                 <option value="">Select category</option>
                                 @foreach($fixedAssetCategories as $category)
                                     <option value="{{ $category }}" @selected(old('category') === $category)>{{ $category }}</option>
                                 @endforeach
                             </select>
+                            @error('category')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Assigned To</label>
-                            <input type="text" name="assigned_to" class="form-control" value="{{ old('assigned_to') }}">
-                        </div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Assigned User <span class="text-muted">(Optional)</span></label><select id="fixedAssetAssignedUser" name="assigned_user_id" class="form-select @error('assigned_user_id') is-invalid @enderror"><option value="">None</option>@foreach($users as $user)<option value="{{ $user->id }}" data-department-id="{{ $user->department_id }}" @selected((string)old('assigned_user_id')===(string)$user->id)>{{ $user->name }} {{ $user->lastname }}</option>@endforeach</select>@error('assigned_user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Assigned Department <span class="text-muted">(Optional)</span></label><select id="fixedAssetAssignedDepartment" name="assigned_department_id" class="form-select @error('assigned_department_id') is-invalid @enderror"><option value="">None</option>@foreach($departments as $department)<option value="{{ $department->id }}" @selected((string)old('assigned_department_id')===(string)$department->id)>{{ $department->name }}</option>@endforeach</select><small id="fixedAssetDepartmentHelp" class="text-muted">Choose a department only when no individual user is assigned.</small>@error('assigned_department_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                     </div>
 
                     <div class="row">
@@ -634,7 +683,7 @@
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Status</label>
                             <select name="status" class="form-select" required>
-                                @foreach(['Active', 'In Use', 'Under Maintenance', 'Disposed'] as $status)
+                                @foreach(['Active', 'In Use', 'Under Maintenance'] as $status)
                                     <option value="{{ $status }}" @selected(old('status', 'Active') === $status)>{{ $status }}</option>
                                 @endforeach
                             </select>
@@ -644,12 +693,21 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Date Acquired</label>
-                            <input type="date" name="date_acquired" class="form-control" value="{{ old('date_acquired') }}">
+                            <input type="date" name="date_acquired" max="{{ today()->toDateString() }}" class="form-control @error('date_acquired') is-invalid @enderror" value="{{ old('date_acquired') }}">
+                            @error('date_acquired')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Acquisition Cost</label><input type="number" name="acquisition_cost" min="0" step="0.01" class="form-control" value="{{ old('acquisition_cost') }}"></div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Remarks</label>
                             <textarea name="remarks" class="form-control" rows="1">{{ old('remarks') }}</textarea>
                         </div>
+                    </div>
+
+                    <div class="yatira-upload-field mb-3 rounded-3 border bg-light p-3">
+                        <label class="form-label">Supporting Document / Image</label>
+                        <input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" class="form-control @error('document') is-invalid @enderror">
+                        @error('document')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <small class="text-muted d-block mt-2">Upload a PDF, JPG or PNG file. Maximum size: 5 MB.</small>
                     </div>
                 </div>
 
@@ -661,12 +719,21 @@
         </div>
     </div>
 </div>
+@endif
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const entryType = document.getElementById('fixedAssetEntryType');
     const assetCode = document.getElementById('fixedAssetCode');
     const assetCodeHelp = document.getElementById('fixedAssetCodeHelp');
+    const assignedUser = document.getElementById('fixedAssetAssignedUser');
+    const assignedDepartment = document.getElementById('fixedAssetAssignedDepartment');
+    const departmentHelp = document.getElementById('fixedAssetDepartmentHelp');
+
+    document.querySelectorAll('form[action*="/consumables/"][action$="/movement"]').forEach((form) => {
+        const context = document.createElement('input'); context.type = 'hidden'; context.name = '_form_context'; context.value = 'movement'; form.appendChild(context);
+        const match = form.action.match(/consumables\/(\d+)\/movement$/); if (match) { const item = document.createElement('input'); item.type = 'hidden'; item.name = '_consumable_id'; item.value = match[1]; form.appendChild(item); }
+    });
 
     if (!entryType || !assetCode || !assetCodeHelp) {
         return;
@@ -679,7 +746,7 @@ document.addEventListener('DOMContentLoaded', function () {
         assetCode.required = isExisting;
         assetCode.placeholder = isExisting
             ? 'Enter the existing asset tag/code'
-            : 'Auto-generated on save (Example: YC-ds2134)';
+            : 'Auto-generated on save (Example: YC-A1B2C3)';
         assetCodeHelp.textContent = isExisting
             ? 'Enter the code already printed or attached to this asset.'
             : 'The system will generate a unique Yatira asset code automatically.';
@@ -691,13 +758,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
     entryType.addEventListener('change', syncAssetCodeField);
     syncAssetCodeField();
+
+    function syncAssignedDepartment() {
+        if (!assignedUser || !assignedDepartment) return;
+        const selected = assignedUser.options[assignedUser.selectedIndex];
+        const hasUser = assignedUser.value !== '';
+
+        if (hasUser) {
+            assignedDepartment.value = selected.dataset.departmentId || '';
+            assignedDepartment.disabled = true;
+            if (departmentHelp) departmentHelp.textContent = 'Automatically set from the selected user.';
+        } else {
+            assignedDepartment.disabled = false;
+            if (departmentHelp) departmentHelp.textContent = 'Choose a department only when no individual user is assigned.';
+        }
+    }
+
+    if (assignedUser && assignedDepartment) {
+        assignedUser.addEventListener('change', syncAssignedDepartment);
+        syncAssignedDepartment();
+    }
+
 });
 </script>
 
 @if($errors->any())
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const modalElement = document.getElementById('addFixedAssetModal');
+    let modalElement = document.getElementById('addFixedAssetModal');
+    if (@json(old('_form_context')) === 'create_consumable') modalElement = document.getElementById('addConsumableModal');
+    if (@json(old('_form_context')) === 'movement') modalElement = document.getElementById('movementModal' + @json(old('_consumable_id')));
     if (modalElement) {
         const modal = new bootstrap.Modal(modalElement);
         modal.show();

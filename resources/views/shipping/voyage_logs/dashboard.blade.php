@@ -104,7 +104,7 @@
     <div class="ops-shell">
         <section class="ops-hero">
             <h2 class="fw-bold mb-2">OPERATIONS | Dashboard</h2>
-            <p class="mb-0">Monthly vessel performance, fuel trend, turnaround time, ug loading/unloading duration.</p>
+            <p class="mb-0">Monthly vessel performance, fuel trends, turnaround time, and loading/unloading duration.</p>
         </section>
 
         <section class="ops-grid">
@@ -138,7 +138,7 @@
                         <div class="ops-title">
                             <div>
                                 <h4>Top Vessels with Most Voyages in {{ $currentMonthLabel }}</h4>
-                                <p class="ops-subtext">Monthly voyage count ug total voyage hours per vessel.</p>
+                                <p class="ops-subtext">Monthly voyage count and total voyage hours per vessel.</p>
                             </div>
                         </div>
 
@@ -180,7 +180,7 @@
                         <div class="ops-title">
                             <div>
                                 <h4>Fuel Consumption Per Vessel</h4>
-                                <p class="ops-subtext">Fuel consumed ug received per vessel within {{ $currentMonthLabel }}.</p>
+                                <p class="ops-subtext">Fuel consumed and received per vessel within {{ $currentMonthLabel }}.</p>
                             </div>
                         </div>
 
@@ -298,7 +298,7 @@
                         <div class="ops-title">
                             <div>
                                 <h5>Turnaround Per Port Location</h5>
-                                <p class="ops-subtext">Average ug total turnaround hours per port location.</p>
+                                <p class="ops-subtext">Average and total turnaround hours per port location.</p>
                             </div>
                         </div>
 
@@ -373,8 +373,8 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+document.addEventListener('DOMContentLoaded', () => {
     const monthlyVoyageVesselLabels = {!! json_encode($monthlyVoyageVesselLabels) !!};
     const monthlyVoyageVesselData = {!! json_encode($monthlyVoyageVesselData) !!};
     const monthlyFuelVesselLabels = {!! json_encode($monthlyFuelVesselLabels) !!};
@@ -539,5 +539,6 @@
             }
         }
     });
+});
 </script>
 @endsection

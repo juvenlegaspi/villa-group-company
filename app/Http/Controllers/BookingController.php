@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BookingController extends Controller
@@ -96,16 +98,39 @@ class BookingController extends Controller
 
     public function approve(BookingHeader $bookingHeader): RedirectResponse
     {
-        $bookingHeader->update([
-            'status' => 'confirmed',
-            'payment_status' => in_array($bookingHeader->payment_status, [null, '', 'pending', 'pending_verification'], true)
-                ? 'verified'
-                : $bookingHeader->payment_status,
-        ]);
+        DB::transaction(function () use ($bookingHeader): void {
+            $lockedBooking = BookingHeader::whereKey($bookingHeader->id)->lockForUpdate()->firstOrFail();
+            $details = $lockedBooking->details()->lockForUpdate()->get();
 
-        $bookingHeader->details()->update([
-            'status' => 'confirmed',
-        ]);
+            abort_if($lockedBooking->status === 'confirmed', 422, 'This booking is already confirmed.');
+            abort_if($details->isEmpty(), 422, 'A booking without details cannot be approved.');
+
+            foreach ($details as $detail) {
+                $hasConflict = \App\Models\BookingDetail::query()
+                    ->where('booking_header_id', '!=', $lockedBooking->id)
+                    ->where('hyve_room_id', $detail->hyve_room_id)
+                    ->whereDate('booking_date', $detail->booking_date)
+                    ->where('status', 'confirmed')
+                    ->where('start_time', '<', $detail->end_time)
+                    ->where('end_time', '>', $detail->start_time)
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($hasConflict) {
+                    throw ValidationException::withMessages([
+                        'booking' => 'This room now conflicts with another confirmed booking.',
+                    ]);
+                }
+            }
+
+            $lockedBooking->update([
+                'status' => 'confirmed',
+                'payment_status' => in_array($lockedBooking->payment_status, [null, '', 'pending', 'pending_verification'], true)
+                    ? 'verified'
+                    : $lockedBooking->payment_status,
+            ]);
+            $lockedBooking->details()->update(['status' => 'confirmed']);
+        });
 
         return back()->with('booking_success', 'Booking '.$bookingHeader->reference_no.' has been approved successfully.');
     }
@@ -141,15 +166,15 @@ class BookingController extends Controller
 
         $trimmedPath = ltrim($path, '/');
 
-        if (str_starts_with($trimmedPath, 'http://') || str_starts_with($trimmedPath, 'https://')) {
-            return $trimmedPath;
-        }
-
         return route('hyve.projects.proof', $bookingHeader);
     }
 
     private function resolveLocalProofPath(string $path): ?string
     {
+        if (str_starts_with(strtolower($path), 'http://') || str_starts_with(strtolower($path), 'https://')) {
+            return null;
+        }
+
         $trimmedPath = str_replace(['..\\', '../'], '', ltrim($path, '\\/'));
         $hyveStorageRoot = realpath(base_path('..\\hyve\\storage\\app\\public'));
 
@@ -166,7 +191,7 @@ class BookingController extends Controller
         $normalizedRoot = str_replace('\\', '/', $hyveStorageRoot);
         $normalizedPath = str_replace('\\', '/', $fullPath);
 
-        if (! str_starts_with($normalizedPath, $normalizedRoot)) {
+        if ($normalizedPath !== $normalizedRoot && ! str_starts_with($normalizedPath, $normalizedRoot.'/')) {
             return null;
         }
 

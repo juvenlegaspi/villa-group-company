@@ -1,115 +1,12 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {
-            font-family: DejaVu Sans, sans-serif;
-            font-size: 12px;
-        }
-
-        h2 {
-            margin-bottom: 5px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 15px;
-        }
-
-        .summary {
-            margin-bottom: 20px;
-        }
-
-        .summary div {
-            margin-bottom: 5px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-
-        th, td {
-            border: 1px solid #ccc;
-            padding: 6px;
-            text-align: left;
-        }
-
-        th {
-            background: #f2f2f2;
-        }
-
-        /* 🔥 important for multi-page */
-        tr {
-            page-break-inside: avoid;
-        }
-
-        thead {
-            display: table-header-group;
-        }
-
-        .page-break {
-            page-break-after: always;
-        }
-    </style>
-</head>
+<html lang="en">
+<head><meta charset="UTF-8"><style>
+body{font-family:DejaVu Sans,sans-serif;font-size:10px;color:#172033;margin:24px}.header{border-bottom:3px solid #274f86;padding-bottom:12px;margin-bottom:16px}.brand{font-size:18px;font-weight:bold;color:#17345f}.subtitle{margin-top:3px;color:#64748b}.summary{width:100%;border-collapse:separate;border-spacing:7px;margin:0 -7px 16px}.summary td{width:20%;background:#f3f6fa;border:1px solid #dce5f0;border-radius:6px;padding:9px}.summary strong{display:block;font-size:16px;color:#17345f}.summary span{font-size:8px;text-transform:uppercase;color:#64748b}h3{margin:16px 0 7px;color:#17345f}table.data{width:100%;border-collapse:collapse}table.data th,table.data td{border:1px solid #d7dee8;padding:6px;text-align:left;vertical-align:top}table.data th{background:#274f86;color:#fff;font-size:8px;text-transform:uppercase}table.data tr{page-break-inside:avoid}thead{display:table-header-group}.active{color:#047857;font-weight:bold}.inactive{color:#64748b;font-weight:bold}.footer{margin-top:14px;color:#64748b;font-size:8px}
+</style></head>
 <body>
-
-<!-- HEADER -->
-<img src="{{ public_path('logo.jpg') }}" width="80">
-<div class="header">
-    <h2>📦 Supplier Dashboard Report</h2>
-    <small>Date: {{ now()->format('F d, Y') }}</small>
-</div>
-
-<!-- SUMMARY -->
-<div class="summary">
-    <div><strong>Total Suppliers:</strong> {{ $metrics['totalSuppliers'] }}</div>
-    <div><strong>Added Today:</strong> {{ $metrics['todaySuppliers'] }}</div>
-    <div><strong>This Month:</strong> {{ $metrics['thisMonthSuppliers'] }}</div>
-</div>
-
-<!-- TOP PRODUCTS -->
-<div>
-    <strong>Top Products:</strong>
-    <ul>
-        @foreach($metrics['topProducts'] as $product)
-            <li>{{ $product }}</li>
-        @endforeach
-    </ul>
-</div>
-
-<!-- TABLE -->
-<h3 style="margin-top:20px;">📋 Supplier Details</h3>
-
-<table>
-    <thead>
-        <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Products</th>
-            <th>Added By</th>
-            <th>Date</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach($suppliers as $index => $supplier)
-        <tr>
-            <td>{{ $index + 1 }}</td>
-            <td>{{ $supplier->name }}</td>
-            <td>{{ $supplier->products }}</td>
-            <td>
-                {{ $supplier->user 
-                    ? $supplier->user->name . ' ' . $supplier->user->lastname 
-                    : 'N/A' 
-                }}
-            </td>
-            <td>{{ $supplier->created_at->format('Y-m-d') }}</td>
-        </tr>
-        @endforeach
-    </tbody>
-</table>
-
-</body>
-</html>
+<div class="header"><div class="brand">YATIRA CONSTRUCTION, INC.</div><div class="subtitle">Supplier and Operations Register &middot; Generated {{ now()->format('F d, Y h:i A') }}</div></div>
+<table class="summary"><tr><td><strong>{{ number_format($metrics['totalSuppliers']) }}</strong><span>Total suppliers</span></td><td><strong>{{ number_format($metrics['activeSuppliers']) }}</strong><span>Active suppliers</span></td><td><strong>{{ number_format($metrics['totalAssets']) }}</strong><span>Fixed assets</span></td><td><strong>{{ number_format($metrics['maintenanceAssets']) }}</strong><span>Under maintenance</span></td><td><strong>{{ number_format($metrics['lowStockItems']) }}</strong><span>Low-stock items</span></td></tr></table>
+<h3>Supplier Register</h3>
+<table class="data"><thead><tr><th>#</th><th>Supplier</th><th>TIN</th><th>Products / Services</th><th>Contact</th><th>Commercial Terms</th><th>Status</th><th>Added</th></tr></thead><tbody>@forelse($suppliers as $index => $supplier)<tr><td>{{ $index + 1 }}</td><td><strong>{{ $supplier->name }}</strong><br>{{ $supplier->business_type }}</td><td>{{ $supplier->tin ?: 'Requires review' }}</td><td>{{ $supplier->products }}</td><td>{{ $supplier->contact_person }}@if($supplier->mobile)<br>{{ $supplier->mobile }}@endif @if($supplier->email)<br>{{ $supplier->email }}@endif</td><td>Lead: {{ is_null($supplier->lead_time) ? 'N/A' : $supplier->lead_time.' days' }}<br>Credit: {{ is_null($supplier->credit_term) ? 'N/A' : $supplier->credit_term.' days' }}</td><td class="{{ $supplier->status ? 'active' : 'inactive' }}">{{ $supplier->status ? 'Active' : 'Inactive' }}</td><td>{{ optional($supplier->created_at)->format('Y-m-d') }}<br>{{ $supplier->user ? trim($supplier->user->name.' '.$supplier->user->lastname) : 'System' }}</td></tr>@empty<tr><td colspan="8" style="text-align:center;padding:20px">No suppliers recorded.</td></tr>@endforelse</tbody></table>
+<div class="footer">This system-generated register is intended for authorized Villa Group personnel. Supplier status and contact information should be reviewed before operational use.</div>
+</body></html>

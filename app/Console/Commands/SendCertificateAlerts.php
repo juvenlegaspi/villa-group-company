@@ -18,10 +18,15 @@ class SendCertificateAlerts extends Command
 
     public function handle(): int
     {
-        $sentCount = $this->certificateAlertService->sendExpiringCertificateAlerts();
+        $summary = $this->certificateAlertService->sendExpiringCertificateAlerts();
+        $this->info("Certificate alerts: {$summary['email_sent']} email(s), {$summary['sms_sent']} SMS sent.");
+        if ($summary['email_failed'] || $summary['sms_failed']) {
+            $this->warn("Failures: {$summary['email_failed']} email(s), {$summary['sms_failed']} SMS.");
+        }
+        if ($summary['sms_skipped_unconfigured']) {
+            $this->line("SMS skipped (Semaphore not configured): {$summary['sms_skipped_unconfigured']}");
+        }
 
-        $this->info("Certificate alerts sent: {$sentCount}");
-
-        return self::SUCCESS;
+        return ($summary['email_failed'] || $summary['sms_failed']) ? self::FAILURE : self::SUCCESS;
     }
 }

@@ -1,104 +1,27 @@
 @extends('layouts.app')
 
+@section('title', 'Add User | Villa Group')
+
 @section('content')
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0">Create New User</h4>
-        <a href="{{ url('/users') }}" class="btn btn-outline-secondary">
-            Back to User List
-        </a>
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-villa-50 px-4 py-6 sm:px-7 lg:px-12">
+    <div class="mx-auto max-w-5xl">
+        <header class="mb-6 flex items-start justify-between gap-4">
+            <div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-villa-600">User Management</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">Create New User</h1><p class="mt-1 text-sm text-slate-500">Set the employee identity, assignment and system access.</p></div>
+            <a href="{{ route('users.index') }}" class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 no-underline shadow-sm hover:border-villa-500 hover:text-villa-800"><i class="bi bi-arrow-left"></i><span class="hidden sm:inline">Back</span></a>
+        </header>
+
+        @if ($errors->any())<div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p class="mb-2 font-extrabold">Please correct the following:</p><ul class="mb-0 list-disc pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+
+        <form method="POST" action="{{ route('users.store') }}" class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+            @csrf
+            <div class="border-b border-slate-100 px-5 py-5 sm:px-7"><h2 class="mb-0 text-lg font-black text-slate-900">Account Information</h2><p class="mb-0 mt-1 text-sm text-slate-500">New users start with the temporary password <strong>villa@2026</strong> and must replace it on first login.</p></div>
+            <div class="grid gap-5 p-5 sm:grid-cols-2 sm:p-7 lg:grid-cols-3">
+                @include('users.partials.fields', ['user' => null])
+            </div>
+            <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-7"><a href="{{ route('users.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 no-underline hover:bg-slate-100">Cancel</a><button class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-5 text-sm font-extrabold text-white shadow-lg shadow-villa-700/20 hover:bg-villa-800 focus:outline-none focus:ring-4 focus:ring-villa-100"><i class="bi bi-person-check"></i>Create User</button></div>
+        </form>
     </div>
-
-    @if ($errors->any())
-        <div class="alert alert-danger">
-            <strong>Please fix the following:</strong>
-            <ul class="mb-0">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
-    <form method="POST" action="{{ url('/users') }}">
-        @csrf
-
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-primary text-white">
-                <strong>User Information</strong>
-            </div>
-
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="fw-bold">First Name</label>
-                        <input type="text" name="name" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="fw-bold">Last Name</label>
-                        <input type="text" name="lastname" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="fw-bold">Username</label>
-                        <input type="text" name="username" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="fw-bold">Email</label>
-                        <input type="email" name="email" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="fw-bold">Cell Number</label>
-                        <input type="text" name="cell_number" class="form-control" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="fw-bold">Division</label>
-                        <select name="division_id" class="form-control" required>
-                            <option value="">Select Division</option>
-                                @foreach($divisions as $div)
-                                    <option value="{{ $div->id }}">{{ $div->name }}</option>
-                                @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="fw-bold">Department</label>
-                        <select name="department_id" class="form-control" required>
-                            <option value="">Select Department</option>
-                            @foreach($departments as $dept)
-                                <option value="{{ $dept->id }}">{{ $dept->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="fw-bold">Role</label>
-                        <select name="role" class="form-control" required>
-                            <option value="">Select Role</option>
-                            <option value="it">IT</option>
-                            <option value="manager">Manager</option>
-                            <option value="captain">Captain</option>
-                            <option value="staff">Staff</option>
-                            <option value="r&d">R & D</option>
-                            <option value="hr">HR</option>
-                            <option value="purchaser">Purchaser</option>
-                            <option value="owner">Owner</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                        <div class="form-check form-switch mt-3">
-                            <input class="form-check-input" type="checkbox" name="is_admin" value="1">
-                            <label class="form-check-label fw-bold">Grant Admin Access</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card-footer text-end">
-                <button class="btn btn-success">Save User</button>
-            </div>
-        </div>
-    </form>
-</div>
+</section>
 @endsection
+
+@include('users.partials.assignment-script')

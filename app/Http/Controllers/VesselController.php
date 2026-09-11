@@ -3,56 +3,69 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\UserVesselAssignment;
 use App\Models\Vessel;
 use App\Models\VoyageLogHeader;
+use App\Services\VesselAccessService;
 use Illuminate\Http\Request;
 
 class VesselController extends Controller
 {
+    public function __construct(private readonly VesselAccessService $vesselAccess) {}
+
     public function index()
     {
         $user = auth()->user();
-        $vessels = Vessel::query()
-        ->with('captain')
-        ->when(
-            !($user->is_admin || $user->role === 'manager'),
-            fn ($query) => $query->where('captain_id', $user->id)
-        )
-        ->orderBy('id', 'asc')
-        ->paginate(10);
+        $vessels = $this->vesselAccess->scopeAccessible(Vessel::query(), $user)
+            ->with('captain')
+            ->orderBy('id', 'asc')
+            ->paginate(10);
         $captains = $this->getCaptains();
+
         return view('shipping.vessels.index', compact('vessels', 'captains'));
     }
+
     public function create()
     {
-        $this->authorizeVesselManagement();
+        $this->authorizeVesselCreation();
         $captains = $this->getCaptains();
+
         return view('shipping.vessels.create', compact('captains'));
     }
+
     public function store(Request $request)
     {
-        $this->authorizeVesselManagement();
+        $this->authorizeVesselCreation();
         $data = $this->validateVessel($request);
-        Vessel::create($data);
+        $vessel = Vessel::create($data);
+        $this->syncCaptainAssignment($vessel);
+
         return redirect()->route('vessels.index')
             ->with('success', 'Vessel added successfully.');
     }
+
     public function edit($id)
     {
         $vessel = Vessel::findOrFail($id);
         $this->authorizeVesselManagement();
         $captains = $this->getCaptains();
+
         return view('shipping.vessels.edit', compact('vessel', 'captains'));
     }
+
     public function update(Request $request, $id)
     {
         $vessel = Vessel::findOrFail($id);
         $this->authorizeVesselManagement();
         $data = $this->validateVessel($request);
+        $previousCaptainId = $vessel->captain_id;
         $vessel->update($data);
+        $this->syncCaptainAssignment($vessel, $previousCaptainId);
+
         return redirect()->route('vessels.index')
             ->with('success', 'Vessel updated successfully.');
     }
+
     public function show(Request $request, $id)
     {
         $vessel = Vessel::findOrFail($id);
@@ -60,9 +73,9 @@ class VesselController extends Controller
         $query = VoyageLogHeader::query()->where('vessel_id', $id);
         if ($request->filled('search')) {
             $query->where(function ($voyageQuery) use ($request) {
-                $voyageQuery->where('voyage_id', 'like', '%' . $request->search . '%')
-                    ->orWhere('port_location', 'like', '%' . $request->search . '%')
-                    ->orWhere('cargo_type', 'like', '%' . $request->search . '%');
+                $voyageQuery->where('voyage_id', 'like', '%'.$request->search.'%')
+                    ->orWhere('port_location', 'like', '%'.$request->search.'%')
+                    ->orWhere('cargo_type', 'like', '%'.$request->search.'%');
             });
         }
         match ($request->sort) {
@@ -83,8 +96,10 @@ class VesselController extends Controller
     protected function getCaptains()
     {
         return User::query()
-            ->where('department_id', 6)
-            ->where('role', 'captain')
+            ->where('status', true)
+            ->whereHas('division', fn ($query) => $query->whereRaw('LOWER(name) = ?', ['villa shipping lines']))
+            ->where(fn ($query) => $query->where('role', 'captain')
+                ->orWhereHas('position', fn ($positions) => $positions->where('code', 'vessel-captain')))
             ->orderBy('name')
             ->get();
     }
@@ -107,17 +122,34 @@ class VesselController extends Controller
 
     protected function authorizeVesselManagement(): void
     {
-        abort_unless(auth()->user()->isAdmin() || auth()->user()->role === 'manager', 403);
+        abort_unless($this->vesselAccess->canAccessAllVessels(auth()->user()), 403);
+    }
+
+    protected function authorizeVesselCreation(): void
+    {
+        abort_unless(auth()->user()->isSystemAdministrator(), 403, 'Only a system administrator can add vessels.');
     }
 
     protected function authorizeVesselAccess(Vessel $vessel): void
     {
-        $user = auth()->user();
+        $this->vesselAccess->authorize(auth()->user(), $vessel);
+    }
 
-        if ($user->isAdmin() || $user->role === 'manager') {
-            return;
+    protected function syncCaptainAssignment(Vessel $vessel, ?int $previousCaptainId = null): void
+    {
+        if ($previousCaptainId && (int) $previousCaptainId !== (int) $vessel->captain_id) {
+            UserVesselAssignment::where(['user_id' => $previousCaptainId, 'vessel_id' => $vessel->id])->update([
+                'is_primary' => false,
+                'is_active' => false,
+                'effective_until' => today(),
+            ]);
         }
 
-        abort_unless($vessel->captain_id === $user->id, 403);
+        if ($vessel->captain_id) {
+            UserVesselAssignment::updateOrCreate(
+                ['user_id' => $vessel->captain_id, 'vessel_id' => $vessel->id],
+                ['assigned_by' => auth()->id(), 'is_primary' => true, 'is_active' => true, 'effective_from' => today(), 'effective_until' => null]
+            );
+        }
     }
 }

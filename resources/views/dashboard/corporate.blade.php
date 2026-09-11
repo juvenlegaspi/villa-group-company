@@ -1,8 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'Villa Group Dashboard')
+
 @section('content')
-<div class="container">
-    <h2>{{ strtoupper($division->name) }} Dashboard</h2>
-    <p>🚧 Under development...</p>
-</div>
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-slate-50 via-white to-villa-50 px-4 py-6 sm:px-7 lg:px-12"><div class="mx-auto max-w-6xl"><header class="mb-6"><p class="mb-1 text-xs font-extrabold uppercase tracking-[.16em] text-villa-600">Corporate Services</p><h1 class="m-0 text-2xl font-black text-slate-900 sm:text-3xl">Villa Group Dashboard</h1><p class="mt-1 text-sm text-slate-500">Central administration, IT and R&amp;D workspace.</p></header>
+<div class="grid gap-4 md:grid-cols-2"><article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-villa-50 text-xl text-villa-700"><i class="bi bi-building"></i></span><h2 class="mb-1 mt-5 text-lg font-black text-slate-900">Corporate overview</h2><p class="mb-0 text-sm leading-6 text-slate-500">This dashboard is the home of shared corporate services and group-wide reporting.</p></article>
+@if(auth()->user()->canManageUsers())<a href="{{ route('users.index') }}" class="group rounded-2xl border border-slate-200 bg-white p-6 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-villa-400 hover:shadow-lg"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-xl text-violet-700"><i class="bi bi-people"></i></span><h2 class="mb-1 mt-5 text-lg font-black text-slate-900">User Management</h2><p class="mb-0 text-sm leading-6 text-slate-500">Manage employee accounts, roles, company assignments and access.</p><span class="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-villa-700">Open module <i class="bi bi-arrow-right transition group-hover:translate-x-1"></i></span></a>@else<article class="rounded-2xl border border-villa-200 bg-villa-50 p-6"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-white text-xl text-villa-700"><i class="bi bi-eye"></i></span><h2 class="mb-1 mt-5 text-lg font-black text-villa-900">Owner overview</h2><p class="mb-0 text-sm leading-6 text-villa-700">Your account has read-only access to division dashboards. Operational and administration tools are intentionally restricted.</p></article>@endif</div></div></section>
 @endsection

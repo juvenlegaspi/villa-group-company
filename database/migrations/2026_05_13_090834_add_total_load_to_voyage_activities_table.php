@@ -11,10 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('voyage_activities', function (Blueprint $table) {
-            $table->string('total_load')->nullable()
-                ->after('total_hours');
-        });
+        if (! Schema::hasColumn('voyage_activities', 'total_load')) {
+            Schema::table('voyage_activities', function (Blueprint $table) {
+                $table->decimal('total_load', 12, 2)->nullable();
+            });
+        }
     }
 
     /**
@@ -22,8 +23,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('voyage_activities', function (Blueprint $table) {
-            $table->dropColumn('total_load');
-        });
+        if (Schema::hasColumn('voyage_activities', 'total_load')) {
+            Schema::table('voyage_activities', fn (Blueprint $table) => $table->dropColumn('total_load'));
+        }
     }
 };
