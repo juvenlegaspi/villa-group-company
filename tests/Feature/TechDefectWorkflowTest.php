@@ -100,6 +100,34 @@ class TechDefectWorkflowTest extends TestCase
         $this->assertDatabaseCount('tech_defects', 0);
     }
 
+    public function test_shipping_manager_can_create_and_submit_a_new_report_for_review(): void
+    {
+        Storage::fake('local');
+        $this->manager->position->permissions()->syncWithoutDetaching(
+            Permission::whereIn('slug', [
+                'shipping.technical_defects.access',
+                'tech_defects.create',
+                'tech_defects.submit_review',
+            ])->pluck('id')
+        );
+        $this->manager->unsetRelation('position');
+
+        $this->actingAs($this->manager)->get(route('tech-defects.index'))
+            ->assertOk()
+            ->assertSee('New report');
+
+        $this->actingAs($this->manager)->post(route('tech-defects.store'), $this->payload([
+            'checklist_document' => UploadedFile::fake()->create('manager-checklist.pdf', 100, 'application/pdf'),
+            'defect_photo' => UploadedFile::fake()->image('manager-defect.jpg'),
+        ]))->assertRedirect();
+
+        $report = TechDefect::firstOrFail();
+        $this->actingAs($this->manager)->put(route('tech-defects.update', $report), [
+            'action' => 'submit_review',
+        ])->assertRedirect();
+        $this->assertSame('For Review', $report->fresh()->status);
+    }
+
     public function test_reporter_dropdown_is_limited_to_active_marine_and_technical_personnel(): void
     {
         Storage::fake('local');

@@ -99,11 +99,27 @@ INSERT IGNORE INTO permission_position (position_id, permission_id)
 SELECT p.id, pe.id FROM positions p
 JOIN divisions dv ON dv.id = p.division_id
 JOIN permissions pe ON pe.slug IN (
-    'vessels.view_all', 'tech_defects.view_company', 'tech_defects.review',
-    'tech_defects.verify', 'certificates.manage'
+    'vessels.view_all', 'tech_defects.create', 'tech_defects.view_company',
+    'tech_defects.submit_review', 'tech_defects.review', 'tech_defects.verify',
+    'certificates.manage'
 )
 WHERE LOWER(dv.name) LIKE '%villa%shipping%'
   AND p.code IN ('operations-manager', 'operation-manager', 'marine-operations-manager', 'vessel-manager');
+
+-- Managers may also originate a report and submit it into the existing review workflow.
+INSERT IGNORE INTO permission_position (position_id, permission_id)
+SELECT p.id, pe.id FROM positions p
+JOIN departments d ON d.id = p.department_id
+JOIN divisions dv ON dv.id = p.division_id
+JOIN permissions pe ON pe.slug IN ('tech_defects.create', 'tech_defects.submit_review')
+WHERE LOWER(dv.name) LIKE '%villa%shipping%'
+  AND (
+      p.code IN ('operations-manager', 'operation-manager', 'marine-operations-manager', 'vessel-manager', 'technical-manager')
+      OR (
+          LOWER(TRIM(p.legacy_role)) = 'manager'
+          AND LOWER(TRIM(d.name)) IN ('marine operation', 'marine operations', 'technical department')
+      )
+  );
 
 INSERT IGNORE INTO permission_position (position_id, permission_id)
 SELECT p.id, pe.id FROM positions p
@@ -119,7 +135,8 @@ INSERT IGNORE INTO permission_position (position_id, permission_id)
 SELECT p.id, pe.id FROM positions p
 JOIN divisions dv ON dv.id = p.division_id
 JOIN permissions pe ON pe.slug IN (
-    'vessels.view_all', 'tech_defects.view_company', 'tech_defects.assess',
+    'vessels.view_all', 'tech_defects.create', 'tech_defects.view_company',
+    'tech_defects.submit_review', 'tech_defects.assess',
     'tech_defects.assign_action', 'tech_defects.perform_action',
     'tech_defects.update_closeout', 'tech_defects.upload_evidence',
     'tech_defects.request_support', 'tech_defects.submit', 'tech_defects.verify'
