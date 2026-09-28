@@ -62,7 +62,7 @@ class YatiraSalesController extends Controller
         $this->authorizeLead($lead, true);
         abort_if($lead->status === 'CANCELLED', 422, 'A cancelled lead can no longer be edited.');
         $data = $this->validateLead($request, $lead);
-        if (! $this->can('yatira.sales.manage')) {
+        if (! auth()->user()->isExecutiveViewer() && ! $this->can('yatira.sales.manage')) {
             unset($data['assigned_agent_id']);
         }$before = $lead->only(array_keys($data));
         $lead->update([...$data, 'updated_by' => auth()->id()]);
@@ -129,6 +129,9 @@ return $query;
     {
         abort_unless((int) $lead->division_id === $this->divisionId(), 404);
         $this->authorizePermission($update ? 'yatira.sales.update' : 'yatira.sales.view');
+        if (! $update && auth()->user()->isExecutiveViewer()) {
+            return;
+        }
         if (! $this->can('yatira.sales.manage')) {
             abort_unless((int) $lead->assigned_agent_id === (int) auth()->id() || (int) $lead->created_by === (int) auth()->id(), 403);
         }

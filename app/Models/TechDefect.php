@@ -13,6 +13,7 @@ class TechDefect extends Model
         'vessel_id',
         'status',
         'date_completed',
+        'completion_cost',
         'date_identified',
         'port_location',
         'reported_by',
@@ -69,6 +70,7 @@ class TechDefect extends Model
 
     protected $casts = [
         'date_completed' => 'date',
+        'completion_cost' => 'decimal:2',
         'date_identified' => 'date',
         'target_completion_date' => 'date',
         'review_submitted_at' => 'datetime',

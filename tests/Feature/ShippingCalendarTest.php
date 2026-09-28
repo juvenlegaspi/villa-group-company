@@ -41,6 +41,23 @@ class ShippingCalendarTest extends TestCase
         ]);
         $this->assertDatabaseHas('shipping_calendar_audits', ['event_id' => $eventId, 'action' => 'created']);
 
+        $preventiveResponse = $this->actingAs($org['manager'])->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id, [
+            'title' => 'Preventive engine maintenance',
+            'checklist_type' => 'preventive_maintenance',
+            'starts_at' => '2026-09-03 08:00:00',
+            'ends_at' => '2026-09-03 10:00:00',
+        ]))->assertCreated();
+        $this->assertDatabaseHas('shipping_calendar_events', [
+            'id' => $preventiveResponse->json('event_id'),
+            'checklist_type' => 'preventive_maintenance',
+        ]);
+
+        $this->actingAs($org['manager'])->getJson(route('shipping.calendar.events.show', $eventId))
+            ->assertOk()
+            ->assertJsonPath('can_complete', true)
+            ->assertJsonPath('can_delete', false);
+        $this->actingAs($org['manager'])->deleteJson(route('shipping.calendar.events.destroy', $eventId))->assertForbidden();
+
         $captainResponse = $this->actingAs($org['captain'])->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id, ['title' => 'Captain checklist']))->assertCreated();
         $this->actingAs($org['captain'])->putJson(route('shipping.calendar.events.update', $eventId), $this->payload($org['vessel']->id))->assertForbidden();
         $captainEventId = $captainResponse->json('event_id');
@@ -50,8 +67,19 @@ class ShippingCalendarTest extends TestCase
         $this->actingAs($org['otherCaptain'])->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id))->assertForbidden();
         $this->actingAs($org['wrongDepartmentManager'])->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id))->assertForbidden();
 
+        $this->actingAs($org['manager'])->patchJson(route('shipping.calendar.events.complete', $eventId))
+            ->assertOk()
+            ->assertJsonPath('message', 'This checklist date was marked complete.');
+        $this->assertDatabaseHas('shipping_calendar_events', ['id' => $eventId, 'status' => 'completed']);
+        $this->assertDatabaseHas('shipping_calendar_audits', ['event_id' => $eventId, 'action' => 'completed']);
+        $this->actingAs($org['manager'])->patchJson(route('shipping.calendar.events.complete', $eventId))->assertUnprocessable();
+
         $admin = User::create(['name' => 'System', 'lastname' => 'Administrator', 'username' => 'calendar-admin', 'email' => 'calendar-admin@example.test', 'password' => Hash::make('villa@2026'), 'role' => 'admin', 'is_admin' => true, 'must_change_password' => false, 'status' => true, 'division_id' => $org['division']->id, 'department_id' => $org['manager']->department_id, 'position_id' => $org['manager']->position_id]);
         $this->actingAs($admin)->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id, ['title' => 'Administrator checklist']))->assertCreated();
+        $this->actingAs($admin)->getJson(route('shipping.calendar.events.show', $eventId))
+            ->assertOk()
+            ->assertJsonPath('can_complete', false)
+            ->assertJsonPath('can_delete', true);
         $this->actingAs($admin)->deleteJson(route('shipping.calendar.events.destroy', $eventId))->assertOk();
         $this->assertSoftDeleted('shipping_calendar_events', ['id' => $eventId]);
     }
@@ -93,6 +121,56 @@ class ShippingCalendarTest extends TestCase
         $monthEndDates = collect($monthly)->where('title', 'Month-end inspection')->pluck('start')
             ->map(fn (string $date) => substr($date, 0, 10))->values()->all();
         $this->assertSame(['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30'], $monthEndDates);
+    }
+
+    public function test_completing_one_recurring_date_keeps_other_dates_and_reminders_active(): void
+    {
+        $org = $this->organization();
+        Notification::fake();
+        Http::fake(['*' => Http::response([['message_id' => 'SMS-2001', 'status' => 'Pending']], 200)]);
+        config()->set('services.semaphore.enabled', true);
+        config()->set('services.semaphore.api_key', 'test-key');
+
+        $response = $this->actingAs($org['manager'])->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id, [
+            'title' => 'Daily safety round',
+            'recurrence_frequency' => 'daily',
+            'recurrence_ends_on' => '2026-09-05',
+        ]))->assertCreated();
+        $eventId = $response->json('event_id');
+
+        $this->actingAs($org['manager'])->patchJson(route('shipping.calendar.events.complete', $eventId), [
+            'occurrence_starts_at' => '2026-09-03 08:00:00',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('shipping_calendar_occurrence_completions', [
+            'event_id' => $eventId,
+            'occurrence_starts_at' => '2026-09-03 08:00:00',
+        ]);
+        $this->assertDatabaseHas('shipping_calendar_events', ['id' => $eventId, 'status' => 'scheduled']);
+
+        $occurrences = collect($this->actingAs($org['manager'])->getJson(route('shipping.calendar.events.index', [
+            'start' => '2026-09-02', 'end' => '2026-09-05', 'vessel_id' => $org['vessel']->id,
+        ]))->assertOk()->json())->keyBy(fn (array $item) => substr($item['start'], 0, 10));
+        $this->assertSame('completed', $occurrences['2026-09-03']['status']);
+        $this->assertSame('scheduled', $occurrences['2026-09-04']['status']);
+        $this->actingAs($org['manager'])->getJson(route('shipping.calendar.events.show', [
+            'event' => $eventId, 'occurrence_starts_at' => '2026-09-03 08:00:00',
+        ]))->assertOk()->assertJsonPath('can_complete', false)->assertJsonPath('can_edit', false);
+        $this->actingAs($org['manager'])->getJson(route('shipping.calendar.events.show', [
+            'event' => $eventId, 'occurrence_starts_at' => '2026-09-04 08:00:00',
+        ]))->assertOk()->assertJsonPath('can_complete', true)->assertJsonPath('can_edit', true);
+
+        Carbon::setTestNow('2026-09-04 08:00:00');
+        $summary = app(ShippingChecklistReminderService::class)->sendDueReminders(now());
+        Carbon::setTestNow();
+
+        $this->assertSame(2, $summary['system_sent']);
+        $this->assertSame(2, $summary['email_sent']);
+        $this->assertSame(2, $summary['sms_sent']);
+        $this->assertDatabaseMissing('shipping_calendar_reminder_logs', [
+            'event_id' => $eventId, 'occurrence_starts_at' => '2026-09-03 08:00:00',
+        ]);
+        $this->assertDatabaseCount('shipping_calendar_reminder_logs', 6);
     }
 
     public function test_due_reminder_sends_system_email_and_sms_only_to_assigned_captain_and_operations_manager(): void

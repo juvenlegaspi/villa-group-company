@@ -14,11 +14,7 @@ class DivisionMiddleware
 
         abort_unless($user, 403);
 
-        if ($user->isExecutiveViewer() && $request->routeIs(
-            'voyage-logs.dashboard',
-            'tech-defects.dashboard',
-            'vessel-certificates.dashboard'
-        )) {
+        if ($user->isExecutiveViewer() && $request->isMethodSafe()) {
             return $next($request);
         }
 

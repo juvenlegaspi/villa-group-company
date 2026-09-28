@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CertificateNotificationController;
+use App\Http\Controllers\CrewVesselLocationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DryDockingHeaderController;
 use App\Http\Controllers\FuelRobMonitoringController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\JmvWorkspaceController;
 use App\Http\Controllers\JmvStockRequestController;
 use App\Http\Controllers\LayoutController;
+use App\Http\Controllers\MapGeocodingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PasswordResetController;
@@ -30,6 +32,19 @@ use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
+
+Route::prefix('vessel-location/{token}')->middleware('throttle:60,1')->group(function (): void {
+    Route::get('/', [CrewVesselLocationController::class, 'show'])->name('crew-location.show');
+    Route::post('/', [CrewVesselLocationController::class, 'update'])
+        ->middleware('throttle:12,1')
+        ->name('crew-location.update');
+    Route::post('/automatic', [CrewVesselLocationController::class, 'automaticUpdate'])
+        ->middleware('throttle:12,1')
+        ->name('crew-location.automatic');
+    Route::get('/reverse', [CrewVesselLocationController::class, 'reverse'])
+        ->middleware('throttle:30,1')
+        ->name('crew-location.reverse');
+});
 
 Route::view('/login', 'login')->middleware('guest')->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware(['guest', 'throttle:5,1']);
@@ -107,6 +122,7 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                     Route::delete('/{event}/attachments/{attachment}', [ShippingCalendarController::class, 'destroyAttachment'])->name('attachments.destroy');
                     Route::put('/{event}', [ShippingCalendarController::class, 'update'])->name('update');
                     Route::patch('/{event}/move', [ShippingCalendarController::class, 'move'])->name('move');
+                    Route::patch('/{event}/complete', [ShippingCalendarController::class, 'complete'])->name('complete');
                     Route::patch('/{event}/cancel', [ShippingCalendarController::class, 'cancel'])->name('cancel');
                     Route::delete('/{event}', [ShippingCalendarController::class, 'destroy'])->name('destroy');
                 });
@@ -124,6 +140,8 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                     Route::get('/{id}', [VesselController::class, 'show'])->name('vessels.show');
                     Route::get('/{id}/edit', [VesselController::class, 'edit'])->name('vessels.edit');
                     Route::put('/{id}', [VesselController::class, 'update'])->name('vessels.update');
+                    Route::post('/location-portal/regenerate', [VesselController::class, 'regenerateLocationPortalLink'])
+                        ->name('vessels.location-portal.regenerate');
                     Route::get('/{id}/logs/create', [VoyageLogController::class, 'create'])
                         ->middleware('module.access:shipping.voyages.access')
                         ->name('voyages.create');
@@ -131,9 +149,13 @@ Route::middleware(['auth', 'active'])->group(function (): void {
 
                 Route::middleware('module.access:shipping.voyages.access')->prefix('voyage-logs')->group(function (): void {
                     Route::get('/dashboard', [VoyageLogController::class, 'dashboard'])->name('voyage-logs.dashboard');
+                    Route::get('/fleet-map', [VoyageLogController::class, 'fleetMap'])->name('voyage-logs.fleet-map');
+                    Route::get('/map/search', [MapGeocodingController::class, 'search'])->name('voyage-map.search');
+                    Route::get('/map/reverse', [MapGeocodingController::class, 'reverse'])->name('voyage-map.reverse');
                     Route::post('/store', [VoyageLogController::class, 'store'])->name('voyages.store');
                     Route::get('/{id}/pdf', [VoyageLogController::class, 'exportPdf'])->name('voyage.pdf');
                     Route::get('/{id}', [VoyageLogController::class, 'show'])->name('voyages.show');
+                    Route::post('/{id}/current-location', [VoyageLogController::class, 'updateCurrentLocation'])->name('voyage.current-location.update');
                     Route::post('/{id}/add-detail', [VoyageLogController::class, 'addDetail'])->name('voyage.addDetail');
                     Route::post('/{id}/complete-voyage', [VoyageLogController::class, 'completeVoyage'])->name('voyage.complete');
                     Route::post('/{detail}/add-activity', [VoyageLogController::class, 'addActivity'])->name('voyage.addActivity');
@@ -152,6 +174,7 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                     Route::get('/dashboard', [TechDefectController::class, 'dashboard'])->name('tech-defects.dashboard');
                     Route::get('/reports/summary/pdf', [TechDefectController::class, 'exportSummaryPdf'])->name('tech-defects.reports.pdf');
                     Route::get('/reports/summary/csv', [TechDefectController::class, 'exportSummaryCsv'])->name('tech-defects.reports.csv');
+                    Route::get('/reports/summary/excel', [TechDefectController::class, 'exportSummaryExcel'])->name('tech-defects.reports.excel');
                     Route::post('/{id}/attachments', [TechDefectController::class, 'storeAttachment'])->name('tech-defects.attachments.store');
                     Route::get('/{id}/attachments/{attachment}', [TechDefectController::class, 'attachment'])->name('tech-defects.attachments.show');
                     Route::get('/{id}/pdf', [TechDefectController::class, 'exportPdf'])->name('tech-defects.pdf');

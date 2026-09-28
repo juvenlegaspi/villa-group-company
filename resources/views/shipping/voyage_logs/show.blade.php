@@ -2,10 +2,52 @@
 
 @section('title', $voyage->voyage_code.' | '.$voyage->vessel->vessel_name)
 
+@push('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+    #activityLocationMapModal .activity-map-dialog { width:min(96vw,1440px); max-width:none; margin:2vh auto; }
+    #activityLocationMapModal .modal-content { display:flex!important; height:min(900px,calc(100dvh - 2rem)); max-height:calc(100dvh - 2rem); flex-direction:column; }
+    #activityLocationMapModal .modal-header,
+    #activityLocationMapModal .modal-footer { flex:0 0 auto; }
+    #activityLocationMapModal .modal-body { flex:1 1 0!important; height:0; min-height:0; overflow:hidden; }
+    .activity-map-grid { display:grid!important; grid-template-columns:360px minmax(0,1fr)!important; height:100%; min-height:0; }
+    .activity-map-sidebar { min-width:0; overflow-x:hidden; overflow-y:auto; }
+    .activity-map-panel { height:100%; min-width:0; min-height:0; }
+    #activity-location-map { display:block; width:100%; height:100%!important; min-height:0; background:#dbeafe; }
+    .activity-current-marker { display:grid; width:28px; height:28px; place-items:center; color:#d97706; font-size:26px; line-height:1; filter:drop-shadow(-1px -1px 0 #fff) drop-shadow(1px 1px 0 #fff) drop-shadow(0 3px 4px #0f172a80); }
+    .voyage-direction-arrow { display:block; color:#fff; font-size:24px; font-weight:900; line-height:24px; text-shadow:-1px -1px 0 #0891b2,1px -1px 0 #0891b2,-1px 1px 0 #0891b2,1px 1px 0 #0891b2,0 2px 5px #0f172a99; transform-origin:center; }
+    @media (max-width:991.98px) {
+        #activityLocationMapModal .activity-map-dialog { width:auto; max-width:calc(100vw - 1rem); margin:.5rem auto; }
+        #activityLocationMapModal .modal-content { height:calc(100dvh - 1rem); max-height:calc(100dvh - 1rem); }
+        #activityLocationMapModal .modal-body { height:auto; overflow-y:auto; }
+        .activity-map-grid { grid-template-columns:minmax(0,1fr)!important; height:auto; }
+        .activity-map-sidebar { overflow:visible; }
+        .activity-map-panel { height:50vh; min-height:330px; }
+        #activity-location-map { min-height:330px; }
+    }
+</style>
+@endpush
+
 @section('content')
 @php
     $details = $voyage->details;
     $voyageCompleted = strtoupper((string) $voyage->status) === 'COMPLETED';
+    $isExecutiveViewer = auth()->user()->isExecutiveViewer();
+    $activityMapOrigin = [
+        'name' => $voyage->port_location,
+        'lat' => $voyage->origin_latitude,
+        'lng' => $voyage->origin_longitude,
+    ];
+    $activityMapDestination = [
+        'name' => $voyage->port_destination,
+        'lat' => $voyage->destination_latitude,
+        'lng' => $voyage->destination_longitude,
+    ];
+    $activityMapHistory = $voyage->positionLogs->map(fn ($position) => [
+        'name' => $position->location_name,
+        'lat' => $position->latitude,
+        'lng' => $position->longitude,
+    ])->values();
 @endphp
 
 <section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-white to-slate-100 px-4 py-6 sm:px-7 lg:px-12">
@@ -30,15 +72,22 @@
                 <svg class="h-4 w-4 shrink-0 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                 <span class="shrink-0 rounded-lg bg-villa-700 px-3 py-1.5 text-xs font-extrabold text-white shadow-sm">{{ $voyage->voyage_code }}</span>
             </nav>
-            <span class="inline-flex w-fit rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider ring-1 ring-inset {{ $voyageCompleted ? 'bg-emerald-100 text-emerald-800 ring-emerald-600/20' : 'bg-blue-100 text-blue-800 ring-blue-600/20' }}">{{ $voyage->status ?: 'OPEN' }}</span>
+            <div class="flex flex-wrap items-center gap-2">
+                @if(auth()->user()->hasPermission('shipping.voyages.access'))
+                    <a href="{{ route('voyage-logs.fleet-map', ['voyage' => $voyage->voyage_id]) }}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-villa-200 bg-white px-3 text-sm font-extrabold text-villa-700 no-underline shadow-sm hover:border-villa-400 hover:bg-villa-50 hover:text-villa-900 focus:outline-none focus:ring-4 focus:ring-villa-100">
+                        <i class="bi bi-map" aria-hidden="true"></i> Voyage Map
+                    </a>
+                @endif
+                <span class="inline-flex w-fit rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider ring-1 ring-inset {{ $voyageCompleted ? 'bg-emerald-100 text-emerald-800 ring-emerald-600/20' : 'bg-blue-100 text-blue-800 ring-blue-600/20' }}">{{ $voyage->status ?: 'OPEN' }}</span>
+            </div>
         </header>
 
         <article class="relative mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-villa-gold via-villa-600 to-villa-900"></div>
             <header class="flex flex-col justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:px-6">
                 <div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-2xl bg-villa-50 text-xl text-villa-700"><i class="bi bi-compass"></i></span><div><p class="mb-0.5 text-xs font-extrabold uppercase tracking-wider text-villa-600">{{ $voyage->voyage_code }}</p><h1 class="text-xl font-extrabold text-slate-950">Voyage Information</h1></div></div>
-                @if(!$voyageCompleted && $details->count() > 0 && $details->where('main_status', '!=', 'COMPLETED')->count() == 0)
-                    <form method="POST" action="{{ url('/shipping/voyage-logs/' . $voyage->voyage_id . '/complete-voyage') }}">@csrf<button class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-extrabold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-100"><i class="bi bi-check2-circle"></i>Complete Voyage</button></form>
+                @if(!$isExecutiveViewer && !$voyageCompleted && $details->count() > 0 && $details->where('main_status', '!=', 'COMPLETED')->count() == 0)
+                    <button type="button" id="complete-voyage-map-button" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-extrabold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-100"><i class="bi bi-geo-alt"></i>Complete Voyage</button>
                 @endif
             </header>
 
@@ -47,9 +96,17 @@
                 <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Voyage ID</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->voyage_id }}</dd></div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Port Origin</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->port_location ?: '-' }}</dd></div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Port Destination</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->port_destination ?: '-' }}</dd></div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Current Location</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->current_location ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Current Location</dt>
+                        @if(!$isExecutiveViewer && !$voyageCompleted)
+                            <button type="button" id="update-current-location-button" class="shrink-0 rounded-lg bg-villa-700 px-2 py-1 text-[.62rem] font-extrabold text-white shadow-sm hover:bg-villa-900 focus:outline-none focus:ring-4 focus:ring-villa-100"><i class="bi bi-geo-alt mr-1" aria-hidden="true"></i>Update</button>
+                        @endif
+                    </div>
+                    <dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->current_location ?: '-' }}</dd>
+                </div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Voyage Number</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->voyage_no ?: '-' }}</dd></div>
-                <div class="rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5"><div class="flex items-start justify-between gap-2"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-amber-700">Fuel ROB</dt>@if(!$voyageCompleted)<button class="rounded-lg bg-amber-500 px-2 py-1 text-[.62rem] font-extrabold text-slate-950 shadow-sm hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100" data-bs-toggle="modal" data-bs-target="#updateFuelModal">Update</button>@endif</div><dd class="mt-1 text-sm font-extrabold text-slate-900">{{ $voyage->fuel_rob ?: '-' }}</dd></div>
+                <div class="rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5"><div class="flex items-start justify-between gap-2"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-amber-700">Fuel ROB</dt>@if(!$isExecutiveViewer && !$voyageCompleted)<button class="rounded-lg bg-amber-500 px-2 py-1 text-[.62rem] font-extrabold text-slate-950 shadow-sm hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100" data-bs-toggle="modal" data-bs-target="#updateFuelModal">Update</button>@endif</div><dd class="mt-1 text-sm font-extrabold text-slate-900">{{ $voyage->fuel_rob ?: '-' }}</dd></div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Cargo Type</dt><dd class="mt-1 break-words text-sm font-bold text-slate-800">{{ $voyage->cargo_type ?: '-' }}</dd></div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Cargo Volume</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->cargo_volume ?: '-' }}</dd></div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"><dt class="text-[.66rem] font-extrabold uppercase tracking-wider text-slate-400">Crew on Board</dt><dd class="mt-1 text-sm font-bold text-slate-800">{{ $voyage->crew_on_board ?: '-' }}</dd></div>
@@ -61,7 +118,7 @@
             <header class="flex flex-col justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:px-6">
                 <div><p class="mb-0.5 text-xs font-extrabold uppercase tracking-wider text-villa-600">Operational progress</p><h2 class="text-lg font-extrabold text-slate-950">Tracking Timeline</h2></div>
                 <div class="flex flex-wrap gap-2">
-                    @if(!$voyageCompleted && ($details->count() == 0 || $details->where('main_status', '!=', 'COMPLETED')->count() == 0))
+                    @if(!$isExecutiveViewer && !$voyageCompleted && ($details->count() == 0 || $details->where('main_status', '!=', 'COMPLETED')->count() == 0))
                         <button class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white shadow-sm hover:bg-villa-900 focus:outline-none focus:ring-4 focus:ring-villa-100" data-bs-toggle="modal" data-bs-target="#addStatusModal"><i class="bi bi-plus"></i>Add Status</button>
                     @endif
                     <a href="{{ route('voyage.pdf', $voyage->voyage_id) }}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-extrabold text-rose-700 no-underline shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800 focus:outline-none focus:ring-4 focus:ring-rose-100"><i class="bi bi-file-earmark-text"></i>Download PDF</a>
@@ -91,7 +148,7 @@
                             @php
                                 $hasRunning = $detail->activities->whereNull('end_date_time')->count();
                             @endphp
-                            @if($loop->last && $hasRunning == 0 && $detail->main_status != 'COMPLETED')
+                            @if(!$isExecutiveViewer && $loop->last && $hasRunning == 0 && $detail->main_status != 'COMPLETED')
                                 <button class="btn btn-success btn-sm"
                                     data-bs-toggle="modal"
                                     data-bs-target="#addActivityModal{{ $detail->dtl_id }}">
@@ -162,6 +219,7 @@
                                                 : '--' }}
                                         </td>
                                         <td>
+                                            @unless($isExecutiveViewer)
                                             @if(!$act->end_date_time)
                                                 <button
                                                     class="btn btn-danger btn-sm"
@@ -193,6 +251,7 @@
                                                     </button>
                                                 @endif
                                             @endif
+                                            @endunless
                                         </td>
                                         
                                     </tr>
@@ -332,14 +391,9 @@
                                                             Add Activity
                                                         </button>
 
-                                                        <form method="POST"
-                                                            action="{{ route('voyage.status.complete', $detail->dtl_id) }}">
-                                                            @csrf
-
-                                                            <button class="btn btn-success btn-lg">
-                                                                Complete Status
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" class="status-completion-map-button btn btn-success btn-lg" data-detail-id="{{ $detail->dtl_id }}" data-complete-action="{{ route('voyage.status.complete', $detail->dtl_id) }}">
+                                                            <i class="bi bi-geo-alt"></i> Complete Status
+                                                        </button>
 
                                                     </div>
                                                 </div>
@@ -428,6 +482,7 @@
                         @endphp
                         {{-- UPDATE STATUS BUTTON --}}
                         @if(
+                            !$isExecutiveViewer &&
                             $isLastStatus &&
                             !$isCompleted &&
                             $detail->activities->count() == 0
@@ -440,13 +495,10 @@
                             Update Status
                         </button>
                         @endif
-                        @if($isLastStatus && !$isCompleted && $hasRunning == 0 && $detail->activities->count() > 0)
-                            <form method="POST" action="{{ route('voyage.status.complete', $detail->dtl_id) }}">
-                                @csrf
-                                <button class="btn btn-primary btn-sm">
-                                    Complete Status
-                                </button>
-                            </form>
+                        @if(!$isExecutiveViewer && $isLastStatus && !$isCompleted && $hasRunning == 0 && $detail->activities->count() > 0)
+                            <button type="button" class="status-completion-map-button btn btn-primary btn-sm" data-detail-id="{{ $detail->dtl_id }}" data-complete-action="{{ route('voyage.status.complete', $detail->dtl_id) }}">
+                                <i class="bi bi-geo-alt"></i> Complete Status
+                            </button>
                         @endif
                     </div>
                     <div class="modal fade"
@@ -529,17 +581,19 @@
                                             </select>
                                         </div>
                                         {{-- LOCATION --}}
-                                        <div class="mb-3">
-                                            <label for="port-{{ $detail->dtl_id }}">Current Port Location</label>
-                                            <select id="port-{{ $detail->dtl_id }}" name="port_location_id" class="form-select" required>
-                                                <option value="">-- SELECT PORT --</option>
-
-                                                @foreach($ports as $port)
-                                                    <option value="{{ $port->id }}" @selected(old('port_location_id') == $port->id)>
-                                                        {{ $port->port_name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                        <div class="mb-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                                            <div class="mb-2 flex items-center justify-between gap-3">
+                                                <label class="mb-0" for="activity-location-{{ $detail->dtl_id }}">Current Vessel Location</label>
+                                                <span class="rounded-full bg-amber-100 px-2 py-1 text-[.65rem] font-extrabold uppercase tracking-wide text-amber-800">Required</span>
+                                            </div>
+                                            <input type="text" id="activity-location-{{ $detail->dtl_id }}" name="activity_location_name" class="form-control activity-location-name" value="{{ old('activity_location_name') }}" placeholder="Pin the vessel location on the map" readonly required>
+                                            <input type="hidden" name="port_location_id" value="">
+                                            <input type="hidden" id="activity-latitude-{{ $detail->dtl_id }}" name="activity_latitude" class="activity-latitude" value="{{ old('activity_latitude') }}">
+                                            <input type="hidden" id="activity-longitude-{{ $detail->dtl_id }}" name="activity_longitude" class="activity-longitude" value="{{ old('activity_longitude') }}">
+                                            <button type="button" class="activity-map-button mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white shadow-sm hover:bg-villa-900" data-detail-id="{{ $detail->dtl_id }}">
+                                                <i class="bi bi-geo-alt" aria-hidden="true"></i> Pin Current Location on Map
+                                            </button>
+                                            <p class="mb-0 mt-2 text-xs leading-5 text-amber-800">This pin will update the vessel's current location and voyage track.</p>
                                         </div>
                                         <div class="mb-3">
                                             <label for="remarks-{{ $detail->dtl_id }}">Remarks</label>
@@ -629,6 +683,57 @@
     </div>
 </div>
 </section>
+<div class="modal fade" id="activityLocationMapModal" tabindex="-1" aria-labelledby="activityLocationMapTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered activity-map-dialog">
+        <div class="modal-content overflow-hidden">
+            <div class="modal-header">
+                <div><p class="mb-1 text-[.65rem] font-extrabold uppercase tracking-wider text-villa-600">Voyage Tracking</p><h5 class="modal-title" id="activityLocationMapTitle">Pin Current Vessel Location</h5></div>
+                <button type="button" class="btn-close" id="cancel-activity-map-x" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="activity-map-grid">
+                    <aside class="activity-map-sidebar space-y-4 border-b border-slate-200 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
+                        <div>
+                            <label class="form-label" for="activity-map-place-name">Pinned place name</label>
+                            <input id="activity-map-place-name" type="text" class="form-control" placeholder="Click the vessel position on the map">
+                            <p id="activity-map-message" class="mb-0 mt-2 text-xs leading-5 text-slate-500">Click the exact current position of the vessel.</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="form-label" for="activity-map-latitude">Latitude</label><input id="activity-map-latitude" type="number" step="0.0000001" min="-90" max="90" inputmode="decimal" autocomplete="off" class="form-control"></div>
+                            <div><label class="form-label" for="activity-map-longitude">Longitude</label><input id="activity-map-longitude" type="number" step="0.0000001" min="-180" max="180" inputmode="decimal" autocomplete="off" class="form-control"></div>
+                        </div>
+                        <p class="mb-0 text-xs leading-5 text-slate-500"><i class="bi bi-keyboard mr-1"></i>You may type the latitude and longitude manually. The map pin will move automatically.</p>
+                        <button type="button" id="use-activity-device-location" class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-villa-300 bg-white px-4 text-sm font-extrabold text-villa-700 shadow-sm hover:bg-villa-50"><i class="bi bi-crosshair"></i> Use My GPS Location</button>
+                        <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800"><i class="bi bi-info-circle mr-1"></i>Saving this point updates the voyage's current position and adds it to the tracking history.</div>
+                    </aside>
+                    <div class="activity-map-panel relative"><div id="activity-location-map" role="application" aria-label="Pin current vessel location"></div><div id="activity-map-loading" class="absolute inset-0 z-[500] grid place-items-center bg-slate-100 p-6 text-center text-sm font-bold text-slate-600">Loading map...</div></div>
+                </div>
+            </div>
+            <div class="modal-footer flex-nowrap">
+                <button type="button" id="cancel-activity-map" class="btn btn-outline-secondary flex-1">Cancel</button>
+                <button type="button" id="confirm-activity-map" class="btn btn-primary flex-1" disabled><i class="bi bi-check2-circle"></i> Use This Location</button>
+            </div>
+        </div>
+    </div>
+</div>
+<form id="status-completion-location-form" method="POST" class="d-none">
+    @csrf
+    <input type="hidden" name="completion_location_name" id="completion-location-name">
+    <input type="hidden" name="completion_latitude" id="completion-latitude">
+    <input type="hidden" name="completion_longitude" id="completion-longitude">
+</form>
+<form id="current-location-update-form" method="POST" action="{{ route('voyage.current-location.update', $voyage->voyage_id) }}" class="d-none">
+    @csrf
+    <input type="hidden" name="location_name" id="current-location-update-name">
+    <input type="hidden" name="latitude" id="current-location-update-latitude">
+    <input type="hidden" name="longitude" id="current-location-update-longitude">
+</form>
+<form id="voyage-completion-location-form" method="POST" action="{{ route('voyage.complete', $voyage->voyage_id) }}" class="d-none">
+    @csrf
+    <input type="hidden" name="final_location_name" id="voyage-completion-location-name">
+    <input type="hidden" name="final_latitude" id="voyage-completion-latitude">
+    <input type="hidden" name="final_longitude" id="voyage-completion-longitude">
+</form>
 <div class="modal fade" id="updateFuelModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -743,6 +848,334 @@
         </div>
     </div>
 </div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const mapModalElement = document.getElementById('activityLocationMapModal');
+    if (!mapModalElement) return;
+
+    const mapModal = bootstrap.Modal.getOrCreateInstance(mapModalElement, { backdrop: 'static', keyboard: false });
+    const placeField = document.getElementById('activity-map-place-name');
+    const latitudeField = document.getElementById('activity-map-latitude');
+    const longitudeField = document.getElementById('activity-map-longitude');
+    const message = document.getElementById('activity-map-message');
+    const confirmButton = document.getElementById('confirm-activity-map');
+    const mapTitle = document.getElementById('activityLocationMapTitle');
+    const completionForm = document.getElementById('status-completion-location-form');
+    const locationUpdateForm = document.getElementById('current-location-update-form');
+    const voyageCompletionForm = document.getElementById('voyage-completion-location-form');
+    const loading = document.getElementById('activity-map-loading');
+    const reverseUrl = @js(route('voyage-map.reverse'));
+    const initialLocationName = @js($voyage->current_location);
+    const initialLatitude = @js($voyage->current_latitude);
+    const initialLongitude = @js($voyage->current_longitude);
+    const originPoint = @json($activityMapOrigin);
+    const destinationPoint = @json($activityMapDestination);
+    const trackingHistory = @json($activityMapHistory);
+    let activityModal = null;
+    let activeDetailId = null;
+    let map = null;
+    let marker = null;
+    let isSwitchingModal = false;
+    let locationMode = 'activity';
+    let completionAction = null;
+    let trackLine = null;
+    let destinationLine = null;
+    let directionArrows = [];
+    let manualCoordinateTimer = null;
+
+    const validCoordinates = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' })[character]);
+    const markerIcon = () => L.divIcon({ className: '', html: '<span class="activity-current-marker" title="Current vessel location"><svg viewBox="0 0 36 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" d="M3 17.5h27.5l-4.8 8H8.2L3 17.5Z"/><path fill="currentColor" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" d="M8 13.5h17l5.5 4H3l5-4Zm2-7h11v7H10v-7Zm11 3h5v4h-5v-4Z"/><path fill="#fff" d="M12 8.5h2.6v2.2H12zm4.2 0h2.6v2.2h-2.6zm6.2 2.5h2v1.5h-2z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7 28.5c2 1.1 4 1.1 6 0s4-1.1 6 0 4 1.1 6 0"/></svg></span>', iconSize: [28, 28], iconAnchor: [14, 14] });
+    const coordinates = point => {
+        const lat = Number.parseFloat(point?.lat), lng = Number.parseFloat(point?.lng);
+        return validCoordinates(lat, lng) ? [lat, lng] : null;
+    };
+    const directionAngle = (start, end) => {
+        const startLat = start[0] * Math.PI / 180, endLat = end[0] * Math.PI / 180;
+        const deltaLng = (end[1] - start[1]) * Math.PI / 180;
+        const y = Math.sin(deltaLng) * Math.cos(endLat);
+        const x = Math.cos(startLat) * Math.sin(endLat) - Math.sin(startLat) * Math.cos(endLat) * Math.cos(deltaLng);
+        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360 - 90;
+    };
+
+    function drawTrackingPreview(current) {
+        if (!map || !current) return;
+        if (trackLine) trackLine.remove();
+        if (destinationLine) destinationLine.remove();
+        directionArrows.forEach(arrow => arrow.remove());
+        directionArrows = [];
+
+        const track = [];
+        const addUnique = point => {
+            if (point && (!track.length || track.at(-1)[0] !== point[0] || track.at(-1)[1] !== point[1])) track.push(point);
+        };
+        addUnique(coordinates(originPoint));
+        trackingHistory.map(coordinates).forEach(addUnique);
+        addUnique(current);
+        if (track.length > 1) trackLine = L.polyline(track, { color: '#24477f', weight: 5, opacity: .88 }).addTo(map);
+
+        const destination = coordinates(destinationPoint);
+        if (!destination) return;
+        destinationLine = L.polyline([current, destination], { color: '#0891b2', weight: 3, opacity: .75, dashArray: '9 9' }).addTo(map);
+        const angle = directionAngle(current, destination);
+        [.35, .65].forEach(fraction => {
+            const point = [current[0] + (destination[0] - current[0]) * fraction, current[1] + (destination[1] - current[1]) * fraction];
+            const icon = L.divIcon({ className: '', html: `<span class="voyage-direction-arrow" style="transform:rotate(${angle}deg)">➜</span>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+            directionArrows.push(L.marker(point, { icon, interactive: false, keyboard: false }).addTo(map));
+        });
+    }
+
+    function initializeMap() {
+        if (map || typeof L === 'undefined') return;
+        map = L.map('activity-location-map').setView([12.8797, 121.7740], 6);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+        loading?.remove();
+        const origin = coordinates(originPoint), destination = coordinates(destinationPoint);
+        if (origin) L.circleMarker(origin, { radius: 8, color: '#fff', weight: 3, fillColor: '#059669', fillOpacity: 1 }).addTo(map).bindPopup(`<strong>Port Origin</strong><br>${escapeHtml(originPoint.name || 'Origin')}`);
+        trackingHistory.map(coordinates).filter(Boolean).forEach((point, index) => L.circleMarker(point, { radius: 5, color: '#fff', weight: 2, fillColor: '#24477f', fillOpacity: 1 }).addTo(map).bindPopup(`<strong>Recorded Position ${index + 1}</strong>`));
+        if (destination) L.circleMarker(destination, { radius: 8, color: '#fff', weight: 3, fillColor: '#dc2626', fillOpacity: 1 }).addTo(map).bindPopup(`<strong>Port Destination</strong><br>${escapeHtml(destinationPoint.name || 'Destination')}`);
+        map.on('click', event => setPoint(event.latlng.lat, event.latlng.lng, true));
+    }
+
+    function updateConfirmState() {
+        const lat = Number.parseFloat(latitudeField.value);
+        const lng = Number.parseFloat(longitudeField.value);
+        confirmButton.disabled = !validCoordinates(lat, lng) || !placeField.value.trim();
+    }
+
+    async function identifyLocation(lat, lng) {
+        message.textContent = 'Identifying pinned location...';
+        try {
+            const response = await fetch(`${reverseUrl}?latitude=${lat}&longitude=${lng}`, { headers: { Accept: 'application/json' } });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.message || 'Unable to identify this location.');
+            if (payload.name) placeField.value = payload.name;
+            message.textContent = 'Location identified. You may correct the place name before confirming.';
+        } catch (error) {
+            message.textContent = `${error.message} Enter the place name manually.`;
+            placeField.focus();
+        }
+        updateConfirmState();
+    }
+
+    function setPoint(latitude, longitude, lookup = false) {
+        const lat = Number.parseFloat(latitude);
+        const lng = Number.parseFloat(longitude);
+        if (!validCoordinates(lat, lng)) return;
+        latitudeField.value = lat.toFixed(7);
+        longitudeField.value = lng.toFixed(7);
+        if (!marker) {
+            marker = L.marker([lat, lng], { draggable: true, icon: markerIcon() }).addTo(map);
+            marker.on('dragend', event => {
+                const point = event.target.getLatLng();
+                placeField.value = '';
+                setPoint(point.lat, point.lng, true);
+            });
+        } else marker.setLatLng([lat, lng]);
+        drawTrackingPreview([lat, lng]);
+        map.setView([lat, lng], Math.max(map.getZoom(), 11));
+        if (lookup) {
+            placeField.value = '';
+            identifyLocation(lat, lng);
+        }
+        updateConfirmState();
+    }
+
+    function queueManualCoordinateUpdate() {
+        window.clearTimeout(manualCoordinateTimer);
+        updateConfirmState();
+
+        const latitude = Number.parseFloat(latitudeField.value);
+        const longitude = Number.parseFloat(longitudeField.value);
+        if (!latitudeField.value.trim() || !longitudeField.value.trim()) {
+            message.textContent = 'Enter both latitude and longitude to position the pin.';
+            return;
+        }
+        if (!validCoordinates(latitude, longitude)) {
+            message.textContent = 'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).';
+            return;
+        }
+
+        manualCoordinateTimer = window.setTimeout(() => {
+            placeField.value = '';
+            setPoint(latitude, longitude);
+            identifyLocation(latitude, longitude);
+        }, 450);
+    }
+
+    function returnToActivity() {
+        if (isSwitchingModal) return;
+        isSwitchingModal = true;
+        mapModalElement.addEventListener('hidden.bs.modal', () => {
+            if (!activityModal) {
+                isSwitchingModal = false;
+                return;
+            }
+            activityModal.addEventListener('shown.bs.modal', () => {
+                isSwitchingModal = false;
+            }, { once: true });
+            bootstrap.Modal.getOrCreateInstance(activityModal).show();
+        }, { once: true });
+        mapModal.hide();
+    }
+
+    function loadStartingLocation(savedName = '', savedLatitude = null, savedLongitude = null) {
+        const savedLat = Number.parseFloat(savedLatitude);
+        const savedLng = Number.parseFloat(savedLongitude);
+        const hasSavedPoint = validCoordinates(savedLat, savedLng);
+        const fallbackLatitude = Number.parseFloat(initialLatitude);
+        const fallbackLongitude = Number.parseFloat(initialLongitude);
+        const hasLastPosition = validCoordinates(fallbackLatitude, fallbackLongitude);
+        placeField.value = savedName || (hasLastPosition ? initialLocationName || '' : '');
+        latitudeField.value = hasSavedPoint ? savedLat.toFixed(7) : (hasLastPosition ? fallbackLatitude.toFixed(7) : '');
+        longitudeField.value = hasSavedPoint ? savedLng.toFixed(7) : (hasLastPosition ? fallbackLongitude.toFixed(7) : '');
+        message.textContent = hasSavedPoint
+            ? 'Review or move the selected position.'
+            : (hasLastPosition ? 'The pin starts at the vessel\'s last saved position. Move it if the vessel changed location.' : 'Click the exact current position of the vessel.');
+        confirmButton.disabled = true;
+    }
+
+    function showLocationMap(trigger) {
+        activityModal = trigger.closest('.modal');
+        const showMap = () => {
+            mapModalElement.addEventListener('shown.bs.modal', () => {
+                isSwitchingModal = false;
+            }, { once: true });
+            mapModal.show();
+        };
+
+        if (!activityModal) {
+            showMap();
+            return;
+        }
+
+        activityModal.addEventListener('hidden.bs.modal', showMap, { once: true });
+        bootstrap.Modal.getOrCreateInstance(activityModal).hide();
+    }
+
+    document.querySelectorAll('.activity-map-button').forEach(button => button.addEventListener('click', () => {
+        if (isSwitchingModal) return;
+        isSwitchingModal = true;
+        locationMode = 'activity';
+        completionAction = null;
+        activeDetailId = button.dataset.detailId;
+        mapTitle.textContent = 'Pin Current Vessel Location';
+        confirmButton.innerHTML = '<i class="bi bi-check2-circle"></i> Use This Location';
+        const savedName = document.getElementById(`activity-location-${activeDetailId}`).value;
+        const savedLatitude = document.getElementById(`activity-latitude-${activeDetailId}`).value;
+        const savedLongitude = document.getElementById(`activity-longitude-${activeDetailId}`).value;
+        loadStartingLocation(savedName, savedLatitude, savedLongitude);
+        showLocationMap(button);
+    }));
+
+    document.querySelectorAll('.status-completion-map-button').forEach(button => button.addEventListener('click', () => {
+        if (isSwitchingModal) return;
+        isSwitchingModal = true;
+        locationMode = 'completion';
+        activeDetailId = button.dataset.detailId;
+        completionAction = button.dataset.completeAction;
+        mapTitle.textContent = 'Update Location & Complete Status';
+        confirmButton.innerHTML = '<i class="bi bi-check2-circle"></i> Save Location & Complete Status';
+        loadStartingLocation();
+        showLocationMap(button);
+    }));
+
+    document.getElementById('update-current-location-button')?.addEventListener('click', event => {
+        if (isSwitchingModal) return;
+        isSwitchingModal = true;
+        locationMode = 'location-update';
+        activeDetailId = @js($voyage->voyage_id);
+        completionAction = null;
+        mapTitle.textContent = 'Update Current Vessel Location';
+        confirmButton.innerHTML = '<i class="bi bi-check2-circle"></i> Save Current Location';
+        loadStartingLocation();
+        showLocationMap(event.currentTarget);
+    });
+
+    document.getElementById('complete-voyage-map-button')?.addEventListener('click', event => {
+        if (isSwitchingModal) return;
+        isSwitchingModal = true;
+        locationMode = 'voyage-completion';
+        activeDetailId = @js($voyage->voyage_id);
+        completionAction = null;
+        mapTitle.textContent = 'Confirm Final Arrival Location';
+        confirmButton.innerHTML = '<i class="bi bi-check2-circle"></i> Save Arrival & Complete Voyage';
+        const destination = coordinates(destinationPoint);
+        if (destination) loadStartingLocation(destinationPoint.name || '', destination[0], destination[1]);
+        else loadStartingLocation();
+        showLocationMap(event.currentTarget);
+    });
+
+    mapModalElement.addEventListener('shown.bs.modal', () => {
+        initializeMap();
+        map?.invalidateSize();
+        const savedLat = Number.parseFloat(latitudeField.value);
+        const savedLng = Number.parseFloat(longitudeField.value);
+        if (validCoordinates(savedLat, savedLng)) setPoint(savedLat, savedLng);
+        else {
+            const lat = Number.parseFloat(initialLatitude), lng = Number.parseFloat(initialLongitude);
+            if (validCoordinates(lat, lng)) map.setView([lat, lng], 10);
+        }
+        updateConfirmState();
+    });
+
+    placeField.addEventListener('input', updateConfirmState);
+    latitudeField.addEventListener('input', queueManualCoordinateUpdate);
+    longitudeField.addEventListener('input', queueManualCoordinateUpdate);
+    document.getElementById('cancel-activity-map').addEventListener('click', returnToActivity);
+    document.getElementById('cancel-activity-map-x').addEventListener('click', returnToActivity);
+    confirmButton.addEventListener('click', () => {
+        if (!activeDetailId || confirmButton.disabled) return;
+        if (locationMode === 'completion') {
+            if (!completionAction) return;
+            completionForm.action = completionAction;
+            document.getElementById('completion-location-name').value = placeField.value.trim();
+            document.getElementById('completion-latitude').value = latitudeField.value;
+            document.getElementById('completion-longitude').value = longitudeField.value;
+            confirmButton.disabled = true;
+            confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Completing Status...';
+            completionForm.requestSubmit();
+            return;
+        }
+        if (locationMode === 'location-update') {
+            document.getElementById('current-location-update-name').value = placeField.value.trim();
+            document.getElementById('current-location-update-latitude').value = latitudeField.value;
+            document.getElementById('current-location-update-longitude').value = longitudeField.value;
+            confirmButton.disabled = true;
+            confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Saving Location...';
+            locationUpdateForm.requestSubmit();
+            return;
+        }
+        if (locationMode === 'voyage-completion') {
+            document.getElementById('voyage-completion-location-name').value = placeField.value.trim();
+            document.getElementById('voyage-completion-latitude').value = latitudeField.value;
+            document.getElementById('voyage-completion-longitude').value = longitudeField.value;
+            confirmButton.disabled = true;
+            confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Completing Voyage...';
+            voyageCompletionForm.requestSubmit();
+            return;
+        }
+        document.getElementById(`activity-location-${activeDetailId}`).value = placeField.value.trim();
+        document.getElementById(`activity-latitude-${activeDetailId}`).value = latitudeField.value;
+        document.getElementById(`activity-longitude-${activeDetailId}`).value = longitudeField.value;
+        returnToActivity();
+    });
+
+    document.getElementById('use-activity-device-location').addEventListener('click', event => {
+        const button = event.currentTarget;
+        if (!navigator.geolocation) return window.alert('GPS is not supported by this device.');
+        button.disabled = true;
+        navigator.geolocation.getCurrentPosition(position => {
+            setPoint(position.coords.latitude, position.coords.longitude, true);
+            button.disabled = false;
+        }, error => {
+            button.disabled = false;
+            window.alert(error.message || 'Unable to get the current GPS location.');
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    });
+});
+</script>
 <script>
 document.querySelectorAll('input[name="end_time"]').forEach(function (input) {
     input.addEventListener('input', function () {

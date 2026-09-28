@@ -58,4 +58,9 @@ class ShippingCalendarEvent extends Model
     {
         return $this->hasMany(ShippingCalendarAttachment::class, 'event_id')->latest('created_at');
     }
+
+    public function occurrenceCompletions()
+    {
+        return $this->hasMany(ShippingCalendarOccurrenceCompletion::class, 'event_id');
+    }
 }

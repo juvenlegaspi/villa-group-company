@@ -6,6 +6,7 @@ use App\Models\Division;
 use App\Models\ShippingCalendarAttachment;
 use App\Models\ShippingCalendarAudit;
 use App\Models\ShippingCalendarEvent;
+use App\Models\ShippingCalendarOccurrenceCompletion;
 use App\Models\User;
 use App\Models\Vessel;
 use App\Notifications\CalendarEventNotification;
@@ -24,7 +25,7 @@ class ShippingCalendarController extends Controller
 {
     private const RECURRENCES = ['daily', 'weekly', 'monthly'];
 
-    private const CHECKLIST_TYPES = ['routine', 'scheduled', 'one_time'];
+    private const CHECKLIST_TYPES = ['routine', 'scheduled', 'one_time', 'preventive_maintenance'];
 
     private const OPERATIONS_MANAGER_CODES = ['operations-manager', 'operation-manager', 'marine-operations-manager'];
 
@@ -59,7 +60,7 @@ class ShippingCalendarController extends Controller
         $end = Carbon::parse($data['end'])->endOfDay();
 
         $events = $this->accessibleQuery(auth()->user())->where('vessel_id', $data['vessel_id'])
-            ->with(['creator:id,name,lastname', 'department:id,name', 'vessel:id,vessel_name'])
+            ->with(['creator:id,name,lastname', 'department:id,name', 'vessel:id,vessel_name', 'occurrenceCompletions'])
             ->where('starts_at', '<=', $end)
             ->where(function (Builder $query) use ($start): void {
                 $query->where('ends_at', '>=', $start)
@@ -72,9 +73,14 @@ class ShippingCalendarController extends Controller
         return response()->json($events->flatMap(fn (ShippingCalendarEvent $event) => $this->occurrences($event, $start, $end))->values());
     }
 
-    public function show(ShippingCalendarEvent $event): JsonResponse
+    public function show(Request $request, ShippingCalendarEvent $event): JsonResponse
     {
         $this->authorizeView($event);
+        $requestedOccurrence = $request->validate(['occurrence_starts_at' => 'nullable|date'])['occurrence_starts_at'] ?? null;
+        $occurrenceStart = $this->resolveOccurrenceStart($event, $requestedOccurrence);
+        $occurrenceCompleted = $event->status === 'completed'
+            || ($event->recurrence_frequency && $event->occurrenceCompletions()->where('occurrence_starts_at', $occurrenceStart)->exists());
+        $occurrenceScheduled = $event->status === 'scheduled' && ! $occurrenceCompleted;
         $event->load([
             'creator:id,name,lastname', 'vessel:id,vessel_name,captain_id', 'vessel.captain:id,name,lastname,email,cell_number',
             'audits.user:id,name,lastname', 'attachments.uploader:id,name,lastname',
@@ -101,7 +107,11 @@ class ShippingCalendarController extends Controller
                 'download_url' => route('shipping.calendar.events.attachments.download', [$event, $attachment]),
                 'delete_url' => route('shipping.calendar.events.attachments.destroy', [$event, $attachment]),
             ]),
-            'can_edit' => $this->canManage($event, auth()->user()),
+            'can_edit' => $occurrenceScheduled && $this->canManage($event, auth()->user()),
+            'can_complete' => $occurrenceScheduled && $this->canManage($event, auth()->user()),
+            'can_delete' => auth()->user()->isSystemAdministrator(),
+            'occurrence_starts_at' => $occurrenceStart->toIso8601String(),
+            'occurrence_status' => $occurrenceCompleted ? 'completed' : $event->status,
         ]);
     }
 
@@ -211,7 +221,7 @@ class ShippingCalendarController extends Controller
     public function cancel(ShippingCalendarEvent $event): JsonResponse
     {
         $this->authorizeManage($event);
-        abort_if($event->status === 'cancelled', 422, 'This event is already cancelled.');
+        abort_unless($event->status === 'scheduled', 422, 'Only a scheduled checklist can be cancelled.');
         $event->update(['status' => 'cancelled', 'cancelled_at' => now(), 'cancelled_by' => auth()->id(), 'updated_by' => auth()->id()]);
         $this->audit($event, 'cancelled');
         $this->notifyRecipients($event, 'Vessel checklist cancelled', "{$event->title} for {$event->vessel?->vessel_name} has been cancelled.");
@@ -219,9 +229,33 @@ class ShippingCalendarController extends Controller
         return response()->json(['message' => 'Checklist cancelled.']);
     }
 
-    public function destroy(ShippingCalendarEvent $event): JsonResponse
+    public function complete(Request $request, ShippingCalendarEvent $event): JsonResponse
     {
         $this->authorizeManage($event);
+        abort_unless($event->status === 'scheduled', 422, 'Only a scheduled checklist can be completed.');
+        $requestedOccurrence = $request->validate(['occurrence_starts_at' => 'nullable|date'])['occurrence_starts_at'] ?? null;
+        $occurrenceStart = $this->resolveOccurrenceStart($event, $requestedOccurrence);
+
+        if ($event->recurrence_frequency) {
+            $completion = ShippingCalendarOccurrenceCompletion::firstOrCreate(
+                ['event_id' => $event->id, 'occurrence_starts_at' => $occurrenceStart],
+                ['completed_by' => auth()->id(), 'completed_at' => now()],
+            );
+            abort_unless($completion->wasRecentlyCreated, 422, 'This checklist occurrence is already complete.');
+        } else {
+            $event->update(['status' => 'completed', 'updated_by' => auth()->id()]);
+        }
+
+        $this->audit($event, 'completed', ['occurrence_starts_at' => $occurrenceStart->format('Y-m-d H:i:s')]);
+        $this->notifyRecipients($event, 'Vessel checklist completed', "{$event->title} for {$event->vessel?->vessel_name} on {$occurrenceStart->format('M d, Y g:i A')} has been marked complete.");
+
+        return response()->json(['message' => 'This checklist date was marked complete.']);
+    }
+
+    public function destroy(ShippingCalendarEvent $event): JsonResponse
+    {
+        abort_unless(auth()->user()->isSystemAdministrator(), 403, 'Only a system administrator can delete a checklist schedule.');
+        $this->authorizeView($event);
         $this->audit($event, 'deleted');
         $event->delete();
 
@@ -330,6 +364,10 @@ class ShippingCalendarController extends Controller
 
     private function canManage(ShippingCalendarEvent $event, User $user): bool
     {
+        if ($user->isExecutiveViewer()) {
+            return false;
+        }
+
         if ($user->isSystemAdministrator() || $this->isOperationsManager($user)) {
             return true;
         }
@@ -342,6 +380,10 @@ class ShippingCalendarController extends Controller
 
     private function canCreateChecklist(User $user): bool
     {
+        if ($user->isExecutiveViewer()) {
+            return false;
+        }
+
         $user->loadMissing('position');
 
         return $user->isSystemAdministrator() || $this->isOperationsManager($user) || $this->isCaptain($user);
@@ -398,14 +440,17 @@ class ShippingCalendarController extends Controller
         do {
             $occurrenceEnd = $starts->copy()->addSeconds($duration);
             if ($occurrenceEnd >= $rangeStart && $starts <= $rangeEnd) {
+                $occurrenceCompleted = $event->status === 'completed'
+                    || $event->occurrenceCompletions->contains(fn (ShippingCalendarOccurrenceCompletion $completion) => $completion->occurrence_starts_at->equalTo($starts));
+                $occurrenceStatus = $occurrenceCompleted ? 'completed' : $event->status;
                 $occurrences[] = [
                     'occurrence_id' => $event->id.'_'.$starts->timestamp,
                     'event_id' => $event->id, 'title' => $event->title,
                     'start' => $starts->toIso8601String(), 'end' => $occurrenceEnd->toIso8601String(),
-                    'all_day' => $event->all_day, 'color' => $event->color, 'status' => $event->status,
+                    'all_day' => $event->all_day, 'color' => $event->color, 'status' => $occurrenceStatus,
                     'checklist_type' => $event->checklist_type, 'vessel' => $event->vessel?->vessel_name,
                     'location' => $event->location,
-                    'can_edit' => $this->canManage($event, auth()->user()), 'recurring' => filled($event->recurrence_frequency),
+                    'can_edit' => $occurrenceStatus === 'scheduled' && $this->canManage($event, auth()->user()), 'recurring' => filled($event->recurrence_frequency),
                 ];
             }
             if (! $event->recurrence_frequency) {
@@ -416,6 +461,29 @@ class ShippingCalendarController extends Controller
         } while ($starts <= $limit && $iterations < 21000);
 
         return $occurrences;
+    }
+
+    private function resolveOccurrenceStart(ShippingCalendarEvent $event, ?string $requested): Carbon
+    {
+        $target = $requested ? Carbon::parse($requested) : $event->starts_at->copy();
+        $occurrence = $event->starts_at->copy();
+
+        if (! $event->recurrence_frequency) {
+            abort_unless($occurrence->equalTo($target), 422, 'The selected checklist date is invalid.');
+
+            return $occurrence;
+        }
+
+        $limit = $event->recurrence_ends_on?->copy()->endOfDay();
+        $iterations = 0;
+        while ($occurrence < $target && $iterations < 21000) {
+            $this->advanceOccurrence($occurrence, $event);
+            $iterations++;
+        }
+
+        abort_unless($occurrence->equalTo($target) && (! $limit || $occurrence <= $limit), 422, 'The selected checklist date is not part of this recurring schedule.');
+
+        return $occurrence;
     }
 
     private function advanceOccurrence(Carbon $date, ShippingCalendarEvent $event): void

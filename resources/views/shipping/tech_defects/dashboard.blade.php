@@ -341,7 +341,7 @@
                                         <th>Vessel</th>
                                         <th>Status</th>
                                         <th>Severity</th>
-                                        <th>Date</th>
+                                        <th>Report created</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -361,7 +361,7 @@
                                                 </span>
                                             </td>
                                             <td>{{ $report->severity_level ?? '-' }}</td>
-                                            <td>{{ optional($report->date_identified)->format('M d, Y') ?? '-' }}</td>
+                                            <td>{{ optional($report->created_at)->format('M d, Y g:i A') ?? '-' }}</td>
                                         </tr>
                                     @empty
                                         <tr>

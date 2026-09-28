@@ -17,8 +17,8 @@ class UserManagementTest extends TestCase
         [$division, $department] = $this->assignment('Owner');
         $owner = $this->user($division, $department, ['role' => 'owner', 'is_admin' => true]);
 
-        $this->actingAs($owner)->get(route('users.index'))->assertRedirect(route('dashboard'));
-        $this->actingAs($owner)->post(route('users.store'), [])->assertRedirect(route('dashboard'));
+        $this->actingAs($owner)->get(route('users.index'))->assertForbidden();
+        $this->actingAs($owner)->post(route('users.store'), [])->assertForbidden();
     }
 
     public function test_admin_can_create_user_with_creator_and_forced_password_change(): void

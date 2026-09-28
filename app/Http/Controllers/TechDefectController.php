@@ -10,6 +10,7 @@ use App\Models\ThirdPartySupport;
 use App\Models\User;
 use App\Models\Vessel;
 use App\Notifications\TechDefectNotification;
+use App\Services\SimpleXlsxWriter;
 use App\Services\VesselAccessService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -110,8 +111,20 @@ class TechDefectController extends Controller
             ->implode(' ');
         $reports = $query->orderByRaw('CASE '.$statusOrder.' ELSE '.(count(self::STATUSES) + 1).' END', self::STATUSES)
             ->orderByDesc('id')->paginate(10)->withQueryString();
+        $firstReportDate = TechDefect::min('date_identified');
+        $latestReportDate = TechDefect::max('date_identified');
 
-        return view('shipping.tech_defects.index', ['reports' => $reports, 'showArchived' => $showArchived, 'canCreate' => $this->canCreateDefects($user), 'canDashboard' => $this->canManageAllDefects($user), 'canArchive' => $this->canDeleteDefects($user)]);
+        return view('shipping.tech_defects.index', [
+            'reports' => $reports,
+            'showArchived' => $showArchived,
+            'canCreate' => $this->canCreateDefects($user),
+            'canDashboard' => $user->isExecutiveViewer() || $this->canManageAllDefects($user),
+            'canExport' => $this->canManageAllDefects($user) && $this->vesselAccess->canAccessAllVessels($user),
+            'canArchive' => $this->canDeleteDefects($user),
+            'exportDateFrom' => $firstReportDate ? Carbon::parse($firstReportDate)->toDateString() : now()->startOfMonth()->toDateString(),
+            'exportDateTo' => $latestReportDate ? Carbon::parse($latestReportDate)->toDateString() : now()->toDateString(),
+            'exportReportCount' => TechDefect::count(),
+        ]);
     }
 
     public function create()
@@ -336,14 +349,17 @@ class TechDefectController extends Controller
     protected function saveAssessment(Request $request, TechDefect $report, bool $complete)
     {
         abort_unless($this->canAssessDefects(auth()->user(), $report), 403, 'A Technical Team position is required.');
+        $identifiedDate = $report->date_identified?->toDateString() ?? today()->toDateString();
         $rules = [
             'technical_assessment' => [$complete ? 'required' : 'nullable', 'string', 'max:5000'],
             'technical_findings' => [$complete ? 'required' : 'nullable', 'string', 'max:5000'],
             'technical_recommendation' => [$complete ? 'required' : 'nullable', 'string', 'max:5000'],
             'assigned_to_user_id' => [$complete ? 'required' : 'nullable', 'integer', 'exists:users,id'],
-            'target_completion_date' => [$complete ? 'required' : 'nullable', 'date', 'after_or_equal:today'],
+            'target_completion_date' => [$complete ? 'required' : 'nullable', 'date', 'after_or_equal:'.$identifiedDate],
         ];
-        $data = $request->validate($rules);
+        $data = $request->validate($rules, [
+            'target_completion_date.after_or_equal' => 'Target completion must be on or after the date identified.',
+        ]);
         if ($complete) abort_unless($this->getTechnicalUsers()->contains('id', (int) $data['assigned_to_user_id']), 422, 'Assigned PIC must have an active technical position or corrective-action permission.');
         foreach (['technical_assessment', 'technical_findings', 'technical_recommendation'] as $field) if (filled($data[$field] ?? null)) $data[$field] = mb_strtoupper(trim($data[$field]));
         DB::transaction(function () use ($report, $data, $complete): void {
@@ -546,7 +562,10 @@ class TechDefectController extends Controller
     protected function confirmCompletion(Request $request, TechDefect $report)
     {
         abort_unless($this->canVerifyDefects(auth()->user(), $report), 403, 'Technical Defects approval authority is required.');
-        $locked = DB::transaction(function () use ($report): TechDefect {
+        $data = $request->validate([
+            'completion_cost' => 'required|numeric|min:0|max:9999999999',
+        ]);
+        $locked = DB::transaction(function () use ($report, $data): TechDefect {
             $locked = TechDefect::whereKey($report->id)->lockForUpdate()->firstOrFail();
             abort_unless($locked->status === self::STATUS_FOR_VERIFICATION, 422, 'Only verified resolutions can be completed.');
             abort_unless($locked->verified_by && $locked->verified_at, 422, 'Verify the resolution before confirming completion.');
@@ -555,8 +574,8 @@ class TechDefectController extends Controller
                 422,
                 'A repair completion photo is required before closing the report.'
             );
-            $locked->update(['status' => self::STATUS_CLOSED, 'date_completed' => today(), 'closed_by' => auth()->id(), 'closed_at' => now()]);
-            $this->recordAudit($locked, 'report_closed', self::STATUS_FOR_VERIFICATION, self::STATUS_CLOSED, [], 'Verified technical defect report closed.');
+            $locked->update(['status' => self::STATUS_CLOSED, 'date_completed' => today(), 'completion_cost' => $data['completion_cost'], 'closed_by' => auth()->id(), 'closed_at' => now()]);
+            $this->recordAudit($locked, 'report_closed', self::STATUS_FOR_VERIFICATION, self::STATUS_CLOSED, ['completion_cost' => $data['completion_cost']], 'Verified technical defect report closed.');
             return $locked;
         });
         $this->notifyParticipants($locked, 'Technical defect closed', "{$locked->report_code} was verified and closed.", 'completed');
@@ -709,21 +728,147 @@ class TechDefectController extends Controller
     {
         abort_unless($this->canManageAllDefects(auth()->user()) && $this->vesselAccess->canAccessAllVessels(auth()->user()), 403);
         [$reports, $filters] = $this->reportQuery($request);
-        return response()->streamDownload(function () use ($reports): void {
+        return response()->streamDownload(function () use ($reports, $filters): void {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Report ID', 'Vessel', 'Identified', 'System', 'Severity', 'Status', 'Assigned PIC', 'Target', 'Downtime Hours', 'Actual External Cost']);
-            foreach ($reports as $report) fputcsv($out, [$report->report_code, $report->vessel?->vessel_name, $report->date_identified?->toDateString(), $report->system_affected, $report->severity_level, $report->status, $report->assignee?->name.' '.$report->assignee?->lastname, $report->target_completion_date?->toDateString(), $report->total_downtime_hours, $report->supports->sum('actual_cost')]);
+            // UTF-8 BOM keeps vessel names and report text readable when opened in Microsoft Excel.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['VILLA SHIPPING LINES - TECHNICAL & DEFECT REPORT']);
+            fputcsv($out, ['Selected period', $filters['date_from'].' to '.$filters['date_to']]);
+            fputcsv($out, ['Total reports', $reports->count()]);
+            fputcsv($out, []);
+            fputcsv($out, [
+                'Report ID', 'Vessel', 'Date Identified', 'Created Date & Time', 'Port / Location',
+                'Reported By', 'System Affected', 'Defect Description', 'Severity', 'Operational Impact',
+                'Temporary Repair', 'Status', 'Assigned PIC', 'Target Completion', 'Progress %',
+                'Downtime Hours', 'Root Cause', 'Corrective Action', 'Preventive Action',
+                'Date Completed', 'Report Completion Cost', 'Third-Party Actual Cost', 'Total Recorded Cost', 'Remarks',
+            ]);
+            foreach ($reports as $report) {
+                $row = [
+                    $report->report_code,
+                    $report->vessel?->vessel_name,
+                    $report->date_identified?->toDateString(),
+                    $report->created_at?->format('Y-m-d h:i A'),
+                    $report->port_location,
+                    $report->reported_by,
+                    $report->system_affected,
+                    $report->defect_description,
+                    $report->severity_level,
+                    $report->operational_impact,
+                    $report->temporary_repair,
+                    $report->status,
+                    trim(($report->assignee?->name ?? '').' '.($report->assignee?->lastname ?? '')),
+                    $report->target_completion_date?->toDateString(),
+                    $report->progress_percent,
+                    $report->total_downtime_hours,
+                    $report->root_cause,
+                    $report->corrective_action,
+                    $report->preventive_action,
+                    $report->date_completed?->toDateString(),
+                    $report->completion_cost === null ? null : (float) $report->completion_cost,
+                    round((float) $report->supports->sum('actual_cost'), 2),
+                    round((float) $report->completion_cost + (float) $report->supports->sum('actual_cost'), 2),
+                    $report->remarks,
+                ];
+                fputcsv($out, array_map(fn ($value) => is_string($value) && preg_match('/^[=+\-@]/', ltrim($value)) ? "'".$value : $value, $row));
+            }
             fclose($out);
-        }, 'technical-defects-'.$filters['month'].'.csv', ['Content-Type' => 'text/csv']);
+        }, 'technical-defects-'.$filters['period'].'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function exportSummaryExcel(Request $request, SimpleXlsxWriter $xlsx)
+    {
+        abort_unless($this->canManageAllDefects(auth()->user()) && $this->vesselAccess->canAccessAllVessels(auth()->user()), 403);
+        [$reports, $filters] = $this->reportQuery($request);
+        $headers = [
+            'Report ID', 'Vessel', 'Date Identified', 'Created Date & Time', 'Port / Location',
+            'Reported By', 'System Affected', 'Defect Description', 'Severity', 'Operational Impact',
+            'Temporary Repair', 'Status', 'Assigned PIC', 'Target Completion', 'Progress %',
+            'Downtime Hours', 'Root Cause', 'Corrective Action', 'Preventive Action',
+            'Date Completed', 'Report Completion Cost', 'Third-Party Actual Cost', 'Total Recorded Cost', 'Remarks',
+        ];
+        $rows = $reports->map(fn (TechDefect $report) => [
+            $report->report_code,
+            $report->vessel?->vessel_name,
+            $report->date_identified?->toDateString(),
+            $report->created_at?->format('Y-m-d h:i A'),
+            $report->port_location,
+            $report->reported_by,
+            $report->system_affected,
+            $report->defect_description,
+            $report->severity_level,
+            $report->operational_impact,
+            $report->temporary_repair,
+            $report->status,
+            trim(($report->assignee?->name ?? '').' '.($report->assignee?->lastname ?? '')),
+            $report->target_completion_date?->toDateString(),
+            $report->progress_percent,
+            $report->total_downtime_hours === null ? null : (float) $report->total_downtime_hours,
+            $report->root_cause,
+            $report->corrective_action,
+            $report->preventive_action,
+            $report->date_completed?->toDateString(),
+            $report->completion_cost === null ? null : (float) $report->completion_cost,
+            round((float) $report->supports->sum('actual_cost'), 2),
+            round((float) $report->completion_cost + (float) $report->supports->sum('actual_cost'), 2),
+            $report->remarks,
+        ])->all();
+        $contents = $xlsx->make(
+            'VILLA SHIPPING LINES - TECHNICAL & DEFECT REPORT',
+            [
+                ['Selected period', $filters['date_from'].' to '.$filters['date_to']],
+                ['Total reports', (string) $reports->count()],
+                ['Generated', now()->format('M d, Y h:i A')],
+            ],
+            $headers,
+            $rows,
+            [16, 22, 15, 21, 21, 22, 20, 42, 13, 20, 17, 18, 22, 18, 12, 17, 28, 34, 34, 17, 20, 20, 20, 34],
+        );
+        $filename = 'technical-defects-'.$filters['period'].'.xlsx';
+
+        return response($contents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Length' => (string) strlen($contents),
+            'Cache-Control' => 'private, max-age=0, must-revalidate',
+        ]);
     }
 
     protected function reportQuery(Request $request): array
     {
-        $data = $request->validate(['month' => 'nullable|date_format:Y-m', 'vessel_id' => 'nullable|exists:vessels,id']);
-        $month = $data['month'] ?? now()->format('Y-m');
-        $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
-        $reports = TechDefect::with(['vessel', 'assignee', 'supports'])->whereBetween('date_identified', [$start->toDateString(), $start->copy()->endOfMonth()->toDateString()])->when($data['vessel_id'] ?? null, fn ($q, $id) => $q->where('vessel_id', $id))->orderBy('date_identified')->get();
-        return [$reports, ['month' => $month, 'vessel_id' => $data['vessel_id'] ?? null]];
+        $data = $request->validate([
+            'month' => 'nullable|date_format:Y-m',
+            'date_from' => 'nullable|required_with:date_to|date',
+            'date_to' => 'nullable|required_with:date_from|date|after_or_equal:date_from',
+            'vessel_id' => 'nullable|exists:vessels,id',
+        ]);
+
+        if (! empty($data['date_from']) && ! empty($data['date_to'])) {
+            $start = Carbon::parse($data['date_from'])->startOfDay();
+            $end = Carbon::parse($data['date_to'])->endOfDay();
+            $month = null;
+            $period = $start->toDateString().'-to-'.$end->toDateString();
+        } else {
+            $month = $data['month'] ?? now()->format('Y-m');
+            $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $end = $start->copy()->endOfMonth();
+            $period = $month;
+        }
+
+        $reports = TechDefect::with(['vessel', 'assignee', 'supports'])
+            ->whereBetween('date_identified', [$start->toDateString(), $end->toDateString()])
+            ->when($data['vessel_id'] ?? null, fn ($q, $id) => $q->where('vessel_id', $id))
+            ->orderBy('date_identified')
+            ->orderBy('id')
+            ->get();
+
+        return [$reports, [
+            'month' => $month,
+            'date_from' => $start->toDateString(),
+            'date_to' => $end->toDateString(),
+            'period' => $period,
+            'vessel_id' => $data['vessel_id'] ?? null,
+        ]];
     }
 
     protected function updateReportDetails(Request $request, TechDefect $report)
@@ -856,7 +1001,7 @@ class TechDefectController extends Controller
 
     protected function authorizeModuleAccess(User $user): void
     {
-        abort_unless($this->canManageAllDefects($user) || $user->role === 'captain' || $user->hasPermission('tech_defects.view_assigned'), 403, 'Technical defect access is not assigned to this account.');
+        abort_unless($user->isExecutiveViewer() || $this->canManageAllDefects($user) || $user->role === 'captain' || $user->hasPermission('tech_defects.view_assigned'), 403, 'Technical defect access is not assigned to this account.');
     }
 
     protected function authorizeVesselSelection(User $user, int $vesselId): void
@@ -884,11 +1029,12 @@ class TechDefectController extends Controller
 
     protected function canCreateDefects(User $user): bool
     {
-        return $user->role !== 'owner' && ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.create') || $user->role === 'captain');
+        return ! $user->isExecutiveViewer() && ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.create') || $user->role === 'captain');
     }
 
     protected function canEditReport(User $user, TechDefect $report): bool
     {
+        if ($user->isExecutiveViewer()) return false;
         if ($report->status !== self::STATUS_NEW_REPORT) return false;
         if ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.view_company')) return true;
         return (int) $report->reported_by_user_id === (int) $user->id
@@ -897,6 +1043,7 @@ class TechDefectController extends Controller
 
     protected function canSubmitReview(User $user, TechDefect $report): bool
     {
+        if ($user->isExecutiveViewer()) return false;
         if ($user->is_admin || $user->role === 'admin') return true;
         $hasVesselScope = (int) $report->reported_by_user_id === (int) $user->id
             || $this->vesselAccess->canAccess($user, (int) $report->vessel_id);
@@ -905,7 +1052,7 @@ class TechDefectController extends Controller
 
     protected function canReviewDefects(User $user, TechDefect $report): bool
     {
-        if ($user->role === 'owner') return false;
+        if ($user->isExecutiveViewer()) return false;
         if ($user->is_admin || $user->role === 'admin') return true;
         $user->loadMissing('position');
         $hasManagerPosition = strtolower(trim((string) $user->position?->legacy_role)) === 'manager';
@@ -917,14 +1064,14 @@ class TechDefectController extends Controller
 
     protected function canAssessDefects(User $user, TechDefect $report): bool
     {
-        return $user->role !== 'owner'
+        return ! $user->isExecutiveViewer()
             && $this->vesselAccess->canAccess($user, (int) $report->vessel_id)
             && ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.assess'));
     }
 
     protected function canPerformPermission(User $user, TechDefect $report, string $permission): bool
     {
-        if ($user->role === 'owner') return false;
+        if ($user->isExecutiveViewer()) return false;
         if ($user->is_admin || $user->role === 'admin') return true;
 
         $user->loadMissing('position');
@@ -953,7 +1100,7 @@ class TechDefectController extends Controller
 
     protected function canManageThirdPartySupport(User $user, TechDefect $report): bool
     {
-        if ($user->role === 'owner') return false;
+        if ($user->isExecutiveViewer()) return false;
         if ($user->is_admin || $user->role === 'admin') return true;
 
         $user->loadMissing(['position', 'department']);
@@ -972,24 +1119,25 @@ class TechDefectController extends Controller
 
     protected function canManageAllDefects(User $user): bool
     {
-        return $user->role !== 'owner' && ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.view_company'));
+        return ! $user->isExecutiveViewer() && ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.view_company'));
     }
 
     protected function canViewAllDefects(User $user): bool
     {
-        return $this->canManageAllDefects($user)
+        return $user->isExecutiveViewer()
+            || $this->canManageAllDefects($user)
             || $user->hasPermission('tech_defects.review')
             || $user->hasPermission('tech_defects.assess');
     }
 
     protected function canDeleteDefects(User $user): bool
     {
-        return $user->role !== 'owner' && ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.archive'));
+        return ! $user->isExecutiveViewer() && ($user->is_admin || $user->role === 'admin' || $user->hasPermission('tech_defects.archive'));
     }
 
     protected function canVerifyDefects(User $user, TechDefect $report): bool
     {
-        if ($user->role === 'owner') return false;
+        if ($user->isExecutiveViewer()) return false;
         if ($user->is_admin || $user->role === 'admin') return true;
 
         $user->loadMissing('position');

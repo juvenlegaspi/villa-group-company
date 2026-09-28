@@ -45,7 +45,7 @@
                         <a href="{{ route('vessels.index') }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-700 no-underline shadow-sm hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-slate-200">
                             <i class="bi bi-arrow-left" aria-hidden="true"></i> Back
                         </a>
-                        @if(!$hasOpenVoyage)
+                        @if(!$hasOpenVoyage && !auth()->user()->isExecutiveViewer())
                             <a href="{{ url('/shipping/vessels/' . $vessel->id . '/logs/create') }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white no-underline shadow-md shadow-villa-900/15 hover:bg-villa-900 hover:text-white focus:outline-none focus:ring-4 focus:ring-villa-100">
                                 <i class="bi bi-plus" aria-hidden="true"></i> Add Voyage
                             </a>
@@ -54,6 +54,10 @@
                 </div>
             </div>
         </article>
+
+        @if(session('success'))
+            <div class="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" role="status">{{ session('success') }}</div>
+        @endif
 
         <div class="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <form method="GET" action="{{ route('vessels.show', $vessel->id) }}" class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(180px,240px)_auto_auto] md:items-end">
@@ -82,7 +86,14 @@
         <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div><h2 class="text-base font-extrabold text-slate-900">Voyage Records</h2><p class="mt-0.5 text-xs text-slate-500">Click a record to open its activities and details.</p></div>
-                <span class="rounded-full bg-villa-50 px-3 py-1.5 text-xs font-extrabold text-villa-700">{{ $voyages->total() }} {{ Str::plural('voyage', $voyages->total()) }}</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    @if(auth()->user()->hasPermission('shipping.voyages.access'))
+                        <a href="{{ route('voyage-logs.fleet-map', ['vessel' => $vessel->id]) }}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white no-underline shadow-sm hover:bg-villa-900 hover:text-white focus:outline-none focus:ring-4 focus:ring-villa-100">
+                            <i class="bi bi-map" aria-hidden="true"></i> View Voyage Map
+                        </a>
+                    @endif
+                    <span class="rounded-full bg-villa-50 px-3 py-1.5 text-xs font-extrabold text-villa-700">{{ $voyages->total() }} {{ Str::plural('voyage', $voyages->total()) }}</span>
+                </div>
             </header>
 
             <div class="overflow-x-auto">

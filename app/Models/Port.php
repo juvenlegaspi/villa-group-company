@@ -11,6 +11,13 @@ class Port extends Model
     protected $fillable = [
         'port_name',
         'province',
-        'status'
+        'status',
+        'latitude',
+        'longitude',
+    ];
+
+    protected $casts = [
+        'latitude' => 'float',
+        'longitude' => 'float',
     ];
 }

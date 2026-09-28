@@ -20,6 +20,12 @@ class VoyageLogHeader extends Model
         'port_location',
         'current_location_id',
         'current_location',
+        'origin_latitude',
+        'origin_longitude',
+        'destination_latitude',
+        'destination_longitude',
+        'current_latitude',
+        'current_longitude',
         'voyage_no',
         'crew_on_board',
         'fuel_rob',
@@ -35,6 +41,12 @@ class VoyageLogHeader extends Model
         'date_completed' => 'date',
         'date_created' => 'date',
         'arrival_date' => 'datetime',
+        'origin_latitude' => 'float',
+        'origin_longitude' => 'float',
+        'destination_latitude' => 'float',
+        'destination_longitude' => 'float',
+        'current_latitude' => 'float',
+        'current_longitude' => 'float',
     ];
 
     public function details()
@@ -59,5 +71,10 @@ class VoyageLogHeader extends Model
     public function fuelMonitorings()
     {
         return $this->hasMany(FuelRobMonitoring::class, 'voyage_id', 'voyage_id');
+    }
+
+    public function positionLogs()
+    {
+        return $this->hasMany(VesselPositionLog::class, 'voyage_id', 'voyage_id');
     }
 }

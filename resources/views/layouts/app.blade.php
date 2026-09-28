@@ -245,6 +245,26 @@
         .app-content > * { min-width: 0; max-width: 100%; }
         .sidebar-backdrop { display: none; }
 
+        /* Final UI guard for the Executive Viewer. The server middleware is
+           still the authoritative protection for every mutation request. */
+        .executive-read-only .app-content form[method="POST" i],
+        .executive-read-only .app-content a[href$="/create"],
+        .executive-read-only .app-content a[href*="/edit"],
+        .executive-read-only .app-content a[href*="/renew"],
+        .executive-read-only .app-content a[href*="/repair-closeout"],
+        .executive-read-only .app-content button[data-bs-target*="add" i],
+        .executive-read-only .app-content button[data-bs-target*="edit" i],
+        .executive-read-only .app-content button[data-bs-target*="update" i],
+        .executive-read-only .app-content button[data-bs-target*="end" i],
+        .executive-read-only .app-content button[data-bs-target*="complete" i],
+        .executive-read-only .app-content button[data-bs-target*="repair" i],
+        .executive-read-only .app-content button[data-bs-target*="support" i],
+        .executive-read-only .app-content button[data-bs-target*="evidence" i],
+        .executive-read-only .app-content #complete-voyage-map-button,
+        .executive-read-only .app-content #update-current-location-button,
+        .executive-read-only .app-content .status-completion-map-button,
+        .executive-read-only .app-content .activity-map-button { display: none !important; }
+
         .card { border: 0; border-radius: 14px; box-shadow: 0 3px 14px rgba(28,46,77,.07); }
         .table th { font-weight: 650; }
 
@@ -286,7 +306,7 @@
     </style>
     @stack('styles')
 </head>
-<body>
+<body @class(['executive-read-only' => auth()->user()?->isExecutiveViewer()])>
 @php
     $currentUser = auth()->user();
     $isOwner = $currentUser->isExecutiveViewer();
@@ -389,11 +409,11 @@
                 @if($currentUser->hasPermission('jmv.inventory.view'))
                 <a class="app-nav-link {{ request()->routeIs('jmv.inventory.*') ? 'active' : '' }}" href="{{ route('jmv.inventory.index') }}" title="Inventory"><i class="bi bi-box-seam"></i><span>Inventory</span></a>
                 @endif
-                @if($currentUser->hasPermission('jmv.inventory.movements.manage'))
+                @if($currentUser->isExecutiveViewer() || $currentUser->hasPermission('jmv.inventory.movements.manage'))
                 <a class="app-nav-link {{ request()->routeIs('jmv.stockin.*') ? 'active' : '' }}" href="{{ route('jmv.stockin.index') }}" title="Stock In"><i class="bi bi-box-arrow-in-down"></i><span>Stock In</span></a>
                 <a class="app-nav-link {{ request()->routeIs('jmv.stockout.*') ? 'active' : '' }}" href="{{ route('jmv.stockout.index') }}" title="Stock Out"><i class="bi bi-box-arrow-up"></i><span>Stock Out</span></a>
                 @endif
-                @if($currentUser->hasPermission('jmv.inventory.requests.create') || $currentUser->hasPermission('jmv.inventory.requests.approve'))
+                @if($currentUser->isExecutiveViewer() || $currentUser->hasPermission('jmv.inventory.requests.create') || $currentUser->hasPermission('jmv.inventory.requests.approve'))
                 <a class="app-nav-link {{ request()->routeIs('jmv.requests.*') ? 'active' : '' }}" href="{{ route('jmv.requests.index') }}" title="Stock Requests"><i class="bi bi-clipboard-check"></i><span>Stock Requests</span></a>
                 @endif
             @else
@@ -404,12 +424,10 @@
                     </a>
                 @endif
 
-                @unless ($isOwner)
-                    <a class="app-nav-link {{ $companiesActive ? 'active' : '' }}" href="{{ route('companies') }}" title="Companies">
-                        <i class="bi bi-grid" aria-hidden="true"></i>
-                        <span>Companies</span>
-                    </a>
-                @endunless
+                <a class="app-nav-link {{ $companiesActive ? 'active' : '' }}" href="{{ route('companies') }}" title="Companies">
+                    <i class="bi bi-grid" aria-hidden="true"></i>
+                    <span>Companies</span>
+                </a>
             @endif
         </nav>
 
@@ -428,7 +446,10 @@
             </div>
 
             <div class="topbar-actions">
-                <a class="icon-action" href="{{ $isShippingArea ? route('shipping.applications') : ($isYatiraArea ? route('yatira.applications') : ($currentUser->isAdmin() ? route('dashboard') : route('companies'))) }}" aria-label="Home">
+                @if($currentUser->isExecutiveViewer())
+                    <span class="d-none d-md-inline-flex align-items-center gap-1 rounded-pill border border-primary-subtle bg-primary-subtle px-3 py-2 small fw-bold text-primary-emphasis"><i class="bi bi-eye"></i> Read-only</span>
+                @endif
+                <a class="icon-action" href="{{ $currentUser->isAdmin() ? route('dashboard') : route('companies') }}" aria-label="Home">
                     <i class="bi bi-house" aria-hidden="true"></i>
                 </a>
                 <a class="icon-action notification-action" href="{{ route('notifications.index') }}" aria-label="Notifications">

@@ -26,7 +26,8 @@
 
     @php
         $canViewInventory = auth()->user()->hasPermission('jmv.inventory.view');
-        $canMoveStock = auth()->user()->hasPermission('jmv.inventory.movements.manage');
+        $isExecutiveViewer = auth()->user()->isExecutiveViewer();
+        $canMoveStock = $isExecutiveViewer || auth()->user()->hasPermission('jmv.inventory.movements.manage');
         $canViewReports = auth()->user()->hasPermission('jmv.inventory.reports.view');
     @endphp
     <div class="mx-auto grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -56,7 +57,7 @@
         </a>
         @endif
 
-        @if(auth()->user()->hasPermission('jmv.inventory.requests.create') || auth()->user()->hasPermission('jmv.inventory.requests.approve'))
+        @if($isExecutiveViewer || auth()->user()->hasPermission('jmv.inventory.requests.create') || auth()->user()->hasPermission('jmv.inventory.requests.approve'))
         <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-violet-400 hover:shadow-lg" href="{{ route('jmv.requests.index') }}"><span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-violet-50 text-2xl text-violet-700"><i class="bi bi-clipboard-check"></i></span><span><span class="block text-sm font-extrabold uppercase text-villa-900">Stock Requests</span><span class="mt-1 block text-xs leading-5 text-slate-500">Request, approve and release materials through a controlled workflow.</span></span></a>
         @endif
 
@@ -66,7 +67,7 @@
             <span><span class="block text-sm font-extrabold uppercase text-villa-900">User Management</span><span class="mt-1 block text-xs leading-5 text-slate-500">Manage company departments, positions and employee access.</span></span>
         </a>
         @endif
-        @unless($canViewInventory || $canMoveStock || $canViewReports || auth()->user()->hasPermission('jmv.inventory.requests.create') || auth()->user()->hasPermission('jmv.inventory.requests.approve') || auth()->user()->canManageUsers())
+        @unless($canViewInventory || $canMoveStock || $canViewReports || $isExecutiveViewer || auth()->user()->hasPermission('jmv.inventory.requests.create') || auth()->user()->hasPermission('jmv.inventory.requests.approve') || auth()->user()->canManageUsers())
         <div class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center"><i class="bi bi-shield-lock mb-3 block text-3xl text-slate-400"></i><h2 class="text-lg font-extrabold text-slate-800">No application assigned</h2><p class="mt-1 text-sm text-slate-500">Contact your administrator to assign JMV inventory access to your position.</p></div>
         @endunless
     </div>

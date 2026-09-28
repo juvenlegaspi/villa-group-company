@@ -71,6 +71,9 @@ class TechDefectWorkflowTest extends TestCase
         Storage::disk('local')->assertExists($defectPhoto->path);
         $this->assertDatabaseCount('tech_defect_attachments', 2);
         $this->assertDatabaseCount('tech_defect_audits', 3);
+        $createdLabel = $report->created_at->format('M d, Y g:i A');
+        $this->actingAs($this->captain)->get(route('tech-defects.index'))->assertOk()->assertSee($createdLabel);
+        $this->actingAs($this->captain)->get(route('tech-defects.show', $report))->assertOk()->assertSee('Created '.$createdLabel);
         $this->actingAs($this->captain)->put(route('tech-defects.update', $report), ['action' => 'submit_review'])->assertRedirect();
         $this->assertSame('For Review', $report->fresh()->status);
         $pdfResponse = $this->actingAs($this->captain)->get(route('tech-defects.pdf', $report));
@@ -210,8 +213,12 @@ class TechDefectWorkflowTest extends TestCase
         $this->actingAs($this->manager)->put(route('tech-defects.update', $report), ['action' => 'verify_resolution', 'verification_remarks' => 'Evidence and operation checked'])->assertRedirect();
         $this->assertSame('For Verification', $report->fresh()->status);
         $this->assertNotNull($report->fresh()->verified_at);
-        $this->actingAs($this->manager)->put(route('tech-defects.update', $report), ['action' => 'confirm_completion'])->assertRedirect();
+        $this->actingAs($this->manager)->put(route('tech-defects.update', $report), ['action' => 'confirm_completion'])
+            ->assertRedirect(route('tech-defects.show', $report))
+            ->assertSessionHasErrors('completion_cost');
+        $this->actingAs($this->manager)->put(route('tech-defects.update', $report), ['action' => 'confirm_completion', 'completion_cost' => 1250.75])->assertRedirect();
         $this->assertSame('Closed', $report->fresh()->status);
+        $this->assertSame('1250.75', $report->fresh()->completion_cost);
         $this->assertDatabaseHas('tech_defect_audits', ['tech_defect_id' => $report->id, 'action' => 'report_closed']);
     }
 
@@ -261,6 +268,38 @@ class TechDefectWorkflowTest extends TestCase
         $this->assertDatabaseHas('tech_defect_information_requests', ['id' => $firstRequest->id, 'request_text' => 'Provide latest engine readings', 'response_text' => 'Readings attached and stable', 'status' => 'Responded']);
         $this->assertDatabaseHas('tech_defect_information_requests', ['tech_defect_id' => $report->id, 'request_text' => 'Confirm the alarm timestamp', 'status' => 'Pending']);
         $this->assertDatabaseHas('tech_defect_audits', ['tech_defect_id' => $report->id, 'action' => 'information_responded']);
+    }
+
+    public function test_assessment_target_completion_is_based_on_date_identified_not_today(): void
+    {
+        $identified = today()->subWeeks(3);
+        $validTarget = $identified->copy()->addDay()->toDateString();
+        $report = $this->report([
+            'status' => 'For Assessment',
+            'date_identified' => $identified->toDateString(),
+        ]);
+
+        $this->actingAs($this->technician)->get(route('tech-defects.show', $report))
+            ->assertOk()
+            ->assertSee('min="'.$identified->toDateString().'"', false)
+            ->assertSee('value="'.$identified->toDateString().'"', false)
+            ->assertSee('Target can start from the identified date: '.$identified->format('M d, Y'));
+
+        $this->actingAs($this->technician)->put(route('tech-defects.update', $report), $this->assessment([
+            'target_completion_date' => $validTarget,
+        ]))->assertRedirect();
+
+        $report->refresh();
+        $this->assertSame('For Action', $report->status);
+        $this->assertSame($validTarget, $report->target_completion_date->toDateString());
+
+        $invalidReport = $this->report([
+            'status' => 'For Assessment',
+            'date_identified' => $identified->toDateString(),
+        ]);
+        $this->actingAs($this->technician)->put(route('tech-defects.update', $invalidReport), $this->assessment([
+            'target_completion_date' => $identified->copy()->subDay()->toDateString(),
+        ]))->assertSessionHasErrors('target_completion_date');
     }
 
     public function test_captain_cannot_review_even_with_approver_access_and_authority(): void
@@ -483,9 +522,56 @@ class TechDefectWorkflowTest extends TestCase
             ->assertViewHas('totalReports', 2)->assertViewHas('open', 1)->assertViewHas('completed', 1)->assertViewHas('criticalDefects', 1);
     }
 
-    private function assessment(): array
+    public function test_excel_export_uses_the_selected_identified_date_range(): void
     {
-        return ['action' => 'complete_assessment', 'technical_assessment' => 'Bearing inspection required', 'technical_findings' => 'Bearing wear confirmed', 'technical_recommendation' => 'Replace bearing and monitor vibration', 'assigned_to_user_id' => $this->technician->id, 'target_completion_date' => today()->addDay()->toDateString()];
+        $included = $this->report(['date_identified' => today()->subDay()->toDateString()]);
+        $excluded = $this->report(['date_identified' => today()->subMonths(2)->toDateString()]);
+        $dateFrom = today()->subWeek()->toDateString();
+        $dateTo = today()->toDateString();
+
+        $response = $this->actingAs($this->manager)->get(route('tech-defects.reports.csv', [
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+        ]));
+
+        $response->assertOk()
+            ->assertDownload("technical-defects-{$dateFrom}-to-{$dateTo}.csv")
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('VILLA SHIPPING LINES - TECHNICAL & DEFECT REPORT', $csv);
+        $this->assertStringContainsString('Defect Description', $csv);
+        $this->assertStringContainsString('Abnormal vibration detected', $csv);
+        $this->assertStringContainsString($included->report_code, $csv);
+        $this->assertStringNotContainsString($excluded->report_code, $csv);
+
+        $excel = $this->actingAs($this->manager)->get(route('tech-defects.reports.excel', [
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+        ]));
+        $excel->assertOk()
+            ->assertDownload("technical-defects-{$dateFrom}-to-{$dateTo}.xlsx")
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringStartsWith("PK\x03\x04", $excel->getContent());
+        $this->assertStringContainsString('VILLA SHIPPING LINES - TECHNICAL &amp; DEFECT REPORT', $excel->getContent());
+        $this->assertStringContainsString($included->report_code, $excel->getContent());
+        $this->assertStringNotContainsString($excluded->report_code, $excel->getContent());
+
+        $this->actingAs($this->manager)->get(route('tech-defects.index'))
+            ->assertOk()
+            ->assertSee('2 reports available')
+            ->assertSee('value="'.$excluded->date_identified->toDateString().'"', false)
+            ->assertSee('value="'.$included->date_identified->toDateString().'"', false);
+
+        $this->actingAs($this->manager)->get(route('tech-defects.reports.csv', [
+            'date_from' => $dateTo,
+            'date_to' => $dateFrom,
+        ]))->assertSessionHasErrors('date_to');
+    }
+
+    private function assessment(array $overrides = []): array
+    {
+        return array_merge(['action' => 'complete_assessment', 'technical_assessment' => 'Bearing inspection required', 'technical_findings' => 'Bearing wear confirmed', 'technical_recommendation' => 'Replace bearing and monitor vibration', 'assigned_to_user_id' => $this->technician->id, 'target_completion_date' => today()->addDay()->toDateString()], $overrides);
     }
 
     private function report(array $overrides = []): TechDefect

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Vessel extends Model
 {
@@ -17,7 +18,23 @@ class Vessel extends Model
         'service_speed',
         'charter_type',
         'vessel_status',
+        'location_update_token',
+        'location_update_token_created_at',
     ];
+
+    protected $casts = [
+        'location_update_token_created_at' => 'datetime',
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Vessel $vessel): void {
+            if (blank($vessel->location_update_token)) {
+                $vessel->location_update_token = Str::random(64);
+                $vessel->location_update_token_created_at = now();
+            }
+        });
+    }
 
     public function voyageLogs()
     {
@@ -44,5 +61,10 @@ class Vessel extends Model
         return $this->belongsToMany(User::class, 'user_vessel_assignments')
             ->withPivot(['assigned_by', 'is_primary', 'is_active', 'effective_from', 'effective_until'])
             ->withTimestamps();
+    }
+
+    public function positionLogs()
+    {
+        return $this->hasMany(VesselPositionLog::class);
     }
 }

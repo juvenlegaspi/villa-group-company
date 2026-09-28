@@ -8,22 +8,42 @@ use Symfony\Component\HttpFoundation\Response;
 
 class OwnerDashboardOnly
 {
-    private const ALLOWED_ROUTES = [
-        'dashboard',
-        'division.dashboard',
-        'voyage-logs.dashboard',
-        'tech-defects.dashboard',
-        'vessel-certificates.dashboard',
-        'supplier.report',
-        'profile',
+    private const ADMIN_ONLY_ROUTES = [
+        'users.*',
+        'organization.*',
+        'departments.*',
+    ];
+
+    private const MUTATION_FORM_ROUTES = [
+        '*.create',
+        '*.edit',
+        'vessel-certificates.add',
+        'vessel-certificates.renew',
+        'tech-defects.repair-closeout',
+    ];
+
+    private const ALLOWED_PERSONAL_MUTATIONS = [
         'profile.update',
+        'notifications.read',
+        'notifications.read-all',
     ];
 
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->user()?->isExecutiveViewer() && ! $request->routeIs(...self::ALLOWED_ROUTES)) {
-            return redirect()->route('dashboard')
-                ->with('error', 'Owner accounts have read-only dashboard access.');
+        if (! $request->user()?->isExecutiveViewer()) {
+            return $next($request);
+        }
+
+        if ($request->routeIs(...self::ADMIN_ONLY_ROUTES)) {
+            abort(403, 'User Management and Organization Setup are restricted to system administrators.');
+        }
+
+        if ($request->routeIs(...self::MUTATION_FORM_ROUTES)) {
+            abort(403, 'Executive Viewer access is read-only.');
+        }
+
+        if (! $request->isMethodSafe() && ! $request->routeIs(...self::ALLOWED_PERSONAL_MUTATIONS)) {
+            abort(403, 'Executive Viewer access is read-only.');
         }
 
         return $next($request);

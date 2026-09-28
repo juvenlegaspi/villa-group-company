@@ -104,13 +104,23 @@ class ShippingChecklistReminderService
         $iterations = 0;
         while ($occurrence <= $occurrenceUntil && $iterations < 1500) {
             if (! $event->recurrence_ends_on || $occurrence <= $event->recurrence_ends_on->copy()->endOfDay()) {
-                $occurrences[] = $occurrence->copy();
+                if (! $this->occurrenceIsCompleted($event, $occurrence)) {
+                    $occurrences[] = $occurrence->copy();
+                }
             }
             $this->advanceOccurrence($occurrence, $event);
             $iterations++;
         }
 
         return $occurrences;
+    }
+
+    private function occurrenceIsCompleted(ShippingCalendarEvent $event, Carbon $occurrence): bool
+    {
+        return DB::table('shipping_calendar_occurrence_completions')
+            ->where('event_id', $event->id)
+            ->where('occurrence_starts_at', $occurrence->format('Y-m-d H:i:s'))
+            ->exists();
     }
 
     private function fastForward(Carbon $occurrence, ShippingCalendarEvent $event, Carbon $target): void

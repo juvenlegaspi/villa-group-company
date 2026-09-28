@@ -1,203 +1,169 @@
 @extends('layouts.app')
+@section('title', 'Create Voyage | Villa Shipping Lines')
+
+@push('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+#locationMapModal .voyage-route-dialog{width:min(96vw,1440px);max-width:none;margin:2vh auto}#locationMapModal .modal-content{height:96vh;max-height:900px}#locationMapModal .modal-body{min-height:0;overflow:hidden}.voyage-route-grid{display:grid!important;grid-template-columns:360px minmax(0,1fr)!important;height:100%;min-height:0}.voyage-route-sidebar{min-width:0;overflow-x:hidden;overflow-y:auto}.voyage-route-sidebar>*{box-sizing:border-box;min-width:0;max-width:100%}.voyage-route-sidebar input,.voyage-route-sidebar button,#confirm-map-location{box-sizing:border-box!important;min-width:0!important;max-width:100%!important}#confirm-map-location{display:flex!important;width:100%!important;white-space:normal}.voyage-route-map-panel{height:100%;min-width:0;min-height:0}#voyage-location-map{display:block;width:100%;height:100%!important;min-height:0;background:#dbeafe}.voyage-map-marker{display:grid;width:34px;height:34px;place-items:center;border:3px solid #fff;border-radius:999px;color:#fff;font-size:13px;font-weight:900;box-shadow:0 5px 14px #0f172a52}.voyage-map-marker--origin{background:#059669}.voyage-map-marker--destination{background:#dc2626}.voyage-map-current-ship{display:grid;width:28px;height:28px;place-items:center;color:#d97706;font-size:26px;line-height:1;filter:drop-shadow(-1px -1px 0 #fff) drop-shadow(1px 1px 0 #fff) drop-shadow(0 3px 4px #0f172a80)}.voyage-direction-arrow{display:block;color:#fff;font-size:24px;font-weight:900;line-height:24px;text-shadow:-1px -1px 0 #0891b2,1px -1px 0 #0891b2,-1px 1px 0 #0891b2,1px 1px 0 #0891b2,0 2px 5px #0f172a99;transform-origin:center}.location-card.has-position{border-color:#86efac!important;background:#f0fdf4}.route-point-button.is-active{border-color:#2563eb!important;background:#eff6ff!important;box-shadow:0 0 0 2px #bfdbfe}.route-point-button.is-complete .route-point-status{color:#047857}@media(max-width:991.98px){#locationMapModal .voyage-route-dialog{width:auto;max-width:calc(100vw - 1rem);margin:.5rem auto}#locationMapModal .modal-content{height:calc(100dvh - 1rem);max-height:none}#locationMapModal .modal-body{overflow-y:auto}.voyage-route-grid{grid-template-columns:minmax(0,1fr)!important;height:auto}.voyage-route-sidebar{overflow:visible}.voyage-route-map-panel{height:52vh;min-height:360px}#voyage-location-map{height:100%!important;min-height:360px}}@media(max-width:575.98px){.voyage-route-map-panel{height:45vh;min-height:310px}#voyage-location-map{min-height:310px}}
+</style>
+@endpush
+
 @section('content')
-<div class="container-fluid">
-    <!-- HEADER -->
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body d-flex justify-content-between align-items-center">
-            <div>
-                <h4 class="fw-bold mb-0 text-primary">🚢 Add Voyage</h4>
-                <small class="text-muted">Create new voyage record</small>
+@php
+    $locations = [
+        'origin' => ['label' => 'Port Origin', 'id' => 'port_id', 'name' => 'origin_location_name', 'lat' => 'origin_latitude', 'lng' => 'origin_longitude', 'color' => '#059669', 'letter' => 'O'],
+        'destination' => ['label' => 'Port Destination', 'id' => 'port_destination_id', 'name' => 'destination_location_name', 'lat' => 'destination_latitude', 'lng' => 'destination_longitude', 'color' => '#dc2626', 'letter' => 'D'],
+        'current' => ['label' => 'Current Location', 'id' => 'current_location_id', 'name' => 'current_location_name', 'lat' => 'current_latitude', 'lng' => 'current_longitude', 'color' => '#d97706', 'letter' => 'C'],
+    ];
+    $mapPorts = $ports->map(fn ($port) => ['id' => $port->id, 'name' => $port->port_name, 'province' => $port->province, 'lat' => $port->latitude, 'lng' => $port->longitude])->values();
+@endphp
+<section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-white to-slate-100 px-4 py-6 sm:px-7 lg:px-12">
+<div class="mx-auto max-w-7xl">
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.14em] text-villa-600">Vessel Management</p><h1 class="m-0 text-2xl font-extrabold tracking-tight text-villa-900 sm:text-3xl">Create Voyage</h1><p class="mt-1 text-sm text-slate-500">{{ $vessel->vessel_name }} · Search and pin each location directly on the map.</p></div>
+        <a href="{{ url()->previous() }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-700 no-underline shadow-sm hover:bg-slate-50"><i class="bi bi-arrow-left"></i> Back</a>
+    </header>
+
+    @if($errors->any())
+        <div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert"><p class="font-extrabold">Please review the voyage information.</p><ul class="mb-0 mt-2 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+    @endif
+
+    <form method="POST" action="{{ route('voyages.store') }}" class="space-y-5">
+        @csrf
+        <input type="hidden" name="vessel_id" value="{{ $vessel->id }}">
+        <input type="hidden" id="current_accuracy_meters" name="current_accuracy_meters" value="{{ old('current_accuracy_meters') }}">
+        <input type="hidden" id="current_position_source" name="current_position_source" value="{{ old('current_position_source', $lastCompletedVoyage ? 'previous_voyage' : 'map_pin') }}">
+
+        <article class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <header class="border-b border-slate-100 px-5 py-4 sm:px-6"><h2 class="text-base font-extrabold text-slate-900">Voyage Information</h2><p class="mt-0.5 text-xs text-slate-500">Operational and cargo details for this voyage.</p></header>
+            <div class="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+                <div><label class="form-label">Voyage ID</label><input class="form-control bg-slate-50" value="{{ $voyageCode }}" readonly></div>
+                <div><label class="form-label" for="voyage_no">Voyage Number</label><input id="voyage_no" type="text" name="voyage_no" class="form-control uppercase" value="{{ old('voyage_no') }}" required></div>
+                <div><label class="form-label" for="crew_on_board">Crew on Board</label><input id="crew_on_board" type="number" min="0" name="crew_on_board" class="form-control" value="{{ old('crew_on_board') }}" required></div>
+                <div><label class="form-label" for="cargo_type">Cargo Type</label><input id="cargo_type" type="text" name="cargo_type" class="form-control uppercase" value="{{ old('cargo_type') }}" required></div>
+                <div><label class="form-label" for="cargo_volume">Cargo Volume</label><div class="input-group"><input id="cargo_volume" type="number" step="0.01" min="0" name="cargo_volume" class="form-control" value="{{ old('cargo_volume') }}" required><select name="cargo_unit" class="form-select" style="max-width:145px" required><option value="">Unit</option>@foreach(['Crates','MT','LB','CBM','L','BBL','Bushel','Bag/Sacks','Piece/Unit'] as $unit)<option value="{{ $unit }}" @selected(old('cargo_unit') === $unit)>{{ $unit }}</option>@endforeach</select></div></div>
+                <div><label class="form-label" for="fuel_rob">Beginning Fuel ROB</label><div class="input-group"><input id="fuel_rob" type="number" step="0.01" min="0" name="fuel_rob" class="form-control" value="{{ old('fuel_rob', $lastVoyage ? preg_replace('/[^0-9.]/', '', $lastVoyage->fuel_rob) : '') }}" {{ $lastVoyage ? 'readonly' : '' }} required><span class="input-group-text">Liters</span></div></div>
+                <div><label class="form-label" for="arrival_date">ETA Next Port</label><input id="arrival_date" type="datetime-local" name="arrival_date" class="form-control" value="{{ old('arrival_date') }}"></div>
             </div>
-            <a href="{{ url()->previous() }}" class="btn btn-light border">
-                ← Back
-            </a>
-        </div>
-    </div>
-    <!-- FORM -->
-    <div class="card shadow-sm border-0">
-        <div class="card-body">
-            <form method="POST" action="{{ url('/shipping/voyage-logs/store') }}">
-                @csrf
-                <input type="hidden" name="vessel_id" value="{{ $vessel->id }}">
-                <div class="row g-3">
-                    <!-- Voyage ID -->
-                    <div class="col-md-6">
-                        <label class="form-label">Voyage ID</label>
-                        <input type="text" class="form-control bg-light" value="VL-NEW" readonly>
+        </article>
+
+        <article class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6"><div><h2 class="text-base font-extrabold text-slate-900">Voyage Route &amp; Current Position</h2><p class="mt-0.5 text-xs text-slate-500">Build all three points and preview the voyage track in one map.</p></div><button type="button" id="open-voyage-route-map" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-5 text-sm font-extrabold text-white shadow-sm hover:bg-villa-900" data-bs-toggle="modal" data-bs-target="#locationMapModal"><i class="bi bi-map"></i> Set Voyage Route on Map</button></header>
+            <div class="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-3">
+                @foreach($locations as $key => $location)
+                    @php
+                        $inheritedCurrentName = $key === 'current' ? $lastCompletedVoyage?->current_location : null;
+                        $inheritedCurrentLatitude = $key === 'current' ? $lastCompletedVoyage?->current_latitude : null;
+                        $inheritedCurrentLongitude = $key === 'current' ? $lastCompletedVoyage?->current_longitude : null;
+                    @endphp
+                    <section class="location-card rounded-2xl border border-slate-200 bg-slate-50/60 p-4 transition" data-location-card="{{ $key }}">
+                        <div class="mb-3 flex items-center gap-2"><span class="grid h-8 w-8 place-items-center rounded-full text-xs font-black text-white" style="background:{{ $location['color'] }}">{{ $location['letter'] }}</span><h3 class="text-sm font-extrabold text-slate-900">{{ $location['label'] }}</h3></div>
+                        <input id="{{ $location['name'] }}" name="{{ $location['name'] }}" type="hidden" value="{{ old($location['name'], $inheritedCurrentName) }}" required>
+                        <input id="{{ $location['id'] }}" name="{{ $location['id'] }}" type="hidden" value="{{ old($location['id']) }}">
+                        <input id="{{ $location['lat'] }}" name="{{ $location['lat'] }}" type="hidden" value="{{ old($location['lat'], $inheritedCurrentLatitude) }}" required>
+                        <input id="{{ $location['lng'] }}" name="{{ $location['lng'] }}" type="hidden" value="{{ old($location['lng'], $inheritedCurrentLongitude) }}" required>
+                        <div class="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><p class="text-[.65rem] font-extrabold uppercase tracking-wide text-slate-400">Pinned location</p><p class="mt-1 truncate text-xs font-bold text-slate-600" data-location-summary="{{ $key }}">No location pinned yet</p></div>
+                        @if($key === 'current' && $lastCompletedVoyage?->current_location && $lastCompletedVoyage?->current_latitude !== null && $lastCompletedVoyage?->current_longitude !== null)
+                            <p class="mb-0 mt-2 text-[.68rem] font-semibold text-emerald-700"><i class="bi bi-arrow-repeat mr-1" aria-hidden="true"></i>From the last completed voyage; you may move this pin.</p>
+                        @endif
+                    </section>
+                @endforeach
+            </div>
+        </article>
+
+        <div class="sticky bottom-3 z-10 flex flex-col-reverse justify-end gap-2 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:flex-row"><a href="{{ url()->previous() }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-5 text-sm font-extrabold text-slate-700 no-underline">Cancel</a><button class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-6 text-sm font-extrabold text-white"><i class="bi bi-check2-circle"></i> Save Voyage &amp; Position</button></div>
+    </form>
+
+    <div class="modal fade" id="locationMapModal" tabindex="-1" aria-labelledby="locationMapModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered voyage-route-dialog"><div class="modal-content overflow-hidden rounded-3xl border-0">
+            <div class="modal-header border-b border-slate-200 px-4 py-3 sm:px-5"><div><p class="mb-1 text-[.65rem] font-extrabold uppercase tracking-wider text-villa-600">Voyage Route Builder</p><h2 class="modal-title text-lg font-extrabold" id="locationMapModalLabel">Set Route on Map</h2><p class="mb-0 mt-1 text-xs text-slate-500">Select a point, search its location, then repeat for all three.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body p-0"><div class="voyage-route-grid grid grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)]">
+                <aside class="voyage-route-sidebar flex min-h-0 flex-col gap-4 border-b border-slate-200 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
+                    <div class="space-y-2">
+                        @foreach($locations as $key => $location)
+                            <button type="button" class="route-point-button flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition" data-route-point="{{ $key }}">
+                                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style="background:{{ $location['color'] }}">{{ $location['letter'] }}</span>
+                                <span class="min-w-0"><strong class="block text-xs text-slate-900">{{ $location['label'] }}</strong><span class="route-point-status block truncate text-[.7rem] text-slate-500" data-route-status="{{ $key }}">Not pinned</span></span>
+                                <i class="bi bi-chevron-right ms-auto text-slate-400"></i>
+                            </button>
+                        @endforeach
                     </div>
-                    <!-- Cargo -->
-                    <div class="col-md-6">
-                        <label class="form-label">Cargo Type</label>
-                        <input type="text" name="cargo_type" class="form-control">
-                        @error('cargo_type')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
+                    <div><label class="form-label" for="map-place-search">Pinned place name</label><input id="map-place-search" type="text" class="form-control bg-white" placeholder="Click a point on the map" readonly><p id="map-search-message" class="mb-0 mt-2 text-xs text-slate-500">Select Origin, Destination, or Current Location, then click its exact position on the map.</p></div>
+                    <div class="grid grid-cols-2 gap-2"><div><label class="text-[.66rem] font-extrabold uppercase text-slate-500" for="modal-latitude">Latitude</label><input id="modal-latitude" type="number" step="0.0000001" min="-90" max="90" class="form-control form-control-sm"></div><div><label class="text-[.66rem] font-extrabold uppercase text-slate-500" for="modal-longitude">Longitude</label><input id="modal-longitude" type="number" step="0.0000001" min="-180" max="180" class="form-control form-control-sm"></div></div>
+                    <button id="modal-use-device-location" type="button" class="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-extrabold text-amber-800"><i class="bi bi-crosshair"></i> Use My Current GPS</button>
+                    <div class="rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-800"><i class="bi bi-info-circle me-1"></i> You may drag any pin or click the map to adjust the currently selected point.</div>
+                    <div class="mt-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                        <p id="route-completion-message" class="mb-2 text-xs font-bold text-slate-500">0 of 3 locations ready</p>
+                        <button id="confirm-map-location" type="button" class="btn btn-primary w-100"><i class="bi bi-check2-circle"></i> Save Voyage Map Points</button>
+                        <button type="button" class="btn btn-link mt-1 w-100 text-sm text-slate-500" data-bs-dismiss="modal">Cancel</button>
                     </div>
-                    <!-- Volume -->
-                    <div class="col-md-6">
-                        <label class="form-label">Cargo Volume</label>
-                        <div class="input-group">
-
-                        <input type="text"
-                            name="cargo_volume"
-                            class="form-control"
-                            placeholder="Enter volume">
-
-                        <select name="cargo_unit"
-                                class="form-select"
-                                style="max-width:120px;"
-                                required>
-                            <option value="">-- SELECT UNIT --</option>
-                            <option value="Crates">Crates</option>
-                            <option value="MT">MT</option>
-                            <option value="LB">LB</option>
-                            <option value="CBM">CBM</option>
-                            <option value="L">L</option>
-                            <option value="BBL">BBL</option>
-                            <option value="Bushel">Bushel</option>
-                            <option value="Bag/Sacks">Bag/Sacks</option>
-                            <option value="Piece/Unit">Piece/Unit</option>
-                        </select>
-                    </div>
-                        @error('cargo_volume')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
-                    </div>
-                    <!-- Crew -->
-                    <div class="col-md-6">
-                        <label class="form-label">Crew on Board</label>
-                        <input type="number" name="crew_on_board" class="form-control" placeholder="Enter number of crew">
-                        @error('crew_on_board')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
-                    </div>
-                    <!-- Port -->
-                    <div class="col-md-3">
-                        <label class="form-label">Port Origin</label>
-                        <select name="port_id" class="form-control" required>
-                            <option value="">-- SELECT PORT --</option>
-                            @foreach($ports as $port)
-                                <option value="{{ $port->id }}">
-                                    {{ $port->port_name }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('port_id')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Port Destination</label>
-
-                        <select name="port_destination_id" class="form-control" required>
-                            <option value="">-- SELECT PORT DESTINATION --</option>
-
-                            @foreach($ports as $port)
-                                <option value="{{ $port->id }}">
-                                    {{ $port->port_name }}
-                                </option>
-                            @endforeach
-                        </select>
-
-                        @error('port_destination_id')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
-                    </div>
-                    <!-- Voyage Number -->
-                    <div class="col-md-6">
-                        <label class="form-label">Current Location</label>
-
-                        <select name="current_location_id" class="form-control" required>
-                            <option value="">-- SELECT PORT --</option>
-
-                            @foreach($ports as $port)
-                                <option value="{{ $port->id }}">
-                                    {{ $port->port_name }}
-                                </option>
-                            @endforeach
-                        </select>
-
-                        @error('current_location_id')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">Voyage Number</label>
-
-                        <input type="text"
-                            name="voyage_no"
-                            class="form-control"
-                            placeholder="Enter voyage number">
-
-                        @error('voyage_no')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
-                    </div>
-                    <!-- Fuel -->
-                    <div class="col-md-6">
-                        <label class="form-label">Biginning Fuel ROB</label>
-                        <div class="input-group">
-                            <input type="number"
-                                name="fuel_rob"
-                                class="form-control"
-                                value="{{ $lastVoyage ? preg_replace('/[^0-9.]/', '', $lastVoyage->fuel_rob) : '' }}"
-                                placeholder="Enter fuel"
-                                {{ $lastVoyage ? 'readonly' : '' }}>
-                            <span class="input-group-text">Liters</span>
-                            @error('fuel_rob')
-                                <small class="text-danger">{{ $message }}</small>
-                            @enderror
-                        </div>
-                    </div>
-                    <!-- ETA NEXT PORT -->
-                    <div class="col-md-6">
-                        <label class="form-label">ETA Next Port</label>
-
-                        <input type="datetime-local"
-                            name="arrival_date"
-                            class="form-control">
-
-                        @error('arrival_date')
-                            <small class="text-danger">{{ $message }}</small>
-                        @enderror
-                    </div>
-                </div>
-                <!-- BUTTONS -->
-                <div class="mt-4 d-flex justify-content-end">
-                    <a href="{{ url()->previous() }}" class="btn btn-light border me-2">
-                        Cancel
-                    </a>
-                    <button class="btn btn-primary px-4 shadow-sm">
-                        💾 Save Voyage
-                    </button>
-                </div>
-            </form>
-        </div>
+                </aside>
+                <div class="voyage-route-map-panel relative min-w-0"><div id="voyage-location-map" role="application" aria-label="Choose exact voyage location"></div><div id="map-loading" class="absolute inset-0 z-[500] grid place-items-center bg-slate-100 p-6 text-center text-sm font-bold text-slate-600">Loading interactive map...</div></div>
+            </div></div>
+        </div></div>
     </div>
 </div>
-<!-- STYLE -->
-<style>
-.form-control {
-    border-radius: 8px;
-}
-.card {
-    border-radius: 12px;
-}
-label {
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-input:focus {
-    box-shadow: none;
-    border-color: #0d6efd;
-}
-</style>
+</section>
+@endsection
+
+@push('scripts')
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-document.querySelectorAll('input[type="text"]').forEach(input => {
-    input.addEventListener('input', function() {
-        this.value = this.value.toUpperCase();
-    });
+document.addEventListener('voyage-route-legacy-disabled',()=>{
+ const modalElement=document.getElementById('locationMapModal'),loading=document.getElementById('map-loading');
+ const config={origin:{id:'port_id',name:'origin_location_name',lat:'origin_latitude',lng:'origin_longitude',label:'Port Origin',className:'origin',letter:'O'},destination:{id:'port_destination_id',name:'destination_location_name',lat:'destination_latitude',lng:'destination_longitude',label:'Port Destination',className:'destination',letter:'D'},current:{id:'current_location_id',name:'current_location_name',lat:'current_latitude',lng:'current_longitude',label:'Current Location',className:'current',letter:'C'}};
+ const ports=@json($mapPorts);
+ const geocodeSearchUrl=@js(route('voyage-map.search')),geocodeReverseUrl=@js(route('voyage-map.reverse'));
+ let active='origin',draft=null,map=null,marker=null;
+ const number=id=>Number.parseFloat(document.getElementById(id).value);
+ const valid=(lat,lng)=>Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180;
+ const normalize=value=>String(value||'').trim().toLowerCase();
+ const portLabel=port=>port.province?`${port.name}, ${port.province}`:port.name;
+ const findPort=value=>ports.find(port=>normalize(portLabel(port))===normalize(value)||normalize(port.name)===normalize(value));
+ const summary=key=>{const item=config[key],lat=number(item.lat),lng=number(item.lng),name=document.getElementById(item.name).value.trim(),card=document.querySelector(`[data-location-card="${key}"]`),text=document.querySelector(`[data-location-summary="${key}"]`);if(name&&valid(lat,lng)){text.textContent=`${name} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;card.classList.add('has-position')}else{card.classList.remove('has-position');text.textContent=name?'Open the map and pin this place':'Type and pin a location'}};
+ function initMap(){if(map||typeof L==='undefined')return;map=L.map('voyage-location-map').setView([12.8797,121.7740],6);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);loading.remove();map.on('click',e=>{setDraft(e.latlng.lat,e.latlng.lng);reverseDraft()});}
+ function icon(){const item=config[active],current=item.className==='current';return L.divIcon({className:'',html:current?'<span class="voyage-map-current-ship" title="Current vessel location"><svg viewBox="0 0 36 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" d="M3 17.5h27.5l-4.8 8H8.2L3 17.5Z"/><path fill="currentColor" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" d="M8 13.5h17l5.5 4H3l5-4Zm2-7h11v7H10v-7Zm11 3h5v4h-5v-4Z"/><path fill="#fff" d="M12 8.5h2.6v2.2H12zm4.2 0h2.6v2.2h-2.6zm6.2 2.5h2v1.5h-2z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7 28.5c2 1.1 4 1.1 6 0s4-1.1 6 0 4 1.1 6 0"/></svg></span>':`<span class="voyage-map-marker voyage-map-marker--${item.className}">${item.letter}</span>`,iconSize:current?[28,28]:[34,34],iconAnchor:current?[14,14]:[17,17]})}
+ function setDraft(lat,lng,center=false){lat=Number.parseFloat(lat);lng=Number.parseFloat(lng);if(!valid(lat,lng))return;draft={lat,lng};document.getElementById('modal-latitude').value=lat.toFixed(7);document.getElementById('modal-longitude').value=lng.toFixed(7);if(!map)return;if(!marker){marker=L.marker([lat,lng],{draggable:true,icon:icon()}).addTo(map);marker.on('dragend',e=>{const p=e.target.getLatLng();setDraft(p.lat,p.lng);reverseDraft()})}else{marker.setIcon(icon()).setLatLng([lat,lng])}if(center)map.setView([lat,lng],Math.max(map.getZoom(),11));}
+ function openPicker(key,show=true){active=key;const item=config[key];document.getElementById('locationMapModalLabel').textContent=`Choose ${item.label}`;document.getElementById('map-place-search').value=document.getElementById(item.name).value;document.getElementById('map-search-message').textContent='Type a saved location to jump to it, or tap the exact point on the map.';document.getElementById('modal-use-device-location').classList.toggle('d-none',key!=='current');if(show)window.bootstrap.Modal.getOrCreateInstance(modalElement).show()}
+ modalElement.addEventListener('shown.bs.modal',()=>{initMap();if(!map){loading.textContent='The map could not load. Enter coordinates manually.';return}setTimeout(()=>map.invalidateSize(),80);const item=config[active],lat=number(item.lat),lng=number(item.lng),matched=findPort(document.getElementById(item.name).value);draft=null;if(valid(lat,lng))setDraft(lat,lng,true);else if(matched&&valid(Number(matched.lat),Number(matched.lng)))setDraft(matched.lat,matched.lng,true);else{if(marker){marker.remove();marker=null}document.getElementById('modal-latitude').value='';document.getElementById('modal-longitude').value='';map.setView([12.8797,121.7740],6)}});
+ document.querySelectorAll('.select-map-location').forEach(button=>button.addEventListener('click',()=>openPicker(button.dataset.location,false)));
+ document.querySelectorAll('.location-name-input').forEach(input=>input.addEventListener('change',()=>{const key=input.dataset.location,item=config[key],matched=findPort(input.value);if(matched){document.getElementById(item.id).value=matched.id;if(valid(Number(matched.lat),Number(matched.lng))){document.getElementById(item.lat).value=matched.lat;document.getElementById(item.lng).value=matched.lng;if(key==='current')document.getElementById('current_position_source').value='port'}}else{document.getElementById(item.id).value='';document.getElementById(item.lat).value='';document.getElementById(item.lng).value=''}summary(key)}));
+ ['modal-latitude','modal-longitude'].forEach(id=>document.getElementById(id).addEventListener('change',()=>setDraft(number('modal-latitude'),number('modal-longitude'),true)));
+ document.getElementById('confirm-map-location').addEventListener('click',()=>{const name=document.getElementById('map-place-search').value.trim();if(!name)return window.alert('Type the location name first.');if(!draft)return window.alert('Tap the map to choose the exact location first.');const item=config[active],matched=findPort(name);document.getElementById(item.name).value=name;document.getElementById(item.id).value=matched?.id||'';document.getElementById(item.lat).value=draft.lat.toFixed(7);document.getElementById(item.lng).value=draft.lng.toFixed(7);if(active==='current')document.getElementById('current_position_source').value=matched?'port':'map_pin';summary(active);window.bootstrap.Modal.getOrCreateInstance(modalElement).hide()});
+ async function searchSavedPlace(){const field=document.getElementById('map-place-search'),button=document.getElementById('search-map-location'),query=normalize(field.value),message=document.getElementById('map-search-message');if(!query){message.textContent='Type a location name first.';return}const matched=findPort(field.value)||ports.find(port=>normalize(portLabel(port)).includes(query));if(matched&&valid(Number(matched.lat),Number(matched.lng))){field.value=portLabel(matched);setDraft(matched.lat,matched.lng,true);message.textContent='Location found and pinned. You can adjust the pin before confirming.';return}button.disabled=true;message.textContent='Searching location...';try{const response=await fetch(`${geocodeSearchUrl}?query=${encodeURIComponent(field.value.trim())}`,{headers:{Accept:'application/json'}});const payload=await response.json();if(!response.ok)throw new Error(payload.message||'Location search failed.');const result=payload.results?.[0];if(!result)throw new Error('No matching location was found.');field.value=result.name;setDraft(result.latitude,result.longitude,true);message.textContent='Location found and pinned automatically. You can adjust the pin.'}catch(error){message.textContent=error.message+' You can still move the map and tap the exact point.'}finally{button.disabled=false}}
+ async function reverseDraft(){if(!draft)return;const field=document.getElementById('map-place-search'),message=document.getElementById('map-search-message');message.textContent='Identifying pinned location...';try{const response=await fetch(`${geocodeReverseUrl}?latitude=${draft.lat}&longitude=${draft.lng}`,{headers:{Accept:'application/json'}});const payload=await response.json();if(!response.ok)throw new Error(payload.message||'Address lookup failed.');if(payload.name)field.value=payload.name;message.textContent='Pinned location identified. Review the name, then confirm.'}catch(error){message.textContent=error.message+' You may type the location name manually.'}}
+ document.getElementById('search-map-location').addEventListener('click',searchSavedPlace);document.getElementById('map-place-search').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchSavedPlace()}});
+ document.getElementById('modal-use-device-location').addEventListener('click',e=>{const button=e.currentTarget;if(!navigator.geolocation)return window.alert('GPS is not supported by this device.');button.disabled=true;button.textContent='Getting GPS location...';navigator.geolocation.getCurrentPosition(position=>{setDraft(position.coords.latitude,position.coords.longitude,true);reverseDraft();document.getElementById('current_accuracy_meters').value=Math.round(position.coords.accuracy||0);document.getElementById('current_position_source').value='device_gps';button.disabled=false;button.innerHTML='<i class="bi bi-check2-circle"></i> GPS Location Captured'},error=>{button.disabled=false;button.innerHTML='<i class="bi bi-crosshair"></i> Use My Current GPS';window.alert(error.message||'Unable to get your location.')},{enableHighAccuracy:true,timeout:15000,maximumAge:60000})});
+ Object.keys(config).forEach(summary);document.querySelectorAll('input.uppercase').forEach(input=>input.addEventListener('input',()=>input.value=input.value.toUpperCase()));
 });
 </script>
-@endsection
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+ const modal=document.getElementById('locationMapModal'),loading=document.getElementById('map-loading');
+ const config={origin:{id:'port_id',name:'origin_location_name',lat:'origin_latitude',lng:'origin_longitude',label:'Port Origin',className:'origin',letter:'O'},destination:{id:'port_destination_id',name:'destination_location_name',lat:'destination_latitude',lng:'destination_longitude',label:'Port Destination',className:'destination',letter:'D'},current:{id:'current_location_id',name:'current_location_name',lat:'current_latitude',lng:'current_longitude',label:'Current Location',className:'current',letter:'C'}};
+ const keys=['origin','destination','current'],ports=@json($mapPorts),reverseUrl=@js(route('voyage-map.reverse'));
+ let active='origin',points={},map=null,markers={},routeLine=null,routeArrows=[];
+ const valid=(lat,lng)=>Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180;
+ const normalize=value=>String(value||'').trim().toLowerCase();
+ const portLabel=port=>port.province?`${port.name}, ${port.province}`:port.name;
+ const findPort=value=>ports.find(port=>normalize(portLabel(port))===normalize(value)||normalize(port.name)===normalize(value));
+ const ready=key=>points[key]&&points[key].name&&valid(points[key].lat,points[key].lng);
+ const markerIcon=key=>{const current=key==='current';return L.divIcon({className:'',html:current?'<span class="voyage-map-current-ship" title="Current vessel location"><svg viewBox="0 0 36 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" d="M3 17.5h27.5l-4.8 8H8.2L3 17.5Z"/><path fill="currentColor" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" d="M8 13.5h17l5.5 4H3l5-4Zm2-7h11v7H10v-7Zm11 3h5v4h-5v-4Z"/><path fill="#fff" d="M12 8.5h2.6v2.2H12zm4.2 0h2.6v2.2h-2.6zm6.2 2.5h2v1.5h-2z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7 28.5c2 1.1 4 1.1 6 0s4-1.1 6 0 4 1.1 6 0"/></svg></span>':`<span class="voyage-map-marker voyage-map-marker--${config[key].className}">${config[key].letter}</span>`,iconSize:current?[28,28]:[34,34],iconAnchor:current?[14,14]:[17,17]})};
+ const directionAngle=(start,end)=>{const startLat=start[0]*Math.PI/180,endLat=end[0]*Math.PI/180,deltaLng=(end[1]-start[1])*Math.PI/180,y=Math.sin(deltaLng)*Math.cos(endLat),x=Math.cos(startLat)*Math.sin(endLat)-Math.sin(startLat)*Math.cos(endLat)*Math.cos(deltaLng);return( Math.atan2(y,x)*180/Math.PI+360)%360-90};
+ function updateCards(){keys.forEach(key=>{const item=config[key],name=document.getElementById(item.name).value.trim(),lat=Number.parseFloat(document.getElementById(item.lat).value),lng=Number.parseFloat(document.getElementById(item.lng).value),card=document.querySelector(`[data-location-card="${key}"]`),text=document.querySelector(`[data-location-summary="${key}"]`);if(name&&valid(lat,lng)){card.classList.add('has-position');text.textContent=`${name} - ${lat.toFixed(5)}, ${lng.toFixed(5)}`}else{card.classList.remove('has-position');text.textContent='No location pinned yet'}})}
+ function updateSidebar(){let count=0;keys.forEach(key=>{const button=document.querySelector(`[data-route-point="${key}"]`),status=document.querySelector(`[data-route-status="${key}"]`),complete=ready(key);button.classList.toggle('is-active',active===key);button.classList.toggle('is-complete',complete);status.textContent=complete?points[key].name:'Not pinned';if(complete)count++});document.getElementById('route-completion-message').textContent=`${count} of 3 locations ready`}
+ function draw(){if(!map)return;keys.forEach(key=>{const point=points[key];if(point&&valid(point.lat,point.lng)){if(!markers[key]){markers[key]=L.marker([point.lat,point.lng],{draggable:true,icon:markerIcon(key)}).addTo(map);markers[key].on('click',()=>select(key,true));markers[key].on('dragend',event=>{const p=event.target.getLatLng();setPoint(key,p.lat,p.lng,null,false);reversePoint(key)})}else markers[key].setLatLng([point.lat,point.lng])}else if(markers[key]){markers[key].remove();delete markers[key]}});if(routeLine){routeLine.remove();routeLine=null}routeArrows.forEach(arrow=>arrow.remove());routeArrows=[];const route=['origin','current','destination'].filter(ready).map(key=>[points[key].lat,points[key].lng]);if(route.length>1){routeLine=L.polyline(route,{color:'#0891b2',weight:4,opacity:.9,dashArray:'10 7'}).addTo(map);route.slice(0,-1).forEach((start,index)=>{const end=route[index+1],angle=directionAngle(start,end);[.38,.72].forEach(fraction=>{const point=[start[0]+(end[0]-start[0])*fraction,start[1]+(end[1]-start[1])*fraction],icon=L.divIcon({className:'',html:`<span class="voyage-direction-arrow" style="transform:rotate(${angle}deg)">➜</span>`,iconSize:[28,28],iconAnchor:[14,14]});routeArrows.push(L.marker(point,{icon,interactive:false,keyboard:false}).addTo(map))})})}updateSidebar()}
+ function setPoint(key,lat,lng,name=null,center=true){lat=Number.parseFloat(lat);lng=Number.parseFloat(lng);if(!valid(lat,lng))return;points[key]={...(points[key]||{}),lat,lng};if(name)points[key].name=name;if(active===key){document.getElementById('modal-latitude').value=lat.toFixed(7);document.getElementById('modal-longitude').value=lng.toFixed(7);if(name)document.getElementById('map-place-search').value=name}draw();if(center&&map)map.setView([lat,lng],Math.max(map.getZoom(),11))}
+ function select(key,pan=false){active=key;const point=points[key];document.getElementById('map-place-search').value=point?.name||'';document.getElementById('modal-latitude').value=point&&valid(point.lat,point.lng)?point.lat.toFixed(7):'';document.getElementById('modal-longitude').value=point&&valid(point.lat,point.lng)?point.lng.toFixed(7):'';document.getElementById('map-search-message').textContent=`Click the exact ${config[key].label} position on the map.`;document.getElementById('modal-use-device-location').classList.toggle('d-none',key!=='current');updateSidebar();if(pan&&ready(key))map.setView([point.lat,point.lng],Math.max(map.getZoom(),11))}
+ function loadPoints(){points={};keys.forEach(key=>{const item=config[key],name=document.getElementById(item.name).value.trim(),lat=Number.parseFloat(document.getElementById(item.lat).value),lng=Number.parseFloat(document.getElementById(item.lng).value);if(name&&valid(lat,lng))points[key]={name,lat,lng}});active=keys.find(key=>!ready(key))||'origin'}
+ function initMap(){if(map||typeof L==='undefined')return;map=L.map('voyage-location-map').setView([12.8797,121.7740],6);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);loading.remove();map.on('click',event=>{setPoint(active,event.latlng.lat,event.latlng.lng,null,false);reversePoint(active)})}
+ modal.addEventListener('shown.bs.modal',()=>{initMap();if(!map){loading.textContent='The map could not load. Please refresh and try again.';return}loadPoints();setTimeout(()=>map.invalidateSize(),80);draw();select(active);const bounds=keys.filter(ready).map(key=>[points[key].lat,points[key].lng]);if(bounds.length>1)map.fitBounds(bounds,{padding:[55,55],maxZoom:11});else if(bounds.length===1)map.setView(bounds[0],11);else map.setView([12.8797,121.7740],6)});
+ document.querySelectorAll('[data-route-point]').forEach(button=>button.addEventListener('click',()=>select(button.dataset.routePoint,true)));
+ ['modal-latitude','modal-longitude'].forEach(id=>document.getElementById(id).addEventListener('change',()=>setPoint(active,document.getElementById('modal-latitude').value,document.getElementById('modal-longitude').value,null,true)));
+ async function reversePoint(key){const point=points[key],field=document.getElementById('map-place-search'),message=document.getElementById('map-search-message');if(!point)return;message.textContent='Identifying pinned location...';try{const response=await fetch(`${reverseUrl}?latitude=${point.lat}&longitude=${point.lng}`,{headers:{Accept:'application/json'}}),data=await response.json();if(!response.ok)throw new Error(data.message||'Address lookup failed.');if(data.name){points[key].name=data.name;if(active===key)field.value=data.name}draw();message.textContent='Location identified. Select the next route point.'}catch(error){message.textContent=error.message+' Type the location name manually if needed.'}}
+ document.getElementById('modal-use-device-location').addEventListener('click',event=>{const button=event.currentTarget;if(!navigator.geolocation)return alert('GPS is not supported by this device.');button.disabled=true;button.textContent='Getting GPS location...';navigator.geolocation.getCurrentPosition(position=>{setPoint('current',position.coords.latitude,position.coords.longitude,null,true);reversePoint('current');document.getElementById('current_accuracy_meters').value=Math.round(position.coords.accuracy||0);document.getElementById('current_position_source').value='device_gps';button.disabled=false;button.innerHTML='<i class="bi bi-check2-circle"></i> GPS Location Captured'},error=>{button.disabled=false;button.innerHTML='<i class="bi bi-crosshair"></i> Use My Current GPS';alert(error.message||'Unable to get your location.')},{enableHighAccuracy:true,timeout:15000,maximumAge:60000})});
+ document.getElementById('confirm-map-location').addEventListener('click',()=>{const missing=keys.filter(key=>!ready(key));if(missing.length)return alert(`Please pin: ${missing.map(key=>config[key].label).join(', ')}.`);keys.forEach(key=>{const item=config[key],point=points[key],stored=findPort(point.name);document.getElementById(item.name).value=point.name;document.getElementById(item.id).value=stored?.id||'';document.getElementById(item.lat).value=point.lat.toFixed(7);document.getElementById(item.lng).value=point.lng.toFixed(7)});if(document.getElementById('current_position_source').value!=='device_gps')document.getElementById('current_position_source').value=findPort(points.current.name)?'port':'map_pin';updateCards();bootstrap.Modal.getOrCreateInstance(modal).hide()});
+ updateCards();document.querySelectorAll('input.uppercase').forEach(input=>input.addEventListener('input',()=>input.value=input.value.toUpperCase()));
+});
+</script>
+@endpush

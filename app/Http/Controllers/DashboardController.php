@@ -12,6 +12,7 @@ use App\Models\YatiraFixedAsset;
 use App\Models\TechDefect;
 use App\Models\Vessel;
 use App\Models\VesselCertificate;
+use App\Models\VesselPositionLog;
 use App\Models\VoyageActivity;
 use App\Models\VoyageLogHeader;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -39,11 +40,7 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
 
-        if ($user->isExecutiveViewer()) {
-            return redirect()->route('dashboard');
-        }
-
-        $divisions = $user->isAdmin()
+        $divisions = ($user->isExecutiveViewer() || $user->isAdmin())
             ? Division::orderBy('id')->get()
             : Division::whereKey($user->division_id)->get();
 
@@ -134,6 +131,110 @@ class DashboardController extends Controller
         })->count();
         $completedVoyages = $applyDateRange(VoyageLogHeader::query(), 'date_created')->where('status', 'COMPLETED')->count();
         $activeVessels = Vessel::whereRaw("LOWER(COALESCE(vessel_status, '')) IN (?, ?, ?)", ['active', 'operational', 'sailing'])->count();
+
+        $liveVoyageQuery = VoyageLogHeader::query()->where(function ($query): void {
+            $query->whereNull('status')->orWhereRaw("UPPER(status) != 'COMPLETED'");
+        });
+        $liveOpenVoyages = (clone $liveVoyageQuery)->count();
+        $liveSailingVoyages = (clone $liveVoyageQuery)
+            ->whereRaw("LOWER(COALESCE(status, '')) = ?", ['sailing'])
+            ->count();
+        $liveAnchoredVoyages = (clone $liveVoyageQuery)
+            ->whereRaw("LOWER(COALESCE(status, '')) = ?", ['anchored'])
+            ->count();
+        $delayedVoyages = (clone $liveVoyageQuery)
+            ->whereNotNull('arrival_date')
+            ->where('arrival_date', '<', now())
+            ->count();
+
+        $activeVoyageMapPoints = (clone $liveVoyageQuery)
+            ->with(['vessel', 'positionLogs'])
+            ->whereHas('vessel')
+            ->whereNotNull('current_latitude')
+            ->whereNotNull('current_longitude')
+            ->latest('voyage_id')
+            ->get()
+            ->unique('vessel_id')
+            ->values()
+            ->map(function (VoyageLogHeader $voyage): array {
+                $latestPosition = $voyage->positionLogs->sortByDesc('recorded_at')->first();
+                $positionUpdatedAt = $latestPosition?->recorded_at ?? $voyage->updated_at;
+
+                return [
+                    'id' => $voyage->voyage_id,
+                    'vessel' => $voyage->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'voyage' => $voyage->voyage_no ?? $voyage->voyage_code,
+                    'status' => strtoupper((string) ($voyage->status ?: 'OPEN')),
+                    'location' => $voyage->current_location ?: 'Location not named',
+                    'destination' => $voyage->port_destination ?: 'Destination not set',
+                    'eta' => $voyage->arrival_date?->format('M d, Y h:i A'),
+                    'lat' => (float) $voyage->current_latitude,
+                    'lng' => (float) $voyage->current_longitude,
+                    'last_update' => $positionUpdatedAt?->format('M d, Y h:i A'),
+                    'is_stale' => ! $positionUpdatedAt || $positionUpdatedAt->lt(now()->subDay()),
+                ];
+            });
+        $staleLocationCount = $activeVoyageMapPoints->where('is_stale', true)->count();
+
+        $dashboardVoyageTracks = VoyageLogHeader::query()
+            ->with([
+                'vessel',
+                'positionLogs' => fn ($query) => $query->orderBy('id'),
+                'fuelMonitorings:fuel_id,voyage_id,total_consumed',
+            ])
+            ->whereHas('vessel')
+            ->where(function ($query): void {
+                $query->where(function ($coordinates): void {
+                    $coordinates->whereNotNull('origin_latitude')->whereNotNull('origin_longitude');
+                })->orWhere(function ($coordinates): void {
+                    $coordinates->whereNotNull('current_latitude')->whereNotNull('current_longitude');
+                })->orWhere(function ($coordinates): void {
+                    $coordinates->whereNotNull('destination_latitude')->whereNotNull('destination_longitude');
+                })->orWhereHas('positionLogs');
+            })
+            ->latest('voyage_id')
+            ->get()
+            ->map(function (VoyageLogHeader $voyage): array {
+                $latestPosition = $voyage->positionLogs->sortByDesc('id')->first();
+                $positionUpdatedAt = $latestPosition?->recorded_at ?? $voyage->updated_at;
+
+                return [
+                    'id' => $voyage->voyage_id,
+                    'vessel' => $voyage->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'voyage' => $voyage->voyage_no ?? $voyage->voyage_code,
+                    'status' => strtoupper((string) ($voyage->status ?: 'OPEN')),
+                    'completed' => strtoupper((string) $voyage->status) === 'COMPLETED',
+                    'cargo' => trim(implode(' - ', array_filter([$voyage->cargo_type, $voyage->cargo_volume]))) ?: null,
+                    'fuel_at_departure' => $voyage->fuel_rob,
+                    'fuel_consumed' => $voyage->fuelMonitorings->isNotEmpty()
+                        ? round((float) $voyage->fuelMonitorings->sum('total_consumed'), 2)
+                        : null,
+                    'eta' => $voyage->arrival_date?->format('M d, Y h:i A'),
+                    'completed_at' => $voyage->date_completed?->format('M d, Y'),
+                    'origin' => [
+                        'name' => $voyage->port_location,
+                        'lat' => $voyage->origin_latitude,
+                        'lng' => $voyage->origin_longitude,
+                    ],
+                    'destination' => [
+                        'name' => $voyage->port_destination,
+                        'lat' => $voyage->destination_latitude,
+                        'lng' => $voyage->destination_longitude,
+                    ],
+                    'current' => [
+                        'name' => $voyage->current_location,
+                        'lat' => $voyage->current_latitude,
+                        'lng' => $voyage->current_longitude,
+                    ],
+                    'positions' => $voyage->positionLogs->map(fn (VesselPositionLog $position): array => [
+                        'name' => $position->location_name,
+                        'lat' => $position->latitude,
+                        'lng' => $position->longitude,
+                        'recorded_at' => $position->recorded_at?->format('M d, Y h:i A'),
+                    ])->values(),
+                    'last_update' => $positionUpdatedAt?->format('M d, Y h:i A'),
+                ];
+            })->values();
 
         $expiredCertificates = VesselCertificate::effective()->expired()->count();
         $expiringCertificates = VesselCertificate::effective()->expiringWithinDays()->count();
@@ -232,10 +333,27 @@ class DashboardController extends Controller
             ->whereNotNull('target_completion_date')
             ->whereDate('target_completion_date', '<', today())
             ->count();
+        $liveOverdueDefects = TechDefect::query()
+            ->where('status', '!=', 'Closed')
+            ->whereNotNull('target_completion_date')
+            ->whereDate('target_completion_date', '<', today())
+            ->count();
         $closedDefects = (int) ($defectStatusCounts['Closed'] ?? 0);
         $defectClosureRate = array_sum($defectStatusCounts) > 0
             ? round(($closedDefects / array_sum($defectStatusCounts)) * 100, 1)
             : 0;
+        $criticalOpenDefects = TechDefect::query()
+            ->whereRaw('LOWER(severity_level) = ?', ['critical'])
+            ->where('status', '!=', 'Closed')
+            ->count();
+
+        $lastDataUpdatedAt = collect([
+            VoyageLogHeader::max('updated_at'),
+            FuelRobMonitoring::max('updated_at'),
+            TechDefect::max('updated_at'),
+            VesselCertificate::max('updated_at'),
+            VesselPositionLog::max('recorded_at'),
+        ])->filter()->map(fn ($value) => Carbon::parse($value))->max();
 
         $fuelConsumptionByEngine = [
             'Main Engine' => (float) $applyTimestampRange(FuelRobMonitoring::query(), 'created_at')->sum('main_engine'),
@@ -358,6 +476,14 @@ class DashboardController extends Controller
         return [
             'totalVessels' => Vessel::count(),
             'activeVessels' => $activeVessels,
+            'liveOpenVoyages' => $liveOpenVoyages,
+            'liveSailingVoyages' => $liveSailingVoyages,
+            'liveAnchoredVoyages' => $liveAnchoredVoyages,
+            'delayedVoyages' => $delayedVoyages,
+            'activeVoyageMapPoints' => $activeVoyageMapPoints,
+            'dashboardVoyageTracks' => $dashboardVoyageTracks,
+            'staleLocationCount' => $staleLocationCount,
+            'lastDataUpdatedAt' => $lastDataUpdatedAt,
             'totalVoyages' => $totalVoyages,
             'totalLogs' => $totalVoyages,
             'openVoyages' => $openVoyages,
@@ -369,8 +495,10 @@ class DashboardController extends Controller
             })->sum('crew_on_board'),
             'totalDefects' => array_sum($defectStatusCounts),
             'criticalDefects' => $applyDateRange(TechDefect::query(), 'date_identified')->whereRaw('LOWER(severity_level) = ?', ['critical'])->count(),
+            'criticalOpenDefects' => $criticalOpenDefects,
             'activeDefects' => $activeDefects,
             'overdueDefects' => $overdueDefects,
+            'liveOverdueDefects' => $liveOverdueDefects,
             'defectClosureRate' => $defectClosureRate,
             'expiredCertificates' => $expiredCertificates,
             'expiringCertificates' => $expiringCertificates,

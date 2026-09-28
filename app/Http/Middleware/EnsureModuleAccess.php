@@ -10,11 +10,7 @@ class EnsureModuleAccess
 {
     public function handle(Request $request, Closure $next, string $permission): Response
     {
-        if ($request->user()?->isExecutiveViewer() && $request->routeIs(
-            'voyage-logs.dashboard',
-            'tech-defects.dashboard',
-            'vessel-certificates.dashboard'
-        )) {
+        if ($request->user()?->isExecutiveViewer() && $request->isMethodSafe()) {
             return $next($request);
         }
 

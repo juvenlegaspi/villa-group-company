@@ -69,7 +69,8 @@ class BookingController extends Controller
                         'notes' => $header->notes,
                         'proof_name' => $header->payment_proof_name,
                         'proof_url' => $proofUrl,
-                        'can_approve' => ($header->status ?: 'pending') !== 'confirmed',
+                        'can_approve' => ! auth()->user()->isExecutiveViewer()
+                            && ($header->status ?: 'pending') !== 'confirmed',
                     ];
                 });
             })

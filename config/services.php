@@ -49,4 +49,9 @@ return [
         'max_attachment_bytes' => (int) env('SHIPPING_CALENDAR_MAX_ATTACHMENT_BYTES', 52428800),
     ],
 
+    'nominatim' => [
+        'endpoint' => env('NOMINATIM_ENDPOINT', 'https://nominatim.openstreetmap.org'),
+        'user_agent' => env('NOMINATIM_USER_AGENT', 'VillaGroupVesselTracking/1.0 (https://villagroupofcompanies.com)'),
+    ],
+
 ];

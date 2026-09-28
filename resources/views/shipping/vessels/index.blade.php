@@ -5,7 +5,8 @@
 @section('content')
 @php
     $canCreateVessels = auth()->user()->isSystemAdministrator();
-    $canManageVessels = app(\App\Services\VesselAccessService::class)->canAccessAllVessels(auth()->user());
+    $canManageVessels = ! auth()->user()->isExecutiveViewer()
+        && app(\App\Services\VesselAccessService::class)->canAccessAllVessels(auth()->user());
 @endphp
 
 <section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-white to-slate-100 px-4 py-6 sm:px-7 lg:px-12">
@@ -25,6 +26,23 @@
 
     @if(session('success'))
         <div class="alert alert-success mx-auto mb-5 max-w-7xl" role="status">{{ session('success') }}</div>
+    @endif
+
+    @if($canManageLocationPortal)
+        <article class="mx-auto mb-5 max-w-7xl rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-white p-4 shadow-sm sm:p-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <p class="mb-1 text-xs font-extrabold uppercase tracking-wider text-cyan-700">Crew location reporting</p>
+                    <h2 class="text-base font-extrabold text-slate-900">Shared Crew Location Portal</h2>
+                    <p class="mb-0 mt-1 text-xs leading-5 text-slate-600">Send one secure link to authorized captains or crew. They select an ongoing vessel before updating its position. Optimized for mobile use.</p>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    <button type="button" id="copy-crew-location-link" data-url="{{ $crewLocationUrl }}" class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-villa-700 px-4 text-sm font-extrabold text-white"><i class="bi bi-copy"></i><span>Copy Shared Link</span></button>
+                    <a href="{{ $crewLocationUrl }}" target="_blank" rel="noopener" class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-300 bg-white px-4 text-sm font-extrabold text-cyan-800 no-underline"><i class="bi bi-box-arrow-up-right"></i>Open</a>
+                    <form method="POST" action="{{ route('vessels.location-portal.regenerate') }}" onsubmit="return confirm('Generate a new shared link? The previous crew link will stop working for everyone.')">@csrf<button class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-700"><i class="bi bi-arrow-clockwise"></i>Regenerate</button></form>
+                </div>
+            </div>
+        </article>
     @endif
 
     <div class="mx-auto grid max-w-7xl grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
@@ -137,6 +155,16 @@ document.querySelectorAll('.editBtn').forEach((button) => {
         });
         bootstrap.Modal.getOrCreateInstance(document.getElementById('editModal')).show();
     });
+});
+document.getElementById('copy-crew-location-link')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    try {
+        await navigator.clipboard.writeText(button.dataset.url);
+        button.querySelector('span').textContent = 'Link Copied';
+        setTimeout(() => button.querySelector('span').textContent = 'Copy Shared Link', 1800);
+    } catch (_) {
+        window.prompt('Copy this shared crew location link:', button.dataset.url);
+    }
 });
 </script>
 @endif

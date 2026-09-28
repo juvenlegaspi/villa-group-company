@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@push('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+@endpush
+
 @section('content')
 <style>
     .vsli-shell {
@@ -256,6 +260,152 @@
         color: #0f172a;
     }
 
+    .vsli-eyebrow {
+        color: #0f4c81;
+        font-size: .76rem;
+        font-weight: 800;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+    }
+
+    .vsli-live-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .vsli-attention-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 13px 0;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .vsli-attention-item:last-child { border-bottom: 0; }
+
+    .vsli-attention-count {
+        min-width: 38px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #fee2e2;
+        color: #b91c1c;
+        text-align: center;
+        font-weight: 800;
+    }
+
+    #executive-fleet-map {
+        height: min(620px, 68vh);
+        min-height: 460px;
+        border-radius: 18px;
+        background: #dbeafe;
+        overflow: hidden;
+    }
+
+    .vsli-dashboard-map-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 14px;
+        align-items: stretch;
+    }
+
+    .vsli-dashboard-map-layout.is-details-hidden { grid-template-columns: minmax(0, 1fr); }
+    .vsli-dashboard-map-layout.is-details-hidden .vsli-map-details { display: none; }
+
+    .vsli-map-details {
+        height: min(620px, 68vh);
+        min-height: 460px;
+        overflow-y: auto;
+        border: 1px solid #dbe7f3;
+        border-radius: 18px;
+        background: #f8fafc;
+        padding: 14px;
+    }
+
+    .vsli-map-detail-card {
+        width: 100%;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        padding: 13px;
+        text-align: left;
+        transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+
+    .vsli-map-detail-card:hover,
+    .vsli-map-detail-card.is-selected {
+        border-color: #24477f;
+        background: #eff6ff;
+        box-shadow: 0 0 0 2px #bfdbfe;
+    }
+
+    .vsli-map-marker {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        color: #087e8b;
+        font-size: 26px;
+        line-height: 1;
+        filter: drop-shadow(-1px -1px 0 #fff) drop-shadow(1px 1px 0 #fff) drop-shadow(0 3px 4px rgba(15, 23, 42, .5));
+    }
+
+    .vsli-map-marker.is-stale { color: #d97706; }
+    .vsli-map-marker.is-completed { color: #475569; }
+
+    .vsli-map-filter {
+        display: inline-flex;
+        gap: 6px;
+        padding: 5px;
+        border: 1px solid #dbe7f3;
+        border-radius: 14px;
+        background: #f8fafc;
+    }
+
+    .vsli-map-filter button {
+        min-height: 36px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #475569;
+        padding: 7px 12px;
+        font-size: .78rem;
+        font-weight: 800;
+    }
+
+    .vsli-map-filter button.is-active {
+        background: #24477f;
+        color: #fff;
+        box-shadow: 0 5px 12px rgba(36, 71, 127, .2);
+    }
+
+    .vsli-details {
+        border: 1px solid #dbe7f3;
+        border-radius: 22px;
+        background: #f8fafc;
+        overflow: hidden;
+    }
+
+    .vsli-details > summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 24px;
+        cursor: pointer;
+        list-style: none;
+        color: #0f274c;
+        font-weight: 800;
+        flex-wrap: wrap;
+    }
+
+    .vsli-details > summary::-webkit-details-marker { display: none; }
+    .vsli-details > summary::after { content: 'Show reports'; color: #64748b; font-size: .82rem; }
+    .vsli-details[open] > summary::after { content: 'Hide reports'; }
+    .vsli-details-content { display: grid; gap: 24px; padding: 0 18px 20px; }
+
     @media (max-width: 1100px) {
         .vsli-filter-form {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -283,6 +433,11 @@
         .vsli-filter-actions .btn {
             flex: 1;
         }
+
+        .vsli-live-heading { align-items: flex-start; flex-direction: column; }
+        #executive-fleet-map { min-height: 360px; }
+        .vsli-dashboard-map-layout { grid-template-columns: minmax(0, 1fr); }
+        .vsli-map-details { height: auto; min-height: 0; max-height: 460px; }
     }
 </style>
 
@@ -292,21 +447,23 @@
             @if(auth()->user()->isExecutiveViewer())
                 <span class="mb-3 d-inline-flex align-items-center gap-2 rounded-pill bg-white bg-opacity-10 px-3 py-2 small fw-bold"><i class="bi bi-eye"></i> Read-only executive dashboard</span>
             @endif
+            <div class="small fw-bold text-uppercase text-white-50 mb-2" style="letter-spacing:.12em;">Executive Dashboard</div>
             <h2 class="fw-bold mb-2">Villa Shipping Lines Command Center</h2>
             <p class="mb-0" style="max-width: 760px;">
-                Central view of vessels, voyages, defects, certificates, and fuel monitoring.
+                A clear view of where the fleet is, what needs attention, and how operations are performing.
+            </p>
+            <p class="mt-2 mb-0 small text-white-50">
+                Last data update: {{ $lastDataUpdatedAt?->format('M d, Y h:i A') ?? 'No operational updates yet' }}
             </p>
 
             <div class="vsli-actions">
-                @unless(auth()->user()->isExecutiveViewer())
                 <a href="{{ route('vessels.index') }}" class="btn btn-light btn-sm">
                     <i class="bi bi-ship me-1"></i> Vessels
                 </a>
-                @endunless
                 <a href="{{ route('voyage-logs.dashboard') }}" class="btn btn-outline-light btn-sm">
                     <i class="bi bi-map me-1"></i> Voyage Dashboard
                 </a>
-                <a href="#monthly-vessel-insights" class="btn btn-outline-light btn-sm">
+                <a href="#period-performance" class="btn btn-outline-light btn-sm">
                     <i class="bi bi-bar-chart-line me-1"></i> Period Vessel Insights
                 </a>
                 <a href="{{ route('tech-defects.dashboard') }}" class="btn btn-outline-light btn-sm">
@@ -318,6 +475,39 @@
                 <a href="#fuel-monitoring" class="btn btn-outline-light btn-sm">
                     <i class="bi bi-fuel-pump me-1"></i> Fuel Monitoring
                 </a>
+            </div>
+        </section>
+
+        <section class="card vsli-card vsli-section-card" id="live-fleet-map-section">
+            <div class="card-body">
+                <div class="vsli-section-title">
+                    <div>
+                        <div class="vsli-eyebrow">Live vessel tracking</div>
+                        <h4>Voyage Tracking Map</h4>
+                        <p class="vsli-subtext">Switch between active routes and the permanent tracking history of completed voyages.</p>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                        <div class="vsli-map-filter" role="group" aria-label="Select voyage map history">
+                            <button type="button" class="is-active" data-dashboard-map-filter="active" aria-pressed="true">Active Voyages</button>
+                            <button type="button" data-dashboard-map-filter="previous" aria-pressed="false">Previous Voyages</button>
+                        </div>
+                        <span class="badge rounded-pill bg-light text-secondary px-3 py-2" id="dashboard-map-count">0 tracks</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="dashboard-map-details-toggle" aria-expanded="true"><i class="bi bi-layout-sidebar-reverse me-1"></i><span>Hide details</span></button>
+                    </div>
+                </div>
+                <div class="vsli-dashboard-map-layout" id="dashboard-map-layout">
+                    <div id="executive-fleet-map" aria-label="Current Villa Shipping vessel locations"></div>
+                    <aside class="vsli-map-details" id="dashboard-map-details" aria-label="Voyage map details">
+                        <div class="mb-3 d-flex align-items-center justify-content-between gap-2">
+                            <div><div class="vsli-eyebrow">Voyage details</div><strong id="dashboard-map-details-title">Active Voyages</strong></div>
+                            <i class="bi bi-list-ul text-muted"></i>
+                        </div>
+                        <div class="d-grid gap-2" id="dashboard-map-details-list"></div>
+                    </aside>
+                </div>
+                <div class="alert alert-warning border mt-3 mb-0 py-3 d-none" id="dashboard-map-empty">
+                    <i class="bi bi-geo-alt me-2"></i><span></span>
+                </div>
             </div>
         </section>
 
@@ -363,18 +553,27 @@
             </form>
         </section>
 
+        <div class="vsli-live-heading">
+            <div>
+                <div class="vsli-eyebrow">Live fleet snapshot</div>
+                <h3 class="h4 mb-1">What is happening right now</h3>
+                <p class="vsli-subtext">Current fleet, voyage, crew, and location status. These cards are not changed by the date filter.</p>
+            </div>
+            <span class="badge rounded-pill bg-success-subtle text-success px-3 py-2"><i class="bi bi-broadcast me-1"></i> Live operational data</span>
+        </div>
+
         <section class="vsli-grid">
             <div class="vsli-card">
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Fleet <span class="badge bg-light text-secondary ms-1">Live</span></div>
+                            <div class="vsli-stat-label">Active Fleet</div>
                             <div class="vsli-stat-value">{{ number_format($totalVessels) }}</div>
-                            <p class="vsli-stat-note">{{ number_format($activeVessels) }} vessels marked active or operational</p>
+                            <p class="vsli-stat-note">{{ number_format($activeVessels) }} marked active or operational</p>
                         </div>
                         <span class="vsli-icon bg-soft-blue"><i class="bi bi-ship"></i></span>
                     </div>
-                    @unless(auth()->user()->isExecutiveViewer())<a href="{{ route('vessels.index') }}" class="small text-decoration-none">Open vessel monitoring</a>@endunless
+                    <a href="{{ route('vessels.index') }}" class="small text-decoration-none">Open vessel monitoring</a>
                 </div>
             </div>
 
@@ -382,13 +581,13 @@
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Voyages</div>
-                            <div class="vsli-stat-value">{{ number_format($totalVoyages) }}</div>
-                            <p class="vsli-stat-note">{{ number_format($openVoyages) }} open and {{ number_format($completedVoyages) }} completed</p>
+                            <div class="vsli-stat-label">Ongoing Voyages</div>
+                            <div class="vsli-stat-value">{{ number_format($liveOpenVoyages) }}</div>
+                            <p class="vsli-stat-note">{{ number_format($liveSailingVoyages) }} sailing, {{ number_format($liveAnchoredVoyages) }} anchored</p>
                         </div>
                         <span class="vsli-icon bg-soft-green"><i class="bi bi-compass"></i></span>
                     </div>
-                    <a href="{{ route('voyage-logs.dashboard') }}" class="small text-decoration-none">Review voyage dashboard</a>
+                    <span class="small text-muted">Current non-completed voyages</span>
                 </div>
             </div>
 
@@ -396,9 +595,9 @@
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Crew Logged <span class="badge bg-light text-secondary ms-1">Live</span></div>
+                            <div class="vsli-stat-label">Crew On Board</div>
                             <div class="vsli-stat-value">{{ number_format($totalCrew) }}</div>
-                            <p class="vsli-stat-note">Combined crew counts recorded across voyage headers</p>
+                            <p class="vsli-stat-note">Combined crew recorded on ongoing voyages</p>
                         </div>
                         <span class="vsli-icon bg-soft-cyan"><i class="bi bi-people"></i></span>
                     </div>
@@ -410,13 +609,13 @@
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Defects</div>
-                            <div class="vsli-stat-value">{{ number_format($totalDefects) }}</div>
-                            <p class="vsli-stat-note">{{ number_format($criticalDefects) }} marked critical across the fleet</p>
+                            <div class="vsli-stat-label">Delayed Voyages</div>
+                            <div class="vsli-stat-value {{ $delayedVoyages > 0 ? 'text-danger' : '' }}">{{ number_format($delayedVoyages) }}</div>
+                            <p class="vsli-stat-note">Open voyages beyond the recorded ETA</p>
                         </div>
-                        <span class="vsli-icon bg-soft-red"><i class="bi bi-cone-striped"></i></span>
+                        <span class="vsli-icon bg-soft-red"><i class="bi bi-clock-history"></i></span>
                     </div>
-                    <a href="{{ route('tech-defects.dashboard') }}" class="small text-decoration-none">Inspect defect dashboard</a>
+                    <span class="small text-muted">Requires operational follow-up</span>
                 </div>
             </div>
 
@@ -424,26 +623,60 @@
                 <div class="vsli-stat">
                     <div class="vsli-stat-top">
                         <div>
-                            <div class="vsli-stat-label">Certificate Risk <span class="badge bg-light text-secondary ms-1">Live</span></div>
-                            <div class="vsli-stat-value">{{ number_format($expiredCertificates + $expiringCertificates) }}</div>
-                            <p class="vsli-stat-note">{{ number_format($expiredCertificates) }} expired, {{ number_format($expiringCertificates) }} due within 30 days</p>
+                            <div class="vsli-stat-label">Location Updates</div>
+                            <div class="vsli-stat-value">{{ number_format($activeVoyageMapPoints->count()) }}</div>
+                            <p class="vsli-stat-note">{{ number_format($staleLocationCount) }} not updated within 24 hours</p>
                         </div>
-                        <span class="vsli-icon bg-soft-orange"><i class="bi bi-file-earmark-text"></i></span>
+                        <span class="vsli-icon bg-soft-orange"><i class="bi bi-geo-alt"></i></span>
                     </div>
-                    <a href="{{ route('vessel-certificates.dashboard') }}" class="small text-decoration-none">Open certificate dashboard</a>
+                    <a href="#executive-fleet-map" class="small text-decoration-none">View current vessel positions</a>
                 </div>
             </div>
         </section>
 
-        <section class="card vsli-card vsli-section-card">
-            <div class="card-body">
-                <div class="vsli-section-title">
-                    <div>
-                        <h4>Selected-period health</h4>
-                        <p class="vsli-subtext">Decision-ready indicators for {{ $dashboardRange['label'] }}. Certificate compliance is a live fleet snapshot.</p>
+        <section class="row g-4">
+            <div class="col-xl-5">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <div class="vsli-eyebrow">Needs attention</div>
+                                <h4>Priority action list</h4>
+                                <p class="vsli-subtext">Items the President and Operations team should review first.</p>
+                            </div>
+                        </div>
+                        <div class="vsli-attention-item"><span><i class="bi bi-exclamation-octagon text-danger me-2"></i>Critical open defects</span><span class="vsli-attention-count">{{ $criticalOpenDefects }}</span></div>
+                        <div class="vsli-attention-item"><span><i class="bi bi-calendar-x text-danger me-2"></i>Overdue defects</span><span class="vsli-attention-count">{{ $liveOverdueDefects }}</span></div>
+                        <div class="vsli-attention-item"><span><i class="bi bi-file-earmark-x text-danger me-2"></i>Expired certificates</span><span class="vsli-attention-count">{{ $expiredCertificates }}</span></div>
+                        <div class="vsli-attention-item"><span><i class="bi bi-file-earmark-clock text-warning me-2"></i>Certificates due in 30 days</span><span class="vsli-attention-count">{{ $expiringCertificates }}</span></div>
+                        <div class="vsli-attention-item"><span><i class="bi bi-fuel-pump text-warning me-2"></i>Low-fuel voyages</span><span class="vsli-attention-count">{{ $lowFuelVoyages->count() }}</span></div>
+                        <div class="vsli-attention-item"><span><i class="bi bi-geo-alt text-warning me-2"></i>Stale vessel locations</span><span class="vsli-attention-count">{{ $staleLocationCount }}</span></div>
                     </div>
                 </div>
-                <div class="vsli-mini-grid">
+            </div>
+
+            <div class="col-xl-7" id="period-performance">
+                <div class="card vsli-card vsli-section-card h-100">
+                    <div class="card-body">
+                        <div class="vsli-section-title">
+                            <div>
+                                <div class="vsli-eyebrow">Selected period</div>
+                                <h4>Performance summary</h4>
+                                <p class="vsli-subtext">Results for {{ $dashboardRange['label'] }} only.</p>
+                            </div>
+                            <span class="vsli-period-chip"><i class="bi bi-calendar3"></i>{{ $dashboardRange['label'] }}</span>
+                        </div>
+                        <div class="vsli-mini-grid">
+                            <div class="vsli-mini-card">
+                                <div class="label">Voyages</div>
+                                <div class="value">{{ number_format($totalVoyages) }}</div>
+                                <div class="small text-muted">{{ $completedVoyages }} completed, {{ $openVoyages }} still open</div>
+                            </div>
+                            <div class="vsli-mini-card">
+                                <div class="label">Fuel Consumed</div>
+                                <div class="value">{{ number_format($totalFuelConsumed, 2) }} L</div>
+                                <div class="small text-muted">Across monitoring logs in period</div>
+                            </div>
                     <div class="vsli-mini-card">
                         <div class="label">Active Defects</div>
                         <div class="value">{{ number_format($activeDefects) }}</div>
@@ -468,6 +701,8 @@
                         <div class="label">Fuel per Completed Voyage</div>
                         <div class="value">{{ number_format($fuelPerCompletedVoyage, 2) }} L</div>
                         <div class="small text-muted">Selected-period consumption efficiency</div>
+                    </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -554,6 +789,12 @@
             </div>
         </section>
 
+        <details class="vsli-details" id="detailed-operational-reports">
+            <summary>
+                <span><i class="bi bi-table me-2"></i>Detailed operational reports</span>
+                <small class="text-muted fw-normal">Charts and record-level tables for deeper review</small>
+            </summary>
+            <div class="vsli-details-content">
         <section id="monthly-vessel-insights" class="row g-4">
             <div class="col-xl-6">
                 <div class="card vsli-card vsli-section-card h-100">
@@ -1127,6 +1368,8 @@
                 </div>
             </div>
         </section>
+            </div>
+        </details>
     </div>
 </div>
 
@@ -1414,3 +1657,240 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 @endsection
+
+@push('scripts')
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const details = document.getElementById('detailed-operational-reports');
+    details?.addEventListener('toggle', () => {
+        if (!details.open || typeof Chart === 'undefined') return;
+        window.setTimeout(() => {
+            details.querySelectorAll('canvas').forEach((canvas) => Chart.getChart(canvas)?.resize());
+        }, 80);
+    });
+    document.querySelectorAll('a[href="#fuel-monitoring"], a[href="#monthly-vessel-insights"]').forEach((link) => {
+        link.addEventListener('click', () => {
+            if (details) details.open = true;
+        });
+    });
+
+    const mapElement = document.getElementById('executive-fleet-map');
+    const tracks = {{ Illuminate\Support\Js::from($dashboardVoyageTracks) }};
+
+    if (!mapElement) return;
+    if (typeof L === 'undefined') {
+        mapElement.classList.add('d-flex', 'align-items-center', 'justify-content-center', 'text-muted');
+        mapElement.textContent = 'The live map could not be loaded. Check the internet connection and refresh the page.';
+        return;
+    }
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+    })[character]);
+    const map = L.map(mapElement, { scrollWheelZoom: false }).setView([12.4, 122.2], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const layers = {
+        active: L.layerGroup(),
+        previous: L.layerGroup(),
+    };
+    const groupBounds = { active: [], previous: [] };
+    const voyageFeatures = new Map();
+    const mapLayout = document.getElementById('dashboard-map-layout');
+    const detailsToggle = document.getElementById('dashboard-map-details-toggle');
+    const detailsTitle = document.getElementById('dashboard-map-details-title');
+    const detailsList = document.getElementById('dashboard-map-details-list');
+    const colors = ['#24477f', '#0f766e', '#7c3aed', '#be123c', '#b45309', '#0369a1'];
+    const coordinates = (point) => {
+        const latitude = Number(point?.lat);
+        const longitude = Number(point?.lng);
+        return Number.isFinite(latitude) && Number.isFinite(longitude) ? [latitude, longitude] : null;
+    };
+    const addUnique = (collection, point) => {
+        if (point && (!collection.length || collection.at(-1)[0] !== point[0] || collection.at(-1)[1] !== point[1])) {
+            collection.push(point);
+        }
+    };
+    const shipIcon = (completed) => L.divIcon({
+        className: '',
+        html: `<span class="vsli-map-marker ${completed ? 'is-completed' : ''}" title="Current vessel location"><svg viewBox="0 0 36 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" d="M3 17.5h27.5l-4.8 8H8.2L3 17.5Z"/><path fill="currentColor" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" d="M8 13.5h17l5.5 4H3l5-4Zm2-7h11v7H10v-7Zm11 3h5v4h-5v-4Z"/><path fill="#fff" d="M12 8.5h2.6v2.2H12zm4.2 0h2.6v2.2h-2.6zm6.2 2.5h2v1.5h-2z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7 28.5c2 1.1 4 1.1 6 0s4-1.1 6 0 4 1.1 6 0"/></svg></span>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14],
+    });
+
+    tracks.forEach((voyage, index) => {
+        const mode = voyage.completed ? 'previous' : 'active';
+        const layer = layers[mode];
+        const color = colors[index % colors.length];
+        const origin = coordinates(voyage.origin);
+        const destination = coordinates(voyage.destination);
+        const savedPositions = (voyage.positions || []).map(coordinates).filter(Boolean);
+        const current = coordinates(voyage.current) || savedPositions.at(-1) || origin;
+        const actualTrack = [];
+        addUnique(actualTrack, origin);
+        savedPositions.forEach((point) => addUnique(actualTrack, point));
+        addUnique(actualTrack, current);
+
+        let trackLine = null;
+        if (actualTrack.length > 1) {
+            trackLine = L.polyline(actualTrack, {
+                color: voyage.completed ? color : '#087e8b',
+                weight: 5,
+                opacity: .88,
+            }).addTo(layer);
+        }
+
+        if (!voyage.completed && current && destination) {
+            L.polyline([current, destination], {
+                color: '#0891b2',
+                weight: 3,
+                opacity: .72,
+                dashArray: '9 9',
+            }).addTo(layer);
+        }
+
+        if (origin) {
+            L.circleMarker(origin, { radius: 7, color: '#fff', weight: 3, fillColor: '#059669', fillOpacity: 1 })
+                .addTo(layer)
+                .bindPopup(`<strong>Origin</strong><br>${escapeHtml(voyage.origin?.name || 'Not named')}<br>${escapeHtml(voyage.vessel)}`);
+        }
+        if (destination) {
+            L.circleMarker(destination, { radius: 7, color: '#fff', weight: 3, fillColor: '#dc2626', fillOpacity: 1 })
+                .addTo(layer)
+                .bindPopup(`<strong>Destination</strong><br>${escapeHtml(voyage.destination?.name || 'Not named')}<br>${escapeHtml(voyage.vessel)}`);
+        }
+        let vesselMarker = null;
+        if (current) {
+            vesselMarker = L.marker(current, { icon: shipIcon(voyage.completed), zIndexOffset: 1000 })
+                .addTo(layer)
+                .bindPopup(`
+                    <div style="min-width:220px">
+                        <strong>${escapeHtml(voyage.vessel)}</strong><br>
+                        <span>${escapeHtml(voyage.voyage)} &middot; ${escapeHtml(voyage.status)}</span><hr class="my-2">
+                        <strong>${voyage.completed ? 'Final' : 'Current'}:</strong> ${escapeHtml(voyage.current?.name || voyage.positions?.at(-1)?.name || 'Position recorded')}<br>
+                        <strong>Destination:</strong> ${escapeHtml(voyage.destination?.name || 'Not set')}<br>
+                        <small class="text-muted">Last update: ${escapeHtml(voyage.last_update || 'Unknown')}</small>
+                    </div>
+                `);
+        }
+
+        const voyageBounds = [...actualTrack, destination].filter(Boolean);
+        voyageBounds.forEach((point) => groupBounds[mode].push(point));
+        voyageFeatures.set(String(voyage.id), { voyage, mode, bounds: voyageBounds, trackLine, vesselMarker });
+    });
+
+    const filterButtons = document.querySelectorAll('[data-dashboard-map-filter]');
+    const countBadge = document.getElementById('dashboard-map-count');
+    const emptyMessage = document.getElementById('dashboard-map-empty');
+    const trackCounts = {
+        active: tracks.filter((voyage) => !voyage.completed).length,
+        previous: tracks.filter((voyage) => voyage.completed).length,
+    };
+    const detailValue = (value, fallback = 'Not recorded') => {
+        const normalized = String(value ?? '').trim();
+        return normalized ? escapeHtml(normalized) : fallback;
+    };
+    const fuelValue = (value, fallback = 'Not recorded') => {
+        const amount = Number(value);
+        return value !== null && value !== '' && Number.isFinite(amount)
+            ? `${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} L`
+            : fallback;
+    };
+    const focusVoyage = (voyageId, openPopup = true) => {
+        const feature = voyageFeatures.get(String(voyageId));
+        if (!feature) return;
+
+        detailsList?.querySelectorAll('[data-dashboard-voyage]').forEach((card) => {
+            card.classList.toggle('is-selected', card.dataset.dashboardVoyage === String(voyageId));
+        });
+        const selectedCard = detailsList?.querySelector(`[data-dashboard-voyage="${CSS.escape(String(voyageId))}"]`);
+        selectedCard?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        if (feature.bounds.length === 1) map.setView(feature.bounds[0], 10);
+        else if (feature.bounds.length > 1) map.fitBounds(feature.bounds, { padding: [50, 50], maxZoom: 10 });
+        if (openPopup) feature.vesselMarker?.openPopup();
+    };
+    const renderVoyageDetails = (mode) => {
+        if (!detailsList || !detailsTitle) return;
+        const visibleVoyages = tracks.filter((voyage) => (voyage.completed ? 'previous' : 'active') === mode);
+        detailsTitle.textContent = mode === 'active' ? 'Active Voyages' : 'Previous Voyages';
+
+        if (!visibleVoyages.length) {
+            detailsList.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-map d-block fs-3 mb-2"></i>No voyage details available.</div>';
+            return;
+        }
+
+        detailsList.innerHTML = visibleVoyages.map((voyage) => {
+            const locationLabel = voyage.completed ? 'Final location' : 'Current location';
+            const dateLabel = voyage.completed ? 'Completed' : 'ETA';
+            const dateValue = voyage.completed ? voyage.completed_at : voyage.eta;
+            return `
+                <button type="button" class="vsli-map-detail-card" data-dashboard-voyage="${escapeHtml(voyage.id)}">
+                    <span class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                        <span><strong class="d-block text-dark">${detailValue(voyage.vessel, 'Unknown vessel')}</strong><small class="text-muted">${detailValue(voyage.voyage, 'Voyage not set')}</small></span>
+                        <span class="badge rounded-pill ${voyage.completed ? 'bg-secondary' : 'bg-success'}">${detailValue(voyage.status, voyage.completed ? 'Completed' : 'Active')}</span>
+                    </span>
+                    <span class="d-grid gap-1 small text-secondary">
+                        <span><strong class="text-dark">Cargo:</strong> ${detailValue(voyage.cargo)}</span>
+                        <span><strong class="text-dark">Fuel departure:</strong> ${fuelValue(voyage.fuel_at_departure)}</span>
+                        <span><strong class="text-dark">Fuel consumed:</strong> ${fuelValue(voyage.fuel_consumed)}</span>
+                        <span><strong class="text-dark">${locationLabel}:</strong> ${detailValue(voyage.current?.name || voyage.positions?.at(-1)?.name)}</span>
+                        <span><strong class="text-dark">Destination:</strong> ${detailValue(voyage.destination?.name)}</span>
+                        <span><strong class="text-dark">${dateLabel}:</strong> ${detailValue(dateValue)}</span>
+                        <span><strong class="text-dark">Last update:</strong> ${detailValue(voyage.last_update)}</span>
+                    </span>
+                    <span class="d-block mt-2 small fw-semibold text-primary"><i class="bi bi-crosshair me-1"></i>Focus this voyage</span>
+                </button>
+            `;
+        }).join('');
+
+        detailsList.querySelectorAll('[data-dashboard-voyage]').forEach((card) => {
+            card.addEventListener('click', () => focusVoyage(card.dataset.dashboardVoyage));
+        });
+    };
+
+    voyageFeatures.forEach((feature, voyageId) => {
+        feature.trackLine?.on('click', () => focusVoyage(voyageId, false));
+        feature.vesselMarker?.on('click', () => focusVoyage(voyageId, false));
+    });
+
+    const showMapMode = (mode) => {
+        Object.values(layers).forEach((layer) => map.removeLayer(layer));
+        layers[mode].addTo(map);
+        filterButtons.forEach((button) => {
+            const selected = button.dataset.dashboardMapFilter === mode;
+            button.classList.toggle('is-active', selected);
+            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+        const count = trackCounts[mode];
+        countBadge.textContent = `${count} ${count === 1 ? 'track' : 'tracks'}`;
+        renderVoyageDetails(mode);
+        emptyMessage.classList.toggle('d-none', count > 0);
+        emptyMessage.querySelector('span').textContent = mode === 'active'
+            ? 'No active voyage has saved coordinates yet. Update its current location to start the dashboard track.'
+            : 'No completed voyage tracking history is available yet.';
+
+        const visibleBounds = groupBounds[mode];
+        if (visibleBounds.length === 1) map.setView(visibleBounds[0], 9);
+        else if (visibleBounds.length > 1) map.fitBounds(visibleBounds, { padding: [36, 36], maxZoom: 9 });
+        else map.setView([12.4, 122.2], 5);
+        window.setTimeout(() => map.invalidateSize(), 50);
+    };
+
+    filterButtons.forEach((button) => button.addEventListener('click', () => showMapMode(button.dataset.dashboardMapFilter)));
+    detailsToggle?.addEventListener('click', () => {
+        const hidden = mapLayout?.classList.toggle('is-details-hidden') ?? false;
+        detailsToggle.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+        const label = detailsToggle.querySelector('span');
+        if (label) label.textContent = hidden ? 'Show details' : 'Hide details';
+        window.setTimeout(() => map.invalidateSize(), 50);
+    });
+    showMapMode('active');
+});
+</script>
+@endpush

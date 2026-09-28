@@ -20,8 +20,8 @@ class VesselAccessService
 
     public function canAccessAllVessels(User $user): bool
     {
-        if ($user->role === 'owner') {
-            return false;
+        if ($user->isExecutiveViewer()) {
+            return true;
         }
 
         $user->loadMissing(['accessRole', 'position']);

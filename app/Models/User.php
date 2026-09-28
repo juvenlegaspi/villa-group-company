@@ -72,7 +72,15 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission): bool
     {
-        if ($this->role === 'owner') return $permission === 'reports.view.executive';
+        if ($this->isExecutiveViewer()) {
+            return $permission === 'reports.view.executive'
+                || str_ends_with($permission, '.access')
+                || str_ends_with($permission, '.view')
+                || str_ends_with($permission, '.view_all')
+                || str_contains($permission, '.view_')
+                || str_contains($permission, '.reports.view');
+        }
+
         $this->loadMissing(['accessRole.permissions', 'position.permissions']);
         return $this->accessRole?->permissions->contains('slug', $permission)
             || $this->position?->permissions->contains('slug', $permission)

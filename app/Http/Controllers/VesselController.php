@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CrewLocationPortal;
 use App\Models\User;
 use App\Models\UserVesselAssignment;
 use App\Models\Vessel;
 use App\Models\VoyageLogHeader;
 use App\Services\VesselAccessService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class VesselController extends Controller
 {
@@ -21,8 +23,12 @@ class VesselController extends Controller
             ->orderBy('id', 'asc')
             ->paginate(10);
         $captains = $this->getCaptains();
+        $canManageLocationPortal = ! $user->isExecutiveViewer() && $this->vesselAccess->canAccessAllVessels($user);
+        $crewLocationUrl = $canManageLocationPortal
+            ? route('crew-location.show', CrewLocationPortal::current()->token)
+            : null;
 
-        return view('shipping.vessels.index', compact('vessels', 'captains'));
+        return view('shipping.vessels.index', compact('vessels', 'captains', 'canManageLocationPortal', 'crewLocationUrl'));
     }
 
     public function create()
@@ -91,6 +97,19 @@ class VesselController extends Controller
             ->exists();
 
         return view('shipping.vessels.show', compact('vessel', 'voyages', 'hasOpenVoyage'));
+    }
+
+    public function regenerateLocationPortalLink()
+    {
+        abort_if(auth()->user()->isExecutiveViewer(), 403);
+        $this->authorizeVesselManagement();
+        CrewLocationPortal::current()->update([
+            'token' => Str::random(64),
+            'generated_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('vessels.index')
+            ->with('success', 'A new shared crew location link was generated. The previous link no longer works.');
     }
 
     protected function getCaptains()

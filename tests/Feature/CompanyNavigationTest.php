@@ -12,7 +12,7 @@ class CompanyNavigationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_owner_only_sees_dashboard_and_cannot_open_companies_page(): void
+    public function test_legacy_owner_has_read_only_access_to_all_company_workspaces(): void
     {
         $this->seedCompanies();
         $owner = $this->user(['role' => 'owner', 'is_admin' => true]);
@@ -20,18 +20,24 @@ class CompanyNavigationTest extends TestCase
         $this->actingAs($owner)->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Division dashboards')
-            ->assertDontSee('>Companies</span>', false);
+            ->assertSee('>Companies</span>', false);
 
-        $this->actingAs($owner)->get(route('companies'))->assertRedirect(route('dashboard'));
+        $this->actingAs($owner)->get(route('companies'))
+            ->assertOk()
+            ->assertSee('Villa Shipping Lines, Inc.')
+            ->assertSee('Yatira Construction, Inc.')
+            ->assertSee('JMV Mining &amp; Development', false)
+            ->assertSee('HYVE');
 
         $this->actingAs($owner)->get(route('vessels.index'))
-            ->assertRedirect(route('dashboard'));
+            ->assertOk();
 
         $this->actingAs($owner)->get(route('division.dashboard', 'Villa shipping Lines'))
             ->assertOk()
             ->assertSee('Voyage Dashboard')
             ->assertSee('Defects Dashboard')
-            ->assertSee('Certificates');
+            ->assertSee('Certificates')
+            ->assertSee('Open vessel monitoring');
 
         $this->actingAs($owner)->get(route('voyage-logs.dashboard'))->assertOk();
         $this->actingAs($owner)->get(route('tech-defects.dashboard'))->assertOk();
@@ -52,16 +58,41 @@ class CompanyNavigationTest extends TestCase
             ->assertOk()
             ->assertSee('Read-only executive view');
 
+        $this->actingAs($executive)->get(route('companies'))
+            ->assertOk()
+            ->assertSee('Villa Shipping Lines, Inc.')
+            ->assertSee('Yatira Construction, Inc.')
+            ->assertSee('JMV Mining &amp; Development', false)
+            ->assertSee('HYVE');
+
         $this->actingAs($executive)->get(route('division.dashboard', 'Villa shipping Lines'))
             ->assertOk()
             ->assertSee('Read-only executive dashboard')
             ->assertSee('Voyage Dashboard')
-            ->assertDontSee('Open vessel monitoring');
+            ->assertSee('Open vessel monitoring');
 
         $this->actingAs($executive)->get(route('voyage-logs.dashboard'))->assertOk();
         $this->actingAs($executive)->get(route('tech-defects.dashboard'))->assertOk();
         $this->actingAs($executive)->get(route('vessel-certificates.dashboard'))->assertOk();
-        $this->actingAs($executive)->get(route('vessels.index'))->assertRedirect(route('dashboard'));
+        $this->actingAs($executive)->get(route('vessels.index'))->assertOk();
+        $this->actingAs($executive)->get(route('shipping.calendar'))->assertOk();
+        $this->actingAs($executive)->get(route('tech-defects.index'))->assertOk();
+        $this->actingAs($executive)->get(route('vessel-certificates.index'))->assertOk();
+        $this->actingAs($executive)->get(route('dry-docking.index'))->assertOk();
+        $this->actingAs($executive)->get(route('yatira.applications'))->assertOk()->assertSee('Sales Monitoring');
+        $this->actingAs($executive)->get(route('suppliers.index'))->assertOk();
+        $this->actingAs($executive)->get(route('yatira.inventory.index'))->assertOk();
+        $this->actingAs($executive)->get(route('yatira.sales.index'))->assertOk()->assertDontSee('Register Lead');
+        $this->actingAs($executive)->get(route('jmv.applications'))->assertOk()->assertSee('Stock Requests');
+        $this->actingAs($executive)->get(route('jmv.inventory.index'))->assertOk();
+        $this->actingAs($executive)->get(route('jmv.stockin.index'))->assertOk();
+        $this->actingAs($executive)->get(route('jmv.stockout.index'))->assertOk();
+        $this->actingAs($executive)->get(route('jmv.requests.index'))->assertOk();
+        $this->actingAs($executive)->get(route('users.index'))->assertForbidden();
+        $this->actingAs($executive)->get(route('vessels.create'))->assertForbidden();
+        $this->actingAs($executive)->post(route('vessels.store'), [])->assertForbidden();
+        $this->actingAs($executive)->post(route('jmv.requests.store'), [])->assertForbidden();
+        $this->actingAs($executive)->post(route('shipping.calendar.events.store'), [])->assertForbidden();
     }
 
     public function test_admin_can_see_dashboard_and_all_company_cards(): void
@@ -163,6 +194,7 @@ class CompanyNavigationTest extends TestCase
 
         $this->actingAs($admin)->get(route('shipping.applications'))
             ->assertOk()
+            ->assertSee('href="'.route('dashboard').'" aria-label="Home"', false)
             ->assertSee('Operations')
             ->assertSee('Procurement')
             ->assertSee('Inventory')
@@ -186,6 +218,7 @@ class CompanyNavigationTest extends TestCase
 
         $this->actingAs($staff)->get(route('shipping.applications'))
             ->assertOk()
+            ->assertSee('href="'.route('companies').'" aria-label="Home"', false)
             ->assertDontSee('User Management')
             ->assertDontSee('>Operations</span>', false)
             ->assertSee('No application assigned');
@@ -363,6 +396,92 @@ class CompanyNavigationTest extends TestCase
             ->assertViewHas('defectClosureRate', 50.0)
             ->assertViewHas('defectStatusLabels', fn (array $labels) => in_array('For Review', $labels, true)
                 && in_array('Closed', $labels, true));
+    }
+
+    public function test_shipping_executive_dashboard_exposes_live_map_and_attention_metrics(): void
+    {
+        $this->seedCompanies();
+        $admin = $this->user(['role' => 'admin', 'is_admin' => true]);
+        $vesselId = DB::table('vessels')->insertGetId([
+            'vessel_name' => 'MV Executive Map',
+            'vessel_status' => 'Operational',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $voyageId = DB::table('voyage_logs_header')->insertGetId([
+            'vessel_id' => $vesselId,
+            'voyage_no' => 'EXEC-001',
+            'date_created' => today(),
+            'status' => 'SAILING',
+            'crew_on_board' => 14,
+            'current_location' => 'Manila Bay',
+            'port_destination' => 'Cebu Port',
+            'current_latitude' => 14.58,
+            'current_longitude' => 120.97,
+            'arrival_date' => now()->subHour(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('vessel_position_logs')->insert([
+            'vessel_id' => $vesselId,
+            'voyage_id' => $voyageId,
+            'latitude' => 14.58,
+            'longitude' => 120.97,
+            'location_name' => 'Manila Bay',
+            'source' => 'map_pin',
+            'recorded_at' => now()->subDays(2),
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ]);
+        $completedVoyageId = DB::table('voyage_logs_header')->insertGetId([
+            'vessel_id' => $vesselId,
+            'voyage_no' => 'EXEC-HISTORY-001',
+            'date_created' => today()->subDays(5),
+            'date_completed' => today()->subDays(2),
+            'status' => 'COMPLETED',
+            'port_location' => 'Cebu Port',
+            'port_destination' => 'Manila Port',
+            'current_location' => 'Manila Port',
+            'origin_latitude' => 10.31,
+            'origin_longitude' => 123.89,
+            'destination_latitude' => 14.58,
+            'destination_longitude' => 120.97,
+            'current_latitude' => 14.58,
+            'current_longitude' => 120.97,
+            'created_at' => now()->subDays(5),
+            'updated_at' => now()->subDays(2),
+        ]);
+        DB::table('vessel_position_logs')->insert([
+            'vessel_id' => $vesselId,
+            'voyage_id' => $completedVoyageId,
+            'latitude' => 14.58,
+            'longitude' => 120.97,
+            'location_name' => 'Manila Port',
+            'source' => 'voyage_completion',
+            'recorded_at' => now()->subDays(2),
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('division.dashboard', 'Villa shipping Lines'))
+            ->assertOk()
+            ->assertSee('Voyage Tracking Map')
+            ->assertSee('Active Voyages')
+            ->assertSee('Previous Voyages')
+            ->assertSee('Hide details')
+            ->assertSee('Voyage details')
+            ->assertSee('Focus this voyage')
+            ->assertSee('Priority action list')
+            ->assertViewHas('liveOpenVoyages', 1)
+            ->assertViewHas('liveSailingVoyages', 1)
+            ->assertViewHas('delayedVoyages', 1)
+            ->assertViewHas('staleLocationCount', 1)
+            ->assertViewHas('activeVoyageMapPoints', fn ($points) => $points->count() === 1
+                && $points->first()['vessel'] === 'MV Executive Map')
+            ->assertViewHas('dashboardVoyageTracks', fn ($tracks) => $tracks->count() === 2
+                && $tracks->where('completed', false)->count() === 1
+                && $tracks->where('completed', true)->count() === 1);
     }
 
     private function seedCompanies(): array
