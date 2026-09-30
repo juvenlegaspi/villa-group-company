@@ -8,15 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('tech_defects', function (Blueprint $table): void {
-            $table->decimal('completion_cost', 12, 2)->nullable()->after('date_completed');
-        });
+        if (! Schema::hasColumn('tech_defects', 'completion_cost')) {
+            Schema::table('tech_defects', function (Blueprint $table): void {
+                $table->decimal('completion_cost', 12, 2)->nullable()->after('date_completed');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('tech_defects', function (Blueprint $table): void {
-            $table->dropColumn('completion_cost');
-        });
+        if (Schema::hasColumn('tech_defects', 'completion_cost')) {
+            Schema::table('tech_defects', function (Blueprint $table): void {
+                $table->dropColumn('completion_cost');
+            });
+        }
     }
 };

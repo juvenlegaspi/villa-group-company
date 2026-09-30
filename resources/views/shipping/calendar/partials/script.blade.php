@@ -7,13 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const requestedVessel = Number(new URLSearchParams(location.search).get('vessel'));
     const savedVessel = Number(localStorage.getItem('shippingChecklistVessel'));
     const initialVessel = vessels.find(vessel => vessel.id === requestedVessel)?.id || vessels.find(vessel => vessel.id === savedVessel)?.id || vessels[0]?.id || null;
-    const state = {date: new Date(), view: localStorage.getItem('shippingCalendarView') || 'month', vesselId: initialVessel, events: [], detail: null};
+    const state = {date: new Date(), view: localStorage.getItem('shippingCalendarView') || 'month', vesselId: initialVessel, events: [], detail: null, detailRequestId: 0};
     const content = document.getElementById('calendarContent');
     const title = document.getElementById('calendarTitle');
     const vesselLabel = document.getElementById('selectedVesselLabel');
     const loading = document.getElementById('calendarLoading');
     const checklistModal = canCreate ? bootstrap.Modal.getOrCreateInstance(document.getElementById('checklistModal')) : null;
     const detailModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('checklistDetailModal'));
+    const removeAttachmentsModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('removeChecklistAttachmentsModal'));
     const pad = number => String(number).padStart(2, '0');
     const dateOnly = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
     const localValue = date => `${dateOnly(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -26,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function api(url, options = {}) {
         const headers = {Accept: 'application/json', 'X-CSRF-TOKEN': csrf};
         if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
-        const response = await fetch(url, {...options, headers: {...headers, ...(options.headers || {})}});
+        const response = await fetch(url, {...options, cache: 'no-store', headers: {...headers, ...(options.headers || {})}});
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.errors ? Object.values(data.errors).flat().join('<br>') : (data.message || 'The request could not be completed.'));
         return data;
@@ -113,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function bindCalendar() {
         content.querySelectorAll('[data-occurrence]').forEach(button => {
-            button.onclick = click => { click.stopPropagation(); const occurrence = state.events.find(item => item.occurrence_id === button.dataset.occurrence); if (occurrence) openDetail(occurrence.event_id, occurrence.start); };
+            button.onclick = click => { click.stopPropagation(); const occurrence = state.events.find(item => item.occurrence_id === button.dataset.occurrence); if (occurrence) openDetail(occurrence.event_id, occurrence.occurrence_starts_at || occurrence.start); };
             button.ondragstart = drag => drag.dataTransfer.setData('text/plain', button.dataset.occurrence);
         });
         content.querySelectorAll('[data-create-day]').forEach(button => button.onclick = click => { click.stopPropagation(); openCreate(button.dataset.createDay); });
@@ -129,24 +130,43 @@ document.addEventListener('DOMContentLoaded', () => {
     function openCreate(day = dateOnly(state.date)) {
         if (!canCreate || !state.vesselId) return;
         document.getElementById('checklistForm').reset(); setVal('checklistId', '');
+        setVal('checklistOccurrenceStart', '');
         document.getElementById('checklistModalTitle').textContent = 'Add Checklist'; clearErrors();
+        document.getElementById('checklistVessel').disabled = false;
+        document.getElementById('checklistRecurrencePanel').classList.remove('hidden');
         const start = new Date(`${day}T08:00`); const end = new Date(`${day}T09:00`);
         setVal('checklistVessel', state.vesselId); setVal('checklistStart', localValue(start)); setVal('checklistEnd', localValue(end));
         setVal('checklistReminder', '0'); setVal('checklistRecurrenceInterval', 1); toggleRecurrence(); checklistModal.show();
     }
 
     async function openDetail(id, occurrenceStartsAt = null) {
+        const requestId = ++state.detailRequestId;
         try {
+            document.getElementById('checklistDetailBody').innerHTML = '<div class="p-8 text-center text-sm font-bold text-slate-500"><span class="spinner-border spinner-border-sm me-2"></span>Loading selected checklist date…</div>';
             const occurrenceQuery = occurrenceStartsAt ? `?occurrence_starts_at=${encodeURIComponent(occurrenceStartsAt)}` : '';
-            const data = await api(`${routes.base}/${id}${occurrenceQuery}`); const event = data.event; const attachments = data.attachments || []; state.detail = data;
+            const data = await api(`${routes.base}/${id}${occurrenceQuery}`); const event = data.event;
+            if (requestId !== state.detailRequestId) return;
+            const attachments = (data.attachments || []).filter(file => file.occurrence_key === data.occurrence_key);
+            state.detail = data;
             document.getElementById('checklistDetailTitle').textContent = event.title;
             const badge = document.getElementById('detailType');
             badge.textContent = {routine: 'Routine checklist', scheduled: 'Scheduled activity', preventive_maintenance: 'Preventive Maintenance', one_time: 'One-time activity'}[event.checklist_type] || 'Checklist';
             badge.className = 'mb-2 inline-flex rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-black uppercase text-cyan-800';
             const attachmentHtml = attachments.length
                 ? `<div class="grid gap-2">${attachments.map(file => `<div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2"><a href="${esc(file.download_url)}" class="flex min-w-0 flex-1 items-center justify-between gap-3 px-1 text-decoration-none"><span class="min-w-0"><b class="block truncate text-sm text-slate-800">${esc(file.name)}</b><small class="text-slate-500">${formatBytes(file.size_bytes)} · ${esc(file.uploaded_by)} · ${esc(file.uploaded_at)}</small></span><i class="bi bi-download shrink-0 text-cyan-700"></i></a>${data.can_edit ? `<button type="button" class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border-0 bg-rose-100 text-rose-700" data-delete-attachment="${file.id}" data-delete-url="${esc(file.delete_url)}" aria-label="Remove ${esc(file.name)}"><i class="bi bi-trash3"></i></button>` : ''}</div>`).join('')}</div>`
-                : '<p class="mb-0 text-sm text-slate-500">No attachment uploaded.</p>';
+                : '<p class="mb-0 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">No checklist file uploaded for this exact date and time.</p>';
+            const occurrenceLabel = new Date(event.starts_at).toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'});
+            const uploadHtml = data.can_upload_attachment
+                ? `<form id="occurrenceChecklistUpload" class="mt-4 rounded-xl border border-dashed border-cyan-300 bg-cyan-50 p-3"><label class="mb-2 block text-xs font-black uppercase text-cyan-900">Upload completed checklist for ${esc(occurrenceLabel)}</label><div class="flex flex-col gap-2 sm:flex-row"><input name="attachments[]" type="file" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white p-2 text-xs" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx" multiple required><button class="rounded-lg bg-cyan-700 px-4 py-2 text-xs font-black text-white">Upload Checklist</button></div><p class="mb-0 mt-2 text-xs text-cyan-800">Up to 5 files, maximum 10 MB each. Files belong only to ${esc(occurrenceLabel)}.</p></form>`
+                : (data.can_prepare_attachment ? `<div class="mt-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3 opacity-80"><label class="mb-2 block text-xs font-black uppercase text-amber-900">Upload completed checklist for ${esc(occurrenceLabel)}</label><div class="flex flex-col gap-2 sm:flex-row"><input type="file" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white p-2 text-xs" disabled><button type="button" class="cursor-not-allowed rounded-lg bg-slate-400 px-4 py-2 text-xs font-black text-white" disabled>Upload Checklist</button></div><p class="mb-0 mt-2 text-xs font-semibold text-amber-800">Available after ${esc(data.attachment_available_at)}.</p></div>` : '');
             document.getElementById('checklistDetailBody').innerHTML = `<div class="grid gap-4 sm:grid-cols-2"><div><b class="text-xs uppercase text-slate-400">Vessel</b><p class="mt-1 font-bold">${esc(event.vessel)}</p></div><div><b class="text-xs uppercase text-slate-400">Schedule</b><p class="mt-1 font-bold">${formatSchedule(event)}</p></div><div><b class="text-xs uppercase text-slate-400">Created by</b><p class="mt-1 font-bold">${esc(event.creator)}</p></div><div><b class="text-xs uppercase text-slate-400">Area / location</b><p class="mt-1 font-bold">${esc(event.location || '—')}</p></div></div>${event.description ? `<div class="mt-4 whitespace-pre-line rounded-xl bg-slate-50 p-4 text-sm">${esc(event.description)}</div>` : ''}<div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4"><h3 class="mb-3 text-sm font-black text-slate-900"><i class="bi bi-paperclip me-1 text-cyan-700"></i>Checklist attachments (${attachments.length})</h3>${attachmentHtml}</div><div class="mt-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4"><h3 class="mb-2 text-sm font-black text-cyan-950">Reminder recipients</h3><div class="flex flex-wrap gap-2">${data.recipients.length ? data.recipients.map(recipient => `<span class="rounded-full bg-white px-3 py-1.5 text-xs font-bold ring-1 ring-cyan-200">${esc(recipient.name)}</span>`).join('') : '<span class="text-sm font-bold text-rose-700">No assigned Captain or Operations Manager found.</span>'}</div><p class="mb-0 mt-3 text-xs text-cyan-800">System alert, email and SMS are sent at the configured reminder time when recipient contact details and Semaphore are available.</p></div><details class="mt-5 rounded-xl border"><summary class="cursor-pointer p-3 text-sm font-black">Audit history (${data.audits.length})</summary><div class="border-t p-3">${data.audits.map(audit => `<p class="mb-2 text-xs"><b>${esc(audit.action)}</b> · ${esc(audit.user)} · ${esc(audit.date)}</p>`).join('') || '<p class="text-xs text-slate-400">No history</p>'}</div></details>`;
+            const attachmentsPanel = Array.from(document.querySelectorAll('#checklistDetailBody h3')).find(heading => heading.textContent.includes('Checklist attachments'))?.parentElement;
+            if (attachmentsPanel) {
+                const attachmentHeading = attachmentsPanel.querySelector('h3');
+                attachmentHeading.innerHTML = `<i class="bi bi-paperclip me-1 text-cyan-700"></i>Attachments for ${esc(occurrenceLabel)} (${attachments.length})`;
+                if (data.can_remove_attachments) attachmentHeading.insertAdjacentHTML('beforeend', '<button id="openRemoveAttachmentsButton" type="button" class="float-end rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-black normal-case text-rose-700"><i class="bi bi-trash3 me-1"></i>Remove attachments</button>');
+                attachmentsPanel.insertAdjacentHTML('beforeend', uploadHtml);
+            }
             const descriptionPanel = document.querySelector('#checklistDetailBody > .mt-4.whitespace-pre-line');
             if (descriptionPanel) {
                 descriptionPanel.classList.remove('whitespace-pre-line', 'text-sm');
@@ -155,15 +175,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const footer = document.getElementById('checklistDetailFooter');
             const footerButtons = [];
-            if (data.can_edit && canCreate) footerButtons.push('<button id="editChecklistButton" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-bold text-white">Edit</button><button id="cancelChecklistButton" class="rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800">Cancel schedule</button>');
+            if (data.can_edit && canCreate) footerButtons.push(`<button id="editChecklistButton" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-bold text-white">Edit this date</button><button id="cancelChecklistButton" class="rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800">${event.recurring ? 'Cancel this date' : 'Cancel schedule'}</button>`);
             if (data.can_complete) footerButtons.push('<button id="completeChecklistButton" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white"><i class="bi bi-check2-circle me-1"></i>Complete</button>');
-            if (data.can_delete) footerButtons.push('<button id="deleteChecklistButton" class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white">Delete</button>');
+            if (data.can_delete && event.recurring) footerButtons.push('<button id="deleteOccurrenceButton" class="rounded-xl bg-rose-100 px-4 py-2 text-sm font-bold text-rose-800">Delete this date</button><button id="deleteSeriesButton" class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white">Delete entire schedule</button>');
+            else if (data.can_delete) footerButtons.push('<button id="deleteSeriesButton" class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white">Delete</button>');
             footer.innerHTML = footerButtons.join('');
             document.getElementById('editChecklistButton')?.addEventListener('click', editDetail);
-            document.getElementById('cancelChecklistButton')?.addEventListener('click', () => cancelChecklist(event.id));
+            document.getElementById('cancelChecklistButton')?.addEventListener('click', () => cancelChecklist(event.id, data.occurrence_starts_at));
             document.getElementById('completeChecklistButton')?.addEventListener('click', () => completeChecklist(event.id, data.occurrence_starts_at));
-            document.getElementById('deleteChecklistButton')?.addEventListener('click', () => deleteChecklist(event.id));
-            document.querySelectorAll('[data-delete-attachment]').forEach(button => button.addEventListener('click', () => deleteAttachment(button.dataset.deleteUrl, event.id)));
+            document.getElementById('deleteOccurrenceButton')?.addEventListener('click', () => deleteChecklist(event.id, 'occurrence', data.occurrence_starts_at));
+            document.getElementById('deleteSeriesButton')?.addEventListener('click', () => deleteChecklist(event.id, 'series', data.occurrence_starts_at));
+            document.querySelectorAll('[data-delete-attachment]').forEach(button => button.remove());
+            document.getElementById('occurrenceChecklistUpload')?.addEventListener('submit', submit => uploadChecklist(submit, data.attachment_upload_url, event.id, data.occurrence_starts_at, data.occurrence_key));
+            document.getElementById('openRemoveAttachmentsButton')?.addEventListener('click', () => {
+                detailModal.hide(); setTimeout(() => removeAttachmentsModal.show(), 180);
+            });
             detailModal.show();
         } catch (error) { toast(error.message, false); }
     }
@@ -172,7 +198,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const event = state.detail.event; detailModal.hide(); document.getElementById('checklistForm').reset();
         const fields = {checklistId: 'id', checklistTitle: 'title', checklistType: 'checklist_type', checklistVessel: 'vessel_id', checklistStart: 'starts_at', checklistEnd: 'ends_at', checklistLocation: 'location', checklistDescription: 'description', checklistRecurrence: 'recurrence_frequency', checklistRecurrenceInterval: 'recurrence_interval', checklistRecurrenceEnd: 'recurrence_ends_on', checklistReminder: 'reminder_minutes'};
         Object.entries(fields).forEach(([field, key]) => setVal(field, event[key] ?? ''));
-        document.getElementById('checklistModalTitle').textContent = 'Edit Checklist'; clearErrors(); toggleRecurrence(); setTimeout(() => checklistModal.show(), 180);
+        setVal('checklistOccurrenceStart', state.detail.occurrence_starts_at || '');
+        document.getElementById('checklistModalTitle').textContent = event.recurring ? 'Edit Selected Checklist Date' : 'Edit Checklist';
+        document.getElementById('checklistVessel').disabled = event.recurring;
+        document.getElementById('checklistRecurrencePanel').classList.toggle('hidden', event.recurring);
+        clearErrors(); toggleRecurrence(); setTimeout(() => checklistModal.show(), 180);
     }
 
     function payload() {
@@ -183,8 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function formPayload(id) {
         const form = new FormData();
         Object.entries(payload()).forEach(([key, value]) => form.append(key, value === false ? '0' : value));
-        Array.from(document.getElementById('checklistAttachments')?.files || []).forEach(file => form.append('attachments[]', file));
-        if (id) form.append('_method', 'PUT');
+        if (!id) Array.from(document.getElementById('checklistAttachments')?.files || []).forEach(file => form.append('attachments[]', file));
+        if (id) { form.append('_method', 'PUT'); form.append('occurrence_starts_at', val('checklistOccurrenceStart')); }
         return form;
     }
 
@@ -201,21 +231,38 @@ document.addEventListener('DOMContentLoaded', () => {
         const start = new Date(`${day}T${pad(oldStart.getHours())}:${pad(oldStart.getMinutes())}`); const end = new Date(start.getTime() + (oldEnd - oldStart));
         try { const data = await api(`${routes.base}/${item.event_id}/move`, {method: 'PATCH', body: JSON.stringify({starts_at: localValue(start), ends_at: localValue(end)})}); toast(data.message, true); load(); } catch (error) { toast(error.message, false); }
     }
-    async function cancelChecklist(id) {
-        if (!confirm('Cancel this checklist schedule?')) return;
-        try { const data = await api(`${routes.base}/${id}/cancel`, {method: 'PATCH', body: '{}'}); detailModal.hide(); toast(data.message, true); load(); } catch (error) { toast(error.message, false); }
+    async function cancelChecklist(id, occurrenceStartsAt) {
+        if (!confirm('Cancel only this selected checklist date? Other repeated dates will continue.')) return;
+        try { const data = await api(`${routes.base}/${id}/cancel`, {method: 'PATCH', body: JSON.stringify({occurrence_starts_at: occurrenceStartsAt})}); detailModal.hide(); toast(data.message, true); load(); } catch (error) { toast(error.message, false); }
     }
     async function completeChecklist(id, occurrenceStartsAt) {
         if (!confirm('Mark only this checklist date as complete? Other repeated dates and reminders will continue.')) return;
         try { const data = await api(`${routes.base}/${id}/complete`, {method: 'PATCH', body: JSON.stringify({occurrence_starts_at: occurrenceStartsAt})}); detailModal.hide(); toast(data.message, true); load(); } catch (error) { toast(error.message, false); }
     }
-    async function deleteChecklist(id) {
-        if (!confirm('Delete this checklist schedule?')) return;
-        try { const data = await api(`${routes.base}/${id}`, {method: 'DELETE'}); detailModal.hide(); toast(data.message, true); load(); } catch (error) { toast(error.message, false); }
+    async function deleteChecklist(id, scope, occurrenceStartsAt) {
+        const warning = scope === 'series' ? 'Delete the entire repeated checklist schedule? This affects every date.' : 'Delete only this selected checklist date?';
+        if (!confirm(warning)) return;
+        try { const data = await api(`${routes.base}/${id}`, {method: 'DELETE', body: JSON.stringify({scope, occurrence_starts_at: occurrenceStartsAt})}); detailModal.hide(); toast(data.message, true); load(); } catch (error) { toast(error.message, false); }
     }
     async function deleteAttachment(url, eventId) {
         if (!confirm('Remove this checklist attachment?')) return;
         try { const data = await api(url, {method: 'DELETE'}); toast(data.message, true); await openDetail(eventId, state.detail?.occurrence_starts_at); } catch (error) { toast(error.message, false); }
+    }
+    async function uploadChecklist(submit, url, eventId, occurrenceStartsAt, occurrenceKey) {
+        submit.preventDefault();
+        const form = submit.currentTarget; const button = form.querySelector('button'); const body = new FormData(form);
+        body.append('occurrence_starts_at', occurrenceStartsAt); body.append('occurrence_key', occurrenceKey); button.disabled = true;
+        try { const data = await api(url, {method: 'POST', body}); toast(data.message, true); await openDetail(eventId, occurrenceStartsAt); }
+        catch (error) { toast(error.message, false); }
+        finally { button.disabled = false; }
+    }
+    async function removeChecklistAttachments(scope) {
+        const detail = state.detail;
+        if (!detail || !confirm(scope === 'series' ? 'Remove every checklist attachment from this entire schedule?' : 'Remove all checklist attachments from this selected date only?')) return;
+        try {
+            const data = await api(detail.attachment_remove_url, {method: 'DELETE', body: JSON.stringify({scope, occurrence_starts_at: detail.occurrence_starts_at})});
+            removeAttachmentsModal.hide(); toast(data.message, true); setTimeout(() => openDetail(detail.event.id, detail.occurrence_starts_at), 180);
+        } catch (error) { toast(error.message, false); }
     }
 
     function formatSchedule(event) { return `${new Date(event.starts_at).toLocaleString()} – ${new Date(event.ends_at).toLocaleString()}${event.recurrence_frequency ? ' · Repeats ' + event.recurrence_frequency : ''}`; }
@@ -228,6 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-vessel-id]').forEach(button => button.onclick = () => { state.vesselId = Number(button.dataset.vesselId); localStorage.setItem('shippingChecklistVessel', state.vesselId); load(); });
     document.getElementById('newChecklistButton')?.addEventListener('click', () => openCreate());
     document.getElementById('checklistRecurrence')?.addEventListener('change', toggleRecurrence);
+    document.getElementById('removeSelectedDateAttachments')?.addEventListener('click', () => removeChecklistAttachments('occurrence'));
+    document.getElementById('removeEntireScheduleAttachments')?.addEventListener('click', () => removeChecklistAttachments('series'));
     document.getElementById('todayButton').onclick = () => { state.date = new Date(); load(); };
     document.getElementById('previousButton').onclick = () => { state.date = state.view === 'month' ? new Date(state.date.getFullYear(), state.date.getMonth() - 1, 1) : addDays(state.date, state.view === 'week' ? -7 : -1); load(); };
     document.getElementById('nextButton').onclick = () => { state.date = state.view === 'month' ? new Date(state.date.getFullYear(), state.date.getMonth() + 1, 1) : addDays(state.date, state.view === 'week' ? 7 : 1); load(); };

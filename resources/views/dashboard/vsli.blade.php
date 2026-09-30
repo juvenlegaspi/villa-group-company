@@ -381,6 +381,62 @@
         box-shadow: 0 5px 12px rgba(36, 71, 127, .2);
     }
 
+    .vsli-monitor-clock {
+        min-width: 210px;
+        border: 1px solid #dbe7f3;
+        border-radius: 14px;
+        background: #f8fafc;
+        padding: 7px 12px;
+        color: #0f274c;
+        line-height: 1.15;
+    }
+
+    .vsli-monitor-clock strong { display: block; font-size: 1rem; font-variant-numeric: tabular-nums; }
+    .vsli-monitor-clock span,
+    .vsli-monitor-clock small { display: block; margin-top: 2px; color: #64748b; font-size: .68rem; font-weight: 700; }
+    .vsli-live-dot { color: #059669; animation: vsli-live-pulse 1.8s ease-in-out infinite; }
+    @keyframes vsli-live-pulse { 50% { opacity: .35; } }
+
+    #live-fleet-map-section:fullscreen,
+    #live-fleet-map-section.is-monitor-fullscreen {
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        background: #07162d;
+        color: #fff;
+        padding: 0;
+    }
+    #live-fleet-map-section.is-monitor-fullscreen { position: fixed; inset: 0; z-index: 9999; }
+
+    #live-fleet-map-section:fullscreen .card-body,
+    #live-fleet-map-section.is-monitor-fullscreen .card-body {
+        display: flex;
+        height: 100%;
+        flex-direction: column;
+        padding: 18px;
+    }
+
+    #live-fleet-map-section:fullscreen .vsli-section-title,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-section-title { flex: 0 0 auto; margin-bottom: 12px; }
+    #live-fleet-map-section:fullscreen .vsli-section-title h4,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-section-title h4 { color: #fff; font-size: 1.45rem; }
+    #live-fleet-map-section:fullscreen .vsli-subtext,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-subtext { color: #b8cbe6; }
+    #live-fleet-map-section:fullscreen .vsli-dashboard-map-layout,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-dashboard-map-layout { flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) 370px; }
+    #live-fleet-map-section:fullscreen #executive-fleet-map,
+    #live-fleet-map-section:fullscreen .vsli-map-details,
+    #live-fleet-map-section.is-monitor-fullscreen #executive-fleet-map,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-map-details { height: 100%; min-height: 0; max-height: none; }
+    #live-fleet-map-section:fullscreen .vsli-monitor-clock,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-monitor-clock { border-color: #284463; background: #102744; color: #fff; }
+    #live-fleet-map-section:fullscreen .vsli-monitor-clock span,
+    #live-fleet-map-section:fullscreen .vsli-monitor-clock small,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-monitor-clock span,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-monitor-clock small { color: #b8cbe6; }
+
     .vsli-details {
         border: 1px solid #dbe7f3;
         border-radius: 22px;
@@ -487,12 +543,18 @@
                         <p class="vsli-subtext">Switch between active routes and the permanent tracking history of completed voyages.</p>
                     </div>
                     <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                        <div class="vsli-monitor-clock" aria-live="polite">
+                            <strong id="dashboard-live-time">--:--:--</strong>
+                            <span id="dashboard-live-date">Loading Philippine time...</span>
+                            <small><i class="bi bi-circle-fill vsli-live-dot me-1"></i><span class="d-inline" id="dashboard-live-sync">Connecting live data...</span></small>
+                        </div>
                         <div class="vsli-map-filter" role="group" aria-label="Select voyage map history">
                             <button type="button" class="is-active" data-dashboard-map-filter="active" aria-pressed="true">Active Voyages</button>
                             <button type="button" data-dashboard-map-filter="previous" aria-pressed="false">Previous Voyages</button>
                         </div>
                         <span class="badge rounded-pill bg-light text-secondary px-3 py-2" id="dashboard-map-count">0 tracks</span>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="dashboard-map-details-toggle" aria-expanded="true"><i class="bi bi-layout-sidebar-reverse me-1"></i><span>Hide details</span></button>
+                        <button type="button" class="btn btn-primary btn-sm" id="dashboard-map-fullscreen" aria-pressed="false"><i class="bi bi-arrows-fullscreen me-1"></i><span>Full screen</span></button>
                     </div>
                 </div>
                 <div class="vsli-dashboard-map-layout" id="dashboard-map-layout">
@@ -1676,7 +1738,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const mapElement = document.getElementById('executive-fleet-map');
-    const tracks = {{ Illuminate\Support\Js::from($dashboardVoyageTracks) }};
+    let tracks = {{ Illuminate\Support\Js::from($dashboardVoyageTracks) }};
+    const liveFleetUrl = {{ Illuminate\Support\Js::from(route('division.dashboard.live-fleet', 'Villa Shipping Lines')) }};
+    const mapSection = document.getElementById('live-fleet-map-section');
+    const fullscreenButton = document.getElementById('dashboard-map-fullscreen');
+    const liveTime = document.getElementById('dashboard-live-time');
+    const liveDate = document.getElementById('dashboard-live-date');
+    const liveSync = document.getElementById('dashboard-live-sync');
 
     if (!mapElement) return;
     if (typeof L === 'undefined') {
@@ -1723,7 +1791,14 @@ document.addEventListener('DOMContentLoaded', () => {
         popupAnchor: [0, -14],
     });
 
-    tracks.forEach((voyage, index) => {
+    const rebuildMapLayers = (nextTracks) => {
+        tracks = Array.isArray(nextTracks) ? nextTracks : [];
+        Object.values(layers).forEach((layer) => layer.clearLayers());
+        groupBounds.active.length = 0;
+        groupBounds.previous.length = 0;
+        voyageFeatures.clear();
+
+        tracks.forEach((voyage, index) => {
         const mode = voyage.completed ? 'previous' : 'active';
         const layer = layers[mode];
         const color = colors[index % colors.length];
@@ -1781,16 +1856,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const voyageBounds = [...actualTrack, destination].filter(Boolean);
         voyageBounds.forEach((point) => groupBounds[mode].push(point));
-        voyageFeatures.set(String(voyage.id), { voyage, mode, bounds: voyageBounds, trackLine, vesselMarker });
-    });
+            voyageFeatures.set(String(voyage.id), { voyage, mode, bounds: voyageBounds, trackLine, vesselMarker });
+        });
+
+        voyageFeatures.forEach((feature, voyageId) => {
+            feature.trackLine?.on('click', () => focusVoyage(voyageId, false));
+            feature.vesselMarker?.on('click', () => focusVoyage(voyageId, false));
+        });
+    };
 
     const filterButtons = document.querySelectorAll('[data-dashboard-map-filter]');
     const countBadge = document.getElementById('dashboard-map-count');
     const emptyMessage = document.getElementById('dashboard-map-empty');
-    const trackCounts = {
-        active: tracks.filter((voyage) => !voyage.completed).length,
-        previous: tracks.filter((voyage) => voyage.completed).length,
-    };
     const detailValue = (value, fallback = 'Not recorded') => {
         const normalized = String(value ?? '').trim();
         return normalized ? escapeHtml(normalized) : fallback;
@@ -1854,12 +1931,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    voyageFeatures.forEach((feature, voyageId) => {
-        feature.trackLine?.on('click', () => focusVoyage(voyageId, false));
-        feature.vesselMarker?.on('click', () => focusVoyage(voyageId, false));
-    });
-
-    const showMapMode = (mode) => {
+    let currentMapMode = 'active';
+    const showMapMode = (mode, fitMap = true) => {
+        currentMapMode = mode;
         Object.values(layers).forEach((layer) => map.removeLayer(layer));
         layers[mode].addTo(map);
         filterButtons.forEach((button) => {
@@ -1867,7 +1941,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.classList.toggle('is-active', selected);
             button.setAttribute('aria-pressed', selected ? 'true' : 'false');
         });
-        const count = trackCounts[mode];
+        const count = tracks.filter((voyage) => (voyage.completed ? 'previous' : 'active') === mode).length;
         countBadge.textContent = `${count} ${count === 1 ? 'track' : 'tracks'}`;
         renderVoyageDetails(mode);
         emptyMessage.classList.toggle('d-none', count > 0);
@@ -1876,9 +1950,11 @@ document.addEventListener('DOMContentLoaded', () => {
             : 'No completed voyage tracking history is available yet.';
 
         const visibleBounds = groupBounds[mode];
-        if (visibleBounds.length === 1) map.setView(visibleBounds[0], 9);
-        else if (visibleBounds.length > 1) map.fitBounds(visibleBounds, { padding: [36, 36], maxZoom: 9 });
-        else map.setView([12.4, 122.2], 5);
+        if (fitMap) {
+            if (visibleBounds.length === 1) map.setView(visibleBounds[0], 9);
+            else if (visibleBounds.length > 1) map.fitBounds(visibleBounds, { padding: [36, 36], maxZoom: 9 });
+            else map.setView([12.4, 122.2], 5);
+        }
         window.setTimeout(() => map.invalidateSize(), 50);
     };
 
@@ -1890,7 +1966,68 @@ document.addEventListener('DOMContentLoaded', () => {
         if (label) label.textContent = hidden ? 'Show details' : 'Hide details';
         window.setTimeout(() => map.invalidateSize(), 50);
     });
+
+    const updateClock = () => {
+        const now = new Date();
+        const timeOptions = { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+        const dateOptions = { timeZone: 'Asia/Manila', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+        if (liveTime) liveTime.textContent = new Intl.DateTimeFormat('en-PH', timeOptions).format(now);
+        if (liveDate) liveDate.textContent = new Intl.DateTimeFormat('en-PH', dateOptions).format(now);
+    };
+    updateClock();
+    window.setInterval(updateClock, 1000);
+
+    let liveRefreshRunning = false;
+    const refreshLiveFleet = async () => {
+        if (liveRefreshRunning || document.hidden) return;
+        liveRefreshRunning = true;
+        if (liveSync) liveSync.textContent = 'Checking vessel updates...';
+        try {
+            const response = await fetch(liveFleetUrl, {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) throw new Error('Live data request failed');
+            const payload = await response.json();
+            rebuildMapLayers(payload.tracks);
+            showMapMode(currentMapMode, false);
+            if (liveSync) liveSync.textContent = `Live · synced ${new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date())}`;
+        } catch (error) {
+            if (liveSync) liveSync.textContent = 'Connection interrupted · retrying';
+        } finally {
+            liveRefreshRunning = false;
+        }
+    };
+
+    const syncFullscreenState = () => {
+        const active = document.fullscreenElement === mapSection || mapSection?.classList.contains('is-monitor-fullscreen');
+        fullscreenButton?.setAttribute('aria-pressed', active ? 'true' : 'false');
+        const label = fullscreenButton?.querySelector('span');
+        const icon = fullscreenButton?.querySelector('i');
+        if (label) label.textContent = active ? 'Exit full screen' : 'Full screen';
+        if (icon) icon.className = `bi ${active ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'} me-1`;
+        active ? map.scrollWheelZoom.enable() : map.scrollWheelZoom.disable();
+        window.setTimeout(() => map.invalidateSize(), 120);
+    };
+
+    fullscreenButton?.addEventListener('click', async () => {
+        if (document.fullscreenElement) {
+            await document.exitFullscreen();
+        } else if (mapSection?.requestFullscreen) {
+            await mapSection.requestFullscreen();
+        } else {
+            mapSection?.classList.toggle('is-monitor-fullscreen');
+            syncFullscreenState();
+        }
+    });
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLiveFleet(); });
+
+    rebuildMapLayers(tracks);
     showMapMode('active');
+    if (liveSync) liveSync.textContent = 'Live · refreshes every 15 seconds';
+    window.setInterval(refreshLiveFleet, 15000);
 });
 </script>
 @endpush

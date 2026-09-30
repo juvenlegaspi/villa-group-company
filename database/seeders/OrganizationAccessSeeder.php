@@ -141,6 +141,9 @@ class OrganizationAccessSeeder extends Seeder
             'inventory-manager' => ['jmv.inventory.view','jmv.inventory.items.manage','jmv.inventory.movements.manage','jmv.inventory.adjustments.manage','jmv.inventory.reports.view','jmv.inventory.requests.create','jmv.inventory.requests.approve'],
             'warehouse-staff' => ['jmv.inventory.view','jmv.inventory.movements.manage','jmv.inventory.requests.create'],
             'procurement-manager', 'purchaser', 'finance-manager', 'accountant' => ['jmv.inventory.view','jmv.inventory.reports.view'],
+            'mine-operations-manager', 'mine-supervisor', 'department-manager' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage','jmv.operations.daily_production.reports.view'],
+            'chief-geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.reports.view'],
+            'geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage'],
             default => [],
         };
     }

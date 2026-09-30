@@ -32,7 +32,7 @@ class ShippingChecklistReminderService
             'delivery_exhausted' => 0,
         ];
 
-        ShippingCalendarEvent::with('vessel')
+        ShippingCalendarEvent::with(['vessel', 'occurrenceOverrides'])
             ->where('status', 'scheduled')
             ->whereNotNull('vessel_id')
             ->whereNotNull('reminder_minutes')
@@ -47,15 +47,18 @@ class ShippingChecklistReminderService
             })
             ->chunkById(100, function ($events) use ($now, $catchUpMinutes, &$summary): void {
                 foreach ($events as $event) {
-                    foreach ($this->dueOccurrences($event, $now, $catchUpMinutes) as $occurrence) {
+                    foreach ($this->dueOccurrences($event, $now, $catchUpMinutes) as $due) {
+                        $anchor = $due['anchor'];
+                        $occurrence = $due['starts_at'];
+                        $effectiveEvent = $this->effectiveEvent($event, $due['override']);
                         foreach ($this->recipients($event) as $recipient) {
-                            $payload = $this->payload($event, $occurrence);
-                            $this->sendSystem($event, $recipient, $occurrence, $payload, $summary);
+                            $payload = $this->payload($effectiveEvent, $occurrence);
+                            $this->sendSystem($event, $recipient, $anchor, $payload, $summary);
                             if (filled($recipient->email)) {
-                                $this->sendEmail($event, $recipient, $occurrence, $payload, $summary);
+                                $this->sendEmail($event, $recipient, $anchor, $payload, $summary);
                             }
                             if (filled($recipient->cell_number)) {
-                                $this->sendSms($event, $recipient, $occurrence, $summary);
+                                $this->sendSms($event, $effectiveEvent, $recipient, $anchor, $occurrence, $summary);
                             }
                         }
                     }
@@ -90,22 +93,31 @@ class ShippingChecklistReminderService
 
     private function dueOccurrences(ShippingCalendarEvent $event, Carbon $now, int $catchUpMinutes): array
     {
-        $reminderMinutes = (int) $event->reminder_minutes;
-        $occurrenceFrom = $now->copy()->subMinutes($catchUpMinutes)->addMinutes($reminderMinutes);
-        $occurrenceUntil = $now->copy()->addSeconds(59)->addMinutes($reminderMinutes);
+        $oldestReminder = $now->copy()->subMinutes($catchUpMinutes);
+        $anchorFrom = $oldestReminder->copy()->subDay()->startOfDay();
+        $anchorUntil = $now->copy()->addMinutes(10080)->endOfDay();
         $occurrence = $event->starts_at->copy();
 
         if (! $event->recurrence_frequency) {
-            return $occurrence->betweenIncluded($occurrenceFrom, $occurrenceUntil) ? [$occurrence] : [];
+            $override = $this->overrideFor($event, $occurrence);
+
+            return $this->occurrenceIsDue($event, $occurrence, $override, $oldestReminder, $now)
+                ? [['anchor' => $occurrence, 'starts_at' => $override?->has_changes ? $override->starts_at->copy() : $occurrence->copy(), 'override' => $override]]
+                : [];
         }
 
-        $this->fastForward($occurrence, $event, $occurrenceFrom);
+        $this->fastForward($occurrence, $event, $anchorFrom);
         $occurrences = [];
         $iterations = 0;
-        while ($occurrence <= $occurrenceUntil && $iterations < 1500) {
+        while ($occurrence <= $anchorUntil && $iterations < 1500) {
             if (! $event->recurrence_ends_on || $occurrence <= $event->recurrence_ends_on->copy()->endOfDay()) {
-                if (! $this->occurrenceIsCompleted($event, $occurrence)) {
-                    $occurrences[] = $occurrence->copy();
+                $override = $this->overrideFor($event, $occurrence);
+                if ($this->occurrenceIsDue($event, $occurrence, $override, $oldestReminder, $now)) {
+                    $occurrences[] = [
+                        'anchor' => $occurrence->copy(),
+                        'starts_at' => $override?->has_changes ? $override->starts_at->copy() : $occurrence->copy(),
+                        'override' => $override,
+                    ];
                 }
             }
             $this->advanceOccurrence($occurrence, $event);
@@ -113,6 +125,41 @@ class ShippingChecklistReminderService
         }
 
         return $occurrences;
+    }
+
+    private function occurrenceIsDue(ShippingCalendarEvent $event, Carbon $anchor, $override, Carbon $oldestReminder, Carbon $now): bool
+    {
+        if (($override?->status ?? $event->status) !== 'scheduled' || $this->occurrenceIsCompleted($event, $anchor)) {
+            return false;
+        }
+        $startsAt = $override?->has_changes ? $override->starts_at->copy() : $anchor->copy();
+        $reminderMinutes = (int) ($override?->has_changes ? $override->reminder_minutes : $event->reminder_minutes);
+        $reminderAt = $startsAt->subMinutes($reminderMinutes);
+
+        return $reminderAt->betweenIncluded($oldestReminder, $now->copy()->addSeconds(59));
+    }
+
+    private function overrideFor(ShippingCalendarEvent $event, Carbon $anchor)
+    {
+        return $event->occurrenceOverrides->first(fn ($override) => $override->occurrence_starts_at->equalTo($anchor));
+    }
+
+    private function effectiveEvent(ShippingCalendarEvent $event, $override): ShippingCalendarEvent
+    {
+        if (! $override?->has_changes) {
+            return $event;
+        }
+        $effective = clone $event;
+        $effective->forceFill([
+            'title' => $override->title ?? $event->title,
+            'checklist_type' => $override->checklist_type ?? $event->checklist_type,
+            'description' => $override->description,
+            'location' => $override->location,
+            'color' => $override->color ?? $event->color,
+            'reminder_minutes' => $override->reminder_minutes ?? $event->reminder_minutes,
+        ]);
+
+        return $effective;
     }
 
     private function occurrenceIsCompleted(ShippingCalendarEvent $event, Carbon $occurrence): bool
@@ -195,14 +242,14 @@ class ShippingChecklistReminderService
         }
     }
 
-    private function sendSms(ShippingCalendarEvent $event, User $recipient, Carbon $occurrence, array &$summary): void
+    private function sendSms(ShippingCalendarEvent $event, ShippingCalendarEvent $effectiveEvent, User $recipient, Carbon $anchor, Carbon $occurrence, array &$summary): void
     {
         if (! $this->sms->isConfigured()) {
             $summary['sms_skipped_unconfigured']++;
 
             return;
         }
-        $log = $this->reserve($event, $recipient, $occurrence, 'sms');
+        $log = $this->reserve($event, $recipient, $anchor, 'sms');
         if (! $this->beginAttempt($log, $summary)) {
             return;
         }
@@ -211,7 +258,7 @@ class ShippingChecklistReminderService
             if (! $number) {
                 throw new RuntimeException('The recipient has an invalid Philippine mobile number.');
             }
-            $result = $this->sms->send($number, Str::limit('Villa Shipping reminder: '.$event->title.' for '.$event->vessel?->vessel_name.' is scheduled '.$occurrence->format('M d, Y g:i A').'. Please perform the vessel checklist.', 160, ''));
+            $result = $this->sms->send($number, Str::limit('Villa Shipping reminder: '.$effectiveEvent->title.' for '.$event->vessel?->vessel_name.' is scheduled '.$occurrence->format('M d, Y g:i A').'. Please perform the vessel checklist.', 160, ''));
             DB::table('shipping_calendar_reminder_logs')->where('id', $log->id)->update([
                 'status' => 'sent', 'provider_message_id' => (string) $result['message_id'],
                 'provider_status' => $result['status'] ?? null, 'error_message' => null,

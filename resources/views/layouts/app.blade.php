@@ -406,6 +406,9 @@
             @elseif ($isJmvApplications)
                 <a class="app-nav-link active" href="{{ route('jmv.applications') }}" title="Applications"><i class="bi bi-grid"></i><span>Applications</span></a>
             @elseif ($isJmvArea)
+                @if($currentUser->hasPermission('jmv.operations.daily_production.view'))
+                <a class="app-nav-link {{ request()->routeIs('jmv.operations.production.*') ? 'active' : '' }}" href="{{ route('jmv.operations.production.index') }}" title="Operations"><i class="bi bi-graph-up-arrow"></i><span>Operations</span></a>
+                @endif
                 @if($currentUser->hasPermission('jmv.inventory.view'))
                 <a class="app-nav-link {{ request()->routeIs('jmv.inventory.*') ? 'active' : '' }}" href="{{ route('jmv.inventory.index') }}" title="Inventory"><i class="bi bi-box-seam"></i><span>Inventory</span></a>
                 @endif

@@ -25,12 +25,20 @@
     </header>
 
     @php
+        $canViewOperations = auth()->user()->hasPermission('jmv.operations.daily_production.view');
         $canViewInventory = auth()->user()->hasPermission('jmv.inventory.view');
         $isExecutiveViewer = auth()->user()->isExecutiveViewer();
         $canMoveStock = $isExecutiveViewer || auth()->user()->hasPermission('jmv.inventory.movements.manage');
         $canViewReports = auth()->user()->hasPermission('jmv.inventory.reports.view');
     @endphp
     <div class="mx-auto grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        @if($canViewOperations)
+        <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-cyan-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-cyan-100" href="{{ route('jmv.operations.production.index') }}">
+            <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-2xl text-cyan-700"><i class="bi bi-graph-up-arrow"></i></span>
+            <span><span class="block text-sm font-extrabold uppercase text-villa-900">Operations</span><span class="mt-1 block text-xs leading-5 text-slate-500">Daily workforce, resource consumption, soil, and coal production monitoring.</span></span>
+        </a>
+        @endif
+
         @if($canViewInventory)
         <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-amber-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-100" href="{{ route('jmv.inventory.index') }}">
             <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-amber-50 text-2xl text-amber-700"><i class="bi bi-box-seam"></i></span>
@@ -67,7 +75,7 @@
             <span><span class="block text-sm font-extrabold uppercase text-villa-900">User Management</span><span class="mt-1 block text-xs leading-5 text-slate-500">Manage company departments, positions and employee access.</span></span>
         </a>
         @endif
-        @unless($canViewInventory || $canMoveStock || $canViewReports || $isExecutiveViewer || auth()->user()->hasPermission('jmv.inventory.requests.create') || auth()->user()->hasPermission('jmv.inventory.requests.approve') || auth()->user()->canManageUsers())
+        @unless($canViewOperations || $canViewInventory || $canMoveStock || $canViewReports || $isExecutiveViewer || auth()->user()->hasPermission('jmv.inventory.requests.create') || auth()->user()->hasPermission('jmv.inventory.requests.approve') || auth()->user()->canManageUsers())
         <div class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center"><i class="bi bi-shield-lock mb-3 block text-3xl text-slate-400"></i><h2 class="text-lg font-extrabold text-slate-800">No application assigned</h2><p class="mt-1 text-sm text-slate-500">Contact your administrator to assign JMV inventory access to your position.</p></div>
         @endunless
     </div>

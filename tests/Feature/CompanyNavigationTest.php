@@ -470,6 +470,8 @@ class CompanyNavigationTest extends TestCase
             ->assertSee('Active Voyages')
             ->assertSee('Previous Voyages')
             ->assertSee('Hide details')
+            ->assertSee('Full screen')
+            ->assertSee('refreshes every 15 seconds')
             ->assertSee('Voyage details')
             ->assertSee('Focus this voyage')
             ->assertSee('Priority action list')
@@ -482,6 +484,15 @@ class CompanyNavigationTest extends TestCase
             ->assertViewHas('dashboardVoyageTracks', fn ($tracks) => $tracks->count() === 2
                 && $tracks->where('completed', false)->count() === 1
                 && $tracks->where('completed', true)->count() === 1);
+
+        $liveResponse = $this->actingAs($admin)
+            ->getJson(route('division.dashboard.live-fleet', 'Villa shipping Lines'))
+            ->assertOk()
+            ->assertJsonCount(2, 'tracks')
+            ->assertJsonPath('tracks.0.id', $completedVoyageId)
+            ->assertJsonPath('tracks.1.id', $voyageId)
+            ->assertJsonStructure(['tracks' => [['id', 'vessel', 'status', 'completed', 'current', 'positions', 'last_update']], 'updated_at']);
+        $this->assertStringContainsString('no-store', (string) $liveResponse->headers->get('Cache-Control'));
     }
 
     private function seedCompanies(): array

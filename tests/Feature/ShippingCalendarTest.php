@@ -173,6 +173,95 @@ class ShippingCalendarTest extends TestCase
         $this->assertDatabaseCount('shipping_calendar_reminder_logs', 6);
     }
 
+    public function test_recurring_attachments_edits_cancellations_and_deletions_are_scoped_to_selected_date(): void
+    {
+        Storage::fake('local');
+        $org = $this->organization();
+        $file = UploadedFile::fake()->create('first-day-checklist.pdf', 100, 'application/pdf');
+        $response = $this->actingAs($org['manager'])->postJson(
+            route('shipping.calendar.events.store'),
+            $this->payload($org['vessel']->id, [
+                'title' => 'Daily deck round', 'recurrence_frequency' => 'daily', 'recurrence_ends_on' => '2026-09-05',
+            ]),
+        )->assertCreated();
+        $eventId = $response->json('event_id');
+        Carbon::setTestNow('2026-09-02 09:00:00');
+        $this->actingAs($org['manager'])->post(
+            route('shipping.calendar.events.attachments.store', $eventId),
+            ['occurrence_starts_at' => '2026-09-02 08:00:00', 'occurrence_key' => $eventId.'_2026-09-02_08-00-00', 'attachments' => [$file]],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+        Carbon::setTestNow();
+
+        $this->actingAs($org['manager'])->getJson(route('shipping.calendar.events.show', [
+            'event' => $eventId, 'occurrence_starts_at' => '2026-09-02 08:00:00',
+        ]))->assertOk()
+            ->assertJsonPath('occurrence_key', $eventId.'_2026-09-02_08-00-00')
+            ->assertJsonPath('attachments.0.occurrence_key', $eventId.'_2026-09-02_08-00-00')
+            ->assertJsonCount(1, 'attachments');
+        $this->actingAs($org['manager'])->getJson(route('shipping.calendar.events.show', [
+            'event' => $eventId, 'occurrence_starts_at' => '2026-09-03 08:00:00',
+        ]))->assertOk()
+            ->assertJsonPath('occurrence_key', $eventId.'_2026-09-03_08-00-00')
+            ->assertJsonPath('can_remove_attachments', false)
+            ->assertJsonCount(0, 'attachments');
+
+        $this->actingAs($org['manager'])->putJson(route('shipping.calendar.events.update', $eventId), $this->payload($org['vessel']->id, [
+            'title' => 'Edited third-day round', 'starts_at' => '2026-09-03 10:00:00', 'ends_at' => '2026-09-03 11:00:00',
+            'recurrence_frequency' => 'daily', 'recurrence_ends_on' => '2026-09-05',
+            'occurrence_starts_at' => '2026-09-03 08:00:00',
+        ]))->assertOk()->assertJsonPath('message', 'This checklist date was updated successfully.');
+        $this->assertDatabaseHas('shipping_calendar_events', ['id' => $eventId, 'title' => 'Daily deck round']);
+        $this->assertDatabaseHas('shipping_calendar_occurrence_overrides', [
+            'event_id' => $eventId, 'occurrence_starts_at' => '2026-09-03 08:00:00', 'title' => 'Edited third-day round',
+        ]);
+        Carbon::setTestNow('2026-09-03 11:00:00');
+        $this->actingAs($org['manager'])->post(
+            route('shipping.calendar.events.attachments.store', $eventId),
+            ['occurrence_starts_at' => '2026-09-03 08:00:00', 'occurrence_key' => $eventId.'_2026-09-03_08-00-00', 'attachments' => [UploadedFile::fake()->create('third-day-checklist.pdf', 100, 'application/pdf')]],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+        Carbon::setTestNow();
+
+        $this->actingAs($org['manager'])->patchJson(route('shipping.calendar.events.cancel', $eventId), [
+            'occurrence_starts_at' => '2026-09-04 08:00:00',
+        ])->assertOk();
+        $occurrences = collect($this->actingAs($org['manager'])->getJson(route('shipping.calendar.events.index', [
+            'start' => '2026-09-02', 'end' => '2026-09-05', 'vessel_id' => $org['vessel']->id,
+        ]))->assertOk()->json())->keyBy(fn (array $item) => substr($item['occurrence_starts_at'], 0, 10));
+        $this->assertSame('Edited third-day round', $occurrences['2026-09-03']['title']);
+        $this->assertSame('cancelled', $occurrences['2026-09-04']['status']);
+        $this->assertSame('scheduled', $occurrences['2026-09-05']['status']);
+
+        $admin = User::create(['name' => 'System', 'lastname' => 'Administrator', 'username' => 'occurrence-admin', 'email' => 'occurrence-admin@example.test', 'password' => Hash::make('villa@2026'), 'role' => 'admin', 'is_admin' => true, 'must_change_password' => false, 'status' => true, 'division_id' => $org['division']->id, 'department_id' => $org['manager']->department_id, 'position_id' => $org['manager']->position_id]);
+        $this->actingAs($admin)->getJson(route('shipping.calendar.events.show', [
+            'event' => $eventId, 'occurrence_starts_at' => '2026-09-02 08:00:00',
+        ]))->assertOk()->assertJsonPath('can_remove_attachments', true);
+        $this->actingAs($admin)->getJson(route('shipping.calendar.events.show', [
+            'event' => $eventId, 'occurrence_starts_at' => '2026-09-04 08:00:00',
+        ]))->assertOk()->assertJsonPath('can_remove_attachments', false)->assertJsonCount(0, 'attachments');
+        $this->actingAs($org['manager'])->deleteJson(route('shipping.calendar.events.attachments.destroy-scope', $eventId), [
+            'scope' => 'occurrence', 'occurrence_starts_at' => '2026-09-02 08:00:00',
+        ])->assertForbidden();
+        $this->actingAs($admin)->deleteJson(route('shipping.calendar.events.attachments.destroy-scope', $eventId), [
+            'scope' => 'occurrence', 'occurrence_starts_at' => '2026-09-02 08:00:00',
+        ])->assertOk();
+        $this->assertDatabaseMissing('shipping_calendar_attachments', ['event_id' => $eventId, 'occurrence_starts_at' => '2026-09-02 08:00:00']);
+        $this->assertDatabaseHas('shipping_calendar_attachments', ['event_id' => $eventId, 'occurrence_starts_at' => '2026-09-03 08:00:00']);
+        $this->actingAs($admin)->deleteJson(route('shipping.calendar.events.attachments.destroy-scope', $eventId), [
+            'scope' => 'series', 'occurrence_starts_at' => '2026-09-03 08:00:00',
+        ])->assertOk();
+        $this->assertDatabaseMissing('shipping_calendar_attachments', ['event_id' => $eventId]);
+        $this->actingAs($admin)->deleteJson(route('shipping.calendar.events.destroy', $eventId), [
+            'scope' => 'occurrence', 'occurrence_starts_at' => '2026-09-05 08:00:00',
+        ])->assertOk()->assertJsonPath('message', 'Only the selected checklist date was deleted.');
+        $remaining = $this->actingAs($admin)->getJson(route('shipping.calendar.events.index', [
+            'start' => '2026-09-02', 'end' => '2026-09-05', 'vessel_id' => $org['vessel']->id,
+        ]))->assertOk()->json();
+        $this->assertCount(3, $remaining);
+        $this->assertNotContains('2026-09-05', collect($remaining)->pluck('start')->map(fn ($date) => substr($date, 0, 10))->all());
+    }
+
     public function test_due_reminder_sends_system_email_and_sms_only_to_assigned_captain_and_operations_manager(): void
     {
         Carbon::setTestNow('2026-09-01 08:00:00');
@@ -202,20 +291,66 @@ class ShippingCalendarTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_cancelled_recurring_date_is_not_reminded_but_next_date_still_is(): void
+    {
+        $org = $this->organization();
+        Notification::fake();
+        Http::fake(['*' => Http::response([['message_id' => 'SMS-NEXT-DATE', 'status' => 'Pending']], 200)]);
+        config()->set('services.semaphore.enabled', true);
+        config()->set('services.semaphore.api_key', 'test-key');
+        config()->set('services.shipping_calendar.catch_up_minutes', 10);
+
+        $response = $this->actingAs($org['manager'])->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id, [
+            'title' => 'Daily cancelled-date test', 'recurrence_frequency' => 'daily', 'recurrence_ends_on' => '2026-09-05',
+        ]))->assertCreated();
+        $eventId = $response->json('event_id');
+        $this->actingAs($org['manager'])->patchJson(route('shipping.calendar.events.cancel', $eventId), [
+            'occurrence_starts_at' => '2026-09-04 08:00:00',
+        ])->assertOk();
+
+        Carbon::setTestNow('2026-09-04 08:00:00');
+        $cancelled = app(ShippingChecklistReminderService::class)->sendDueReminders(now());
+        $this->assertSame(0, $cancelled['system_sent']);
+        $this->assertSame(0, $cancelled['email_sent']);
+        $this->assertSame(0, $cancelled['sms_sent']);
+
+        Carbon::setTestNow('2026-09-05 08:00:00');
+        $nextDate = app(ShippingChecklistReminderService::class)->sendDueReminders(now());
+        Carbon::setTestNow();
+        $this->assertSame(2, $nextDate['system_sent']);
+        $this->assertSame(2, $nextDate['email_sent']);
+        $this->assertSame(2, $nextDate['sms_sent']);
+    }
+
     public function test_checklist_attachments_are_private_audited_and_limited_to_authorized_vessel_users(): void
     {
         Storage::fake('local');
         config()->set('services.shipping_calendar.max_attachments', 1);
         $org = $this->organization();
-        $file = UploadedFile::fake()->create('engine-checklist.pdf', 240, 'application/pdf');
-
-        $response = $this->actingAs($org['manager'])->post(
+        $response = $this->actingAs($org['manager'])->postJson(
             route('shipping.calendar.events.store'),
-            [...$this->payload($org['vessel']->id), 'attachments' => [$file]],
-            ['Accept' => 'application/json'],
+            $this->payload($org['vessel']->id),
         )->assertCreated();
 
         $eventId = $response->json('event_id');
+        Carbon::setTestNow('2026-09-02 08:30:00');
+        $this->actingAs($org['captain'])->getJson(route('shipping.calendar.events.show', [
+            'event' => $eventId, 'occurrence_starts_at' => '2026-09-02 08:00:00',
+        ]))->assertOk()->assertJsonPath('can_prepare_attachment', true)->assertJsonPath('can_upload_attachment', false);
+        $this->actingAs($org['manager'])->post(
+            route('shipping.calendar.events.attachments.store', $eventId),
+            ['occurrence_starts_at' => '2026-09-02 08:00:00', 'occurrence_key' => $eventId.'_2026-09-02_08-00-00', 'attachments' => [UploadedFile::fake()->create('too-early.pdf', 100, 'application/pdf')]],
+            ['Accept' => 'application/json'],
+        )->assertUnprocessable()->assertJsonPath('message', 'Upload the completed checklist after the expected schedule end time.');
+
+        Carbon::setTestNow('2026-09-02 09:00:00');
+        $this->actingAs($org['manager'])->post(
+            route('shipping.calendar.events.attachments.store', $eventId),
+            ['occurrence_starts_at' => '2026-09-02 08:00:00', 'occurrence_key' => $eventId.'_2026-09-02_08-00-00', 'attachments' => [UploadedFile::fake()->create('engine-checklist.pdf', 240, 'application/pdf')]],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+        Carbon::setTestNow();
+
         $attachment = DB::table('shipping_calendar_attachments')->where('event_id', $eventId)->first();
         $this->assertNotNull($attachment);
         Storage::disk('local')->assertExists($attachment->path);
@@ -227,24 +362,34 @@ class ShippingCalendarTest extends TestCase
         $this->actingAs($org['captain'])->deleteJson(route('shipping.calendar.events.attachments.destroy', [$eventId, $attachment->id]))->assertForbidden();
 
         $extraFile = UploadedFile::fake()->create('additional-checklist.pdf', 100, 'application/pdf');
+        Carbon::setTestNow('2026-09-02 09:00:00');
         $this->actingAs($org['manager'])->post(
-            route('shipping.calendar.events.update', $eventId),
-            [...$this->payload($org['vessel']->id), '_method' => 'PUT', 'attachments' => [$extraFile]],
+            route('shipping.calendar.events.attachments.store', $eventId),
+            ['occurrence_starts_at' => '2026-09-02 08:00:00', 'occurrence_key' => $eventId.'_2026-09-02_08-00-00', 'attachments' => [$extraFile]],
             ['Accept' => 'application/json'],
         )->assertUnprocessable();
 
-        $this->actingAs($org['manager'])->deleteJson(route('shipping.calendar.events.attachments.destroy', [$eventId, $attachment->id]))
+        $this->actingAs($org['manager'])->deleteJson(route('shipping.calendar.events.attachments.destroy', [$eventId, $attachment->id]))->assertForbidden();
+        $admin = User::create(['name' => 'Attachment', 'lastname' => 'Administrator', 'username' => 'attachment-admin', 'email' => 'attachment-admin@example.test', 'password' => Hash::make('villa@2026'), 'role' => 'admin', 'is_admin' => true, 'must_change_password' => false, 'status' => true, 'division_id' => $org['division']->id, 'department_id' => $org['manager']->department_id, 'position_id' => $org['manager']->position_id]);
+        $this->actingAs($admin)->deleteJson(route('shipping.calendar.events.attachments.destroy', [$eventId, $attachment->id]))
             ->assertOk()->assertJsonPath('message', 'Checklist attachment removed.');
         Storage::disk('local')->assertMissing($attachment->path);
         $this->assertDatabaseMissing('shipping_calendar_attachments', ['id' => $attachment->id]);
         $this->assertDatabaseHas('shipping_calendar_audits', ['event_id' => $eventId, 'action' => 'attachment_deleted']);
 
+        $this->actingAs($org['captain'])->post(
+            route('shipping.calendar.events.attachments.store', $eventId),
+            ['occurrence_starts_at' => '2026-09-02 08:00:00', 'occurrence_key' => $eventId.'_2026-09-02_08-00-00', 'attachments' => [UploadedFile::fake()->create('captain-checklist.pdf', 100, 'application/pdf')]],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+
         $invalid = UploadedFile::fake()->create('unsafe.exe', 10, 'application/octet-stream');
         $this->actingAs($org['manager'])->post(
-            route('shipping.calendar.events.store'),
-            [...$this->payload($org['vessel']->id), 'attachments' => [$invalid]],
+            route('shipping.calendar.events.attachments.store', $eventId),
+            ['occurrence_starts_at' => '2026-09-02 08:00:00', 'occurrence_key' => $eventId.'_2026-09-02_08-00-00', 'attachments' => [$invalid]],
             ['Accept' => 'application/json'],
         )->assertUnprocessable()->assertJsonValidationErrors('attachments.0');
+        Carbon::setTestNow();
     }
 
     public function test_missed_reminder_is_caught_up_retried_and_not_duplicated(): void

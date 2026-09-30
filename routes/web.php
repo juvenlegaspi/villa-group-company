@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DryDockingHeaderController;
 use App\Http\Controllers\FuelRobMonitoringController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\JmvDailyProductionController;
 use App\Http\Controllers\JmvWorkspaceController;
 use App\Http\Controllers\JmvStockRequestController;
 use App\Http\Controllers\LayoutController;
@@ -76,6 +77,8 @@ Route::middleware(['auth', 'active'])->group(function (): void {
         Route::get('/companies', [DashboardController::class, 'companies'])->name('companies');
         Route::get('/division/{division}', [DashboardController::class, 'divisionDashboard'])
             ->name('division.dashboard');
+        Route::get('/division/{division}/live-fleet', [DashboardController::class, 'shippingLiveFleet'])
+            ->name('division.dashboard.live-fleet');
 
         Route::middleware('admin')->group(function (): void {
             Route::get('/departments/{id}', function ($id) {
@@ -118,6 +121,8 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                     Route::get('/', [ShippingCalendarController::class, 'events'])->name('index');
                     Route::post('/', [ShippingCalendarController::class, 'store'])->name('store');
                     Route::get('/{event}', [ShippingCalendarController::class, 'show'])->name('show');
+                    Route::post('/{event}/attachments', [ShippingCalendarController::class, 'storeAttachment'])->name('attachments.store');
+                    Route::delete('/{event}/attachments', [ShippingCalendarController::class, 'destroyAttachments'])->name('attachments.destroy-scope');
                     Route::get('/{event}/attachments/{attachment}', [ShippingCalendarController::class, 'downloadAttachment'])->name('attachments.download');
                     Route::delete('/{event}/attachments/{attachment}', [ShippingCalendarController::class, 'destroyAttachment'])->name('attachments.destroy');
                     Route::put('/{event}', [ShippingCalendarController::class, 'update'])->name('update');
@@ -252,6 +257,15 @@ Route::middleware(['auth', 'active'])->group(function (): void {
 
         Route::middleware('division:JMV')->prefix('jmv')->group(function (): void {
             Route::get('/applications', [JmvWorkspaceController::class, 'applications'])->name('jmv.applications');
+            Route::prefix('operations/daily-production')->name('jmv.operations.production.')->group(function (): void {
+                Route::get('/', [JmvDailyProductionController::class, 'index'])->name('index');
+                Route::post('/', [JmvDailyProductionController::class, 'store'])->name('store');
+                Route::get('/export', [JmvDailyProductionController::class, 'export'])->name('export');
+                Route::get('/{productionLog}', [JmvDailyProductionController::class, 'show'])->name('show');
+                Route::get('/{productionLog}/edit', [JmvDailyProductionController::class, 'edit'])->name('edit');
+                Route::put('/{productionLog}', [JmvDailyProductionController::class, 'update'])->name('update');
+                Route::get('/{productionLog}/attachments/{attachment}', [JmvDailyProductionController::class, 'attachment'])->name('attachments.show');
+            });
             Route::get('/inventory', [InventoryController::class, 'index'])->name('jmv.inventory.index');
             Route::post('/inventory', [InventoryController::class, 'store'])->name('jmv.inventory.store');
             Route::put('/inventory/{item}', [InventoryController::class, 'update'])->name('jmv.inventory.update');

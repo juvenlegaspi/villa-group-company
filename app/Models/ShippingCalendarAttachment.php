@@ -6,11 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class ShippingCalendarAttachment extends Model
 {
-    protected $fillable = ['event_id', 'uploaded_by', 'original_name', 'path', 'mime_type', 'size_bytes'];
+    protected $fillable = ['event_id', 'occurrence_starts_at', 'uploaded_by', 'original_name', 'path', 'mime_type', 'size_bytes'];
 
     protected function casts(): array
     {
-        return ['size_bytes' => 'integer'];
+        return ['occurrence_starts_at' => 'datetime', 'size_bytes' => 'integer'];
     }
 
     public function event()

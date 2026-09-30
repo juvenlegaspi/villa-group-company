@@ -65,6 +65,9 @@ class OrganizationController extends Controller
         if ($divisionName === 'yatira') {
             $permissionSlugs = array_values(array_unique([...$permissionSlugs, ...$this->yatiraPermissionsFor($departmentName, $code)]));
         }
+        if ($divisionName === 'jmv') {
+            $permissionSlugs = array_values(array_unique([...$permissionSlugs, ...$this->jmvPermissionsFor($code)]));
+        }
         if ($permissionSlugs) {
             $permissionIds = Permission::whereIn('slug', $permissionSlugs)->pluck('id');
             DB::table('permission_position')->insertOrIgnore($permissionIds->map(fn ($id) => ['position_id' => $position->id, 'permission_id' => $id])->all());
@@ -90,5 +93,18 @@ class OrganizationController extends Controller
         if ($departmentName === 'equipment and maintenance' && $code === 'maintenance-manager') $permissions[] = 'yatira.assets.update';
         if ($departmentName === 'inventory and warehouse' && in_array($code, ['inventory-manager', 'warehouse-staff'], true)) $permissions[] = 'yatira.consumables.manage';
         return array_values(array_unique($permissions));
+    }
+
+    private function jmvPermissionsFor(string $code): array
+    {
+        return match ($code) {
+            'inventory-manager' => ['jmv.inventory.view','jmv.inventory.items.manage','jmv.inventory.movements.manage','jmv.inventory.adjustments.manage','jmv.inventory.reports.view','jmv.inventory.requests.create','jmv.inventory.requests.approve'],
+            'warehouse-staff' => ['jmv.inventory.view','jmv.inventory.movements.manage','jmv.inventory.requests.create'],
+            'procurement-manager', 'purchaser', 'finance-manager', 'accountant' => ['jmv.inventory.view','jmv.inventory.reports.view'],
+            'mine-operations-manager', 'mine-supervisor', 'department-manager' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage','jmv.operations.daily_production.reports.view'],
+            'chief-geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.reports.view'],
+            'geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage'],
+            default => [],
+        };
     }
 }

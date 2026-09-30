@@ -63,4 +63,9 @@ class ShippingCalendarEvent extends Model
     {
         return $this->hasMany(ShippingCalendarOccurrenceCompletion::class, 'event_id');
     }
+
+    public function occurrenceOverrides()
+    {
+        return $this->hasMany(ShippingCalendarOccurrenceOverride::class, 'event_id');
+    }
 }

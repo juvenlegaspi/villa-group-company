@@ -101,6 +101,18 @@ class DashboardController extends Controller
         return redirect()->route('division.dashboard', ['division' => $division->name, ...$request->query()]);
     }
 
+    public function shippingLiveFleet(string $division)
+    {
+        $divisionModel = Division::whereRaw('LOWER(name) = ?', [strtolower(trim($division))])->firstOrFail();
+        $this->authorizeDivisionAccess($divisionModel);
+        abort_unless(strcasecmp($divisionModel->name, 'Villa Shipping Lines') === 0, 404);
+
+        return response()->json([
+            'tracks' => $this->shippingVoyageTracks(),
+            'updated_at' => now()->toIso8601String(),
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+
     protected function buildShippingMetrics(Request $request): array
     {
         $databaseDriver = DB::connection()->getDriverName();
@@ -176,65 +188,7 @@ class DashboardController extends Controller
             });
         $staleLocationCount = $activeVoyageMapPoints->where('is_stale', true)->count();
 
-        $dashboardVoyageTracks = VoyageLogHeader::query()
-            ->with([
-                'vessel',
-                'positionLogs' => fn ($query) => $query->orderBy('id'),
-                'fuelMonitorings:fuel_id,voyage_id,total_consumed',
-            ])
-            ->whereHas('vessel')
-            ->where(function ($query): void {
-                $query->where(function ($coordinates): void {
-                    $coordinates->whereNotNull('origin_latitude')->whereNotNull('origin_longitude');
-                })->orWhere(function ($coordinates): void {
-                    $coordinates->whereNotNull('current_latitude')->whereNotNull('current_longitude');
-                })->orWhere(function ($coordinates): void {
-                    $coordinates->whereNotNull('destination_latitude')->whereNotNull('destination_longitude');
-                })->orWhereHas('positionLogs');
-            })
-            ->latest('voyage_id')
-            ->get()
-            ->map(function (VoyageLogHeader $voyage): array {
-                $latestPosition = $voyage->positionLogs->sortByDesc('id')->first();
-                $positionUpdatedAt = $latestPosition?->recorded_at ?? $voyage->updated_at;
-
-                return [
-                    'id' => $voyage->voyage_id,
-                    'vessel' => $voyage->vessel?->vessel_name ?? 'Unknown Vessel',
-                    'voyage' => $voyage->voyage_no ?? $voyage->voyage_code,
-                    'status' => strtoupper((string) ($voyage->status ?: 'OPEN')),
-                    'completed' => strtoupper((string) $voyage->status) === 'COMPLETED',
-                    'cargo' => trim(implode(' - ', array_filter([$voyage->cargo_type, $voyage->cargo_volume]))) ?: null,
-                    'fuel_at_departure' => $voyage->fuel_rob,
-                    'fuel_consumed' => $voyage->fuelMonitorings->isNotEmpty()
-                        ? round((float) $voyage->fuelMonitorings->sum('total_consumed'), 2)
-                        : null,
-                    'eta' => $voyage->arrival_date?->format('M d, Y h:i A'),
-                    'completed_at' => $voyage->date_completed?->format('M d, Y'),
-                    'origin' => [
-                        'name' => $voyage->port_location,
-                        'lat' => $voyage->origin_latitude,
-                        'lng' => $voyage->origin_longitude,
-                    ],
-                    'destination' => [
-                        'name' => $voyage->port_destination,
-                        'lat' => $voyage->destination_latitude,
-                        'lng' => $voyage->destination_longitude,
-                    ],
-                    'current' => [
-                        'name' => $voyage->current_location,
-                        'lat' => $voyage->current_latitude,
-                        'lng' => $voyage->current_longitude,
-                    ],
-                    'positions' => $voyage->positionLogs->map(fn (VesselPositionLog $position): array => [
-                        'name' => $position->location_name,
-                        'lat' => $position->latitude,
-                        'lng' => $position->longitude,
-                        'recorded_at' => $position->recorded_at?->format('M d, Y h:i A'),
-                    ])->values(),
-                    'last_update' => $positionUpdatedAt?->format('M d, Y h:i A'),
-                ];
-            })->values();
+        $dashboardVoyageTracks = $this->shippingVoyageTracks();
 
         $expiredCertificates = VesselCertificate::effective()->expired()->count();
         $expiringCertificates = VesselCertificate::effective()->expiringWithinDays()->count();
@@ -541,6 +495,57 @@ class DashboardController extends Controller
             'loadingDurationChartData' => $loadingDurationChartData,
             'unloadingDurationChartData' => $unloadingDurationChartData,
         ];
+    }
+
+    private function shippingVoyageTracks()
+    {
+        return VoyageLogHeader::query()
+            ->with([
+                'vessel',
+                'positionLogs' => fn ($query) => $query->orderBy('id'),
+                'fuelMonitorings:fuel_id,voyage_id,total_consumed',
+            ])
+            ->whereHas('vessel')
+            ->where(function ($query): void {
+                $query->where(function ($coordinates): void {
+                    $coordinates->whereNotNull('origin_latitude')->whereNotNull('origin_longitude');
+                })->orWhere(function ($coordinates): void {
+                    $coordinates->whereNotNull('current_latitude')->whereNotNull('current_longitude');
+                })->orWhere(function ($coordinates): void {
+                    $coordinates->whereNotNull('destination_latitude')->whereNotNull('destination_longitude');
+                })->orWhereHas('positionLogs');
+            })
+            ->latest('voyage_id')
+            ->get()
+            ->map(function (VoyageLogHeader $voyage): array {
+                $latestPosition = $voyage->positionLogs->sortByDesc('id')->first();
+                $positionUpdatedAt = $latestPosition?->recorded_at ?? $voyage->updated_at;
+
+                return [
+                    'id' => $voyage->voyage_id,
+                    'vessel' => $voyage->vessel?->vessel_name ?? 'Unknown Vessel',
+                    'voyage' => $voyage->voyage_no ?? $voyage->voyage_code,
+                    'status' => strtoupper((string) ($voyage->status ?: 'OPEN')),
+                    'completed' => strtoupper((string) $voyage->status) === 'COMPLETED',
+                    'cargo' => trim(implode(' - ', array_filter([$voyage->cargo_type, $voyage->cargo_volume]))) ?: null,
+                    'fuel_at_departure' => $voyage->fuel_rob,
+                    'fuel_consumed' => $voyage->fuelMonitorings->isNotEmpty()
+                        ? round((float) $voyage->fuelMonitorings->sum('total_consumed'), 2)
+                        : null,
+                    'eta' => $voyage->arrival_date?->format('M d, Y h:i A'),
+                    'completed_at' => $voyage->date_completed?->format('M d, Y'),
+                    'origin' => ['name' => $voyage->port_location, 'lat' => $voyage->origin_latitude, 'lng' => $voyage->origin_longitude],
+                    'destination' => ['name' => $voyage->port_destination, 'lat' => $voyage->destination_latitude, 'lng' => $voyage->destination_longitude],
+                    'current' => ['name' => $voyage->current_location, 'lat' => $voyage->current_latitude, 'lng' => $voyage->current_longitude],
+                    'positions' => $voyage->positionLogs->map(fn (VesselPositionLog $position): array => [
+                        'name' => $position->location_name,
+                        'lat' => $position->latitude,
+                        'lng' => $position->longitude,
+                        'recorded_at' => $position->recorded_at?->format('M d, Y h:i A'),
+                    ])->values(),
+                    'last_update' => $positionUpdatedAt?->format('M d, Y h:i A'),
+                ];
+            })->values();
     }
 
     protected function resolveShippingDashboardRange(Request $request): array
