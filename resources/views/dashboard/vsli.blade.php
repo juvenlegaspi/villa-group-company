@@ -346,14 +346,15 @@
         place-items: center;
         width: 28px;
         height: 28px;
-        color: #087e8b;
+        color: var(--vessel-color, #087e8b);
         font-size: 26px;
         line-height: 1;
+        transform: translate(var(--marker-offset-x, 0), var(--marker-offset-y, 0));
         filter: drop-shadow(-1px -1px 0 #fff) drop-shadow(1px 1px 0 #fff) drop-shadow(0 3px 4px rgba(15, 23, 42, .5));
     }
 
-    .vsli-map-marker.is-stale { color: #d97706; }
-    .vsli-map-marker.is-completed { color: #475569; }
+    .vsli-map-marker.is-completed { opacity: .78; }
+    .vsli-voyage-color { display: inline-block; width: 11px; height: 11px; border: 2px solid #fff; border-radius: 999px; box-shadow: 0 0 0 1px rgba(15, 23, 42, .18); }
 
     .vsli-map-filter {
         display: inline-flex;
@@ -1772,7 +1773,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailsToggle = document.getElementById('dashboard-map-details-toggle');
     const detailsTitle = document.getElementById('dashboard-map-details-title');
     const detailsList = document.getElementById('dashboard-map-details-list');
-    const colors = ['#24477f', '#0f766e', '#7c3aed', '#be123c', '#b45309', '#0369a1'];
+    const colors = ['#1d4ed8', '#0f766e', '#7c3aed', '#be123c', '#d97706', '#0284c7', '#c026d3', '#15803d', '#e11d48', '#4f46e5', '#0891b2', '#9333ea'];
     const coordinates = (point) => {
         const latitude = Number(point?.lat);
         const longitude = Number(point?.lng);
@@ -1783,9 +1784,15 @@ document.addEventListener('DOMContentLoaded', () => {
             collection.push(point);
         }
     };
-    const shipIcon = (completed) => L.divIcon({
+    const colorForVoyage = (voyage) => {
+        const identity = String(voyage?.id ?? voyage?.vessel ?? 'vessel');
+        let hash = 0;
+        for (let index = 0; index < identity.length; index++) hash = ((hash << 5) - hash) + identity.charCodeAt(index);
+        return colors[Math.abs(hash) % colors.length];
+    };
+    const shipIcon = (completed, color, offset = {x: 0, y: 0}) => L.divIcon({
         className: '',
-        html: `<span class="vsli-map-marker ${completed ? 'is-completed' : ''}" title="Current vessel location"><svg viewBox="0 0 36 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" d="M3 17.5h27.5l-4.8 8H8.2L3 17.5Z"/><path fill="currentColor" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" d="M8 13.5h17l5.5 4H3l5-4Zm2-7h11v7H10v-7Zm11 3h5v4h-5v-4Z"/><path fill="#fff" d="M12 8.5h2.6v2.2H12zm4.2 0h2.6v2.2h-2.6zm6.2 2.5h2v1.5h-2z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7 28.5c2 1.1 4 1.1 6 0s4-1.1 6 0 4 1.1 6 0"/></svg></span>`,
+        html: `<span class="vsli-map-marker ${completed ? 'is-completed' : ''}" style="--vessel-color:${color};--marker-offset-x:${offset.x}px;--marker-offset-y:${offset.y}px" title="Current vessel location"><svg viewBox="0 0 36 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" d="M3 17.5h27.5l-4.8 8H8.2L3 17.5Z"/><path fill="currentColor" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" d="M8 13.5h17l5.5 4H3l5-4Zm2-7h11v7H10v-7Zm11 3h5v4h-5v-4Z"/><path fill="#fff" d="M12 8.5h2.6v2.2H12zm4.2 0h2.6v2.2h-2.6zm6.2 2.5h2v1.5h-2z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7 28.5c2 1.1 4 1.1 6 0s4-1.1 6 0 4 1.1 6 0"/></svg></span>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14],
         popupAnchor: [0, -14],
@@ -1798,14 +1805,27 @@ document.addEventListener('DOMContentLoaded', () => {
         groupBounds.previous.length = 0;
         voyageFeatures.clear();
 
+        const currentPoints = tracks.map((voyage) => {
+            const savedPositions = (voyage.positions || []).map(coordinates).filter(Boolean);
+            return coordinates(voyage.current) || savedPositions.at(-1) || coordinates(voyage.origin);
+        });
+        const collisionTotals = new Map();
+        currentPoints.forEach((point, index) => {
+            if (!point) return;
+            const mode = tracks[index].completed ? 'previous' : 'active';
+            const key = `${mode}:${point[0].toFixed(5)}:${point[1].toFixed(5)}`;
+            collisionTotals.set(key, (collisionTotals.get(key) || 0) + 1);
+        });
+        const collisionSlots = new Map();
+
         tracks.forEach((voyage, index) => {
         const mode = voyage.completed ? 'previous' : 'active';
         const layer = layers[mode];
-        const color = colors[index % colors.length];
+        const color = colorForVoyage(voyage);
         const origin = coordinates(voyage.origin);
         const destination = coordinates(voyage.destination);
         const savedPositions = (voyage.positions || []).map(coordinates).filter(Boolean);
-        const current = coordinates(voyage.current) || savedPositions.at(-1) || origin;
+        const current = currentPoints[index];
         const actualTrack = [];
         addUnique(actualTrack, origin);
         savedPositions.forEach((point) => addUnique(actualTrack, point));
@@ -1814,7 +1834,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let trackLine = null;
         if (actualTrack.length > 1) {
             trackLine = L.polyline(actualTrack, {
-                color: voyage.completed ? color : '#087e8b',
+                color,
                 weight: 5,
                 opacity: .88,
             }).addTo(layer);
@@ -1822,7 +1842,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!voyage.completed && current && destination) {
             L.polyline([current, destination], {
-                color: '#0891b2',
+                color,
                 weight: 3,
                 opacity: .72,
                 dashArray: '9 9',
@@ -1841,7 +1861,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         let vesselMarker = null;
         if (current) {
-            vesselMarker = L.marker(current, { icon: shipIcon(voyage.completed), zIndexOffset: 1000 })
+            const collisionKey = `${mode}:${current[0].toFixed(5)}:${current[1].toFixed(5)}`;
+            const collisionTotal = collisionTotals.get(collisionKey) || 1;
+            const collisionSlot = collisionSlots.get(collisionKey) || 0;
+            collisionSlots.set(collisionKey, collisionSlot + 1);
+            const angle = (Math.PI * 2 * collisionSlot / collisionTotal) - (Math.PI / 2);
+            const offset = collisionTotal > 1 ? {x: Math.round(Math.cos(angle) * 19), y: Math.round(Math.sin(angle) * 19)} : {x: 0, y: 0};
+            vesselMarker = L.marker(current, { icon: shipIcon(voyage.completed, color, offset), zIndexOffset: 1000 + collisionSlot })
                 .addTo(layer)
                 .bindPopup(`
                     <div style="min-width:220px">
@@ -1856,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const voyageBounds = [...actualTrack, destination].filter(Boolean);
         voyageBounds.forEach((point) => groupBounds[mode].push(point));
-            voyageFeatures.set(String(voyage.id), { voyage, mode, bounds: voyageBounds, trackLine, vesselMarker });
+            voyageFeatures.set(String(voyage.id), { voyage, mode, color, bounds: voyageBounds, trackLine, vesselMarker });
         });
 
         voyageFeatures.forEach((feature, voyageId) => {
@@ -1903,13 +1929,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         detailsList.innerHTML = visibleVoyages.map((voyage) => {
+            const voyageColor = colorForVoyage(voyage);
             const locationLabel = voyage.completed ? 'Final location' : 'Current location';
             const dateLabel = voyage.completed ? 'Completed' : 'ETA';
             const dateValue = voyage.completed ? voyage.completed_at : voyage.eta;
             return `
-                <button type="button" class="vsli-map-detail-card" data-dashboard-voyage="${escapeHtml(voyage.id)}">
+                <button type="button" class="vsli-map-detail-card" style="border-left:5px solid ${voyageColor}" data-dashboard-voyage="${escapeHtml(voyage.id)}">
                     <span class="d-flex align-items-start justify-content-between gap-2 mb-2">
-                        <span><strong class="d-block text-dark">${detailValue(voyage.vessel, 'Unknown vessel')}</strong><small class="text-muted">${detailValue(voyage.voyage, 'Voyage not set')}</small></span>
+                        <span><strong class="d-flex align-items-center gap-2 text-dark"><i class="vsli-voyage-color" style="background:${voyageColor}"></i>${detailValue(voyage.vessel, 'Unknown vessel')}</strong><small class="text-muted">${detailValue(voyage.voyage, 'Voyage not set')}</small></span>
                         <span class="badge rounded-pill ${voyage.completed ? 'bg-secondary' : 'bg-success'}">${detailValue(voyage.status, voyage.completed ? 'Completed' : 'Active')}</span>
                     </span>
                     <span class="d-grid gap-1 small text-secondary">

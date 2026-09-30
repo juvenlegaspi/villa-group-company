@@ -8,9 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('shipping_calendar_occurrence_overrides', function (Blueprint $table): void {
-            $table->boolean('has_changes')->default(false)->after('occurrence_starts_at');
-        });
+        if (! Schema::hasColumn('shipping_calendar_occurrence_overrides', 'has_changes')) {
+            Schema::table('shipping_calendar_occurrence_overrides', function (Blueprint $table): void {
+                $table->boolean('has_changes')->default(false)->after('occurrence_starts_at');
+            });
+        }
     }
 
     public function down(): void

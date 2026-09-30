@@ -9,7 +9,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('shipping_calendar_occurrence_overrides', function (Blueprint $table): void {
+        if (! Schema::hasTable('shipping_calendar_occurrence_overrides')) {
+            Schema::create('shipping_calendar_occurrence_overrides', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('event_id')->constrained('shipping_calendar_events')->cascadeOnDelete();
             $table->dateTime('occurrence_starts_at');
@@ -29,12 +30,15 @@ return new class extends Migration
 
             $table->unique(['event_id', 'occurrence_starts_at'], 'ship_cal_occurrence_override_unique');
             $table->index(['event_id', 'status'], 'ship_cal_occurrence_override_status_idx');
-        });
+            });
+        }
 
-        Schema::table('shipping_calendar_attachments', function (Blueprint $table): void {
-            $table->dateTime('occurrence_starts_at')->nullable()->after('event_id');
-            $table->index(['event_id', 'occurrence_starts_at'], 'ship_cal_attachment_occurrence_idx');
-        });
+        if (! Schema::hasColumn('shipping_calendar_attachments', 'occurrence_starts_at')) {
+            Schema::table('shipping_calendar_attachments', function (Blueprint $table): void {
+                $table->dateTime('occurrence_starts_at')->nullable()->after('event_id');
+                $table->index(['event_id', 'occurrence_starts_at'], 'ship_cal_attachment_occurrence_idx');
+            });
+        }
 
         DB::table('shipping_calendar_attachments')->orderBy('id')->chunkById(200, function ($attachments): void {
             $eventStarts = DB::table('shipping_calendar_events')
