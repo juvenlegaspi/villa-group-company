@@ -54,4 +54,17 @@ return [
         'user_agent' => env('NOMINATIM_USER_AGENT', 'VillaGroupVesselTracking/1.0 (https://villagroupofcompanies.com)'),
     ],
 
+    'met_norway' => [
+        'endpoint' => env('MET_NORWAY_ENDPOINT', 'https://api.met.no/weatherapi/locationforecast/2.0'),
+        'user_agent' => env('MET_NORWAY_USER_AGENT', 'VillaGroupVesselTracking/1.0 (https://villagroupofcompanies.com)'),
+        'cache_minutes' => (int) env('MET_NORWAY_CACHE_MINUTES', 10),
+    ],
+
+    'searoutes' => [
+        'api_key' => env('SEAROUTES_API_KEY'),
+        'endpoint' => env('SEAROUTES_ENDPOINT', 'https://api.searoutes.com/route/v2/sea'),
+        'connect_timeout' => (int) env('SEAROUTES_CONNECT_TIMEOUT', 5),
+        'timeout' => (int) env('SEAROUTES_TIMEOUT', 25),
+    ],
+
 ];

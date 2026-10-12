@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
     #fleet-map { height: min(680px, 70vh); min-height: 440px; background: #dbeafe; }
+    .fleet-map-layout { display:grid; grid-template-columns:minmax(0,1fr) 340px; }
     .fleet-vessel-marker { display:grid; place-items:center; width:28px; height:28px; color:var(--vessel-color,#087e8b); font-size:26px; line-height:1; filter:drop-shadow(-1px -1px 0 #fff) drop-shadow(1px 1px 0 #fff) drop-shadow(0 3px 4px rgba(15,23,42,.5)); }
     .fleet-route-point { display:grid; place-items:center; width:28px; height:28px; border:3px solid white; border-radius:999px; color:white; box-shadow:0 4px 12px rgba(15,23,42,.3); font-size:11px; font-weight:900; }
     .fleet-direction-arrow { display:block; color:#fff; font-size:24px; font-weight:900; line-height:24px; text-shadow:-1px -1px 0 #24477f,1px -1px 0 #24477f,-1px 1px 0 #24477f,1px 1px 0 #24477f,0 2px 5px #0f172a99; transform-origin:center; }
@@ -13,6 +14,7 @@
     [data-vessel-card].fleet-card-muted { opacity:.48; filter:saturate(.45); }
     [data-vessel-card].fleet-card-focused { border-color:#24477f; background:#eff6ff; box-shadow:0 0 0 2px #bfdbfe; }
     [data-focus-voyage][aria-pressed="true"] { background:#0f274c; box-shadow:0 0 0 3px #bfdbfe; }
+    @media (max-width: 1199.98px) { .fleet-map-layout { grid-template-columns:minmax(0,1fr); } }
     @media (max-width: 767.98px) { #fleet-map { height: 62vh; min-height: 390px; } }
 </style>
 @endpush
@@ -47,6 +49,8 @@
                 'lng' => $voyage->destination_longitude,
             ],
             'positions' => $positions,
+            'planned_route' => data_get($voyage->planned_route_geojson, 'geometry.coordinates', []),
+            'planned_distance_nm' => $voyage->planned_route_distance_nm,
             'metrics' => $voyageMetrics->get($voyage->voyage_id),
             'url' => route('voyages.show', $voyage->voyage_id),
         ];
@@ -60,14 +64,14 @@
         </header>
 
         <article class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div class="fleet-map-layout">
                 <div class="relative min-w-0"><div id="fleet-map" role="application" aria-label="Current vessel locations"></div><div id="fleet-map-loading" class="absolute inset-0 z-[500] grid place-items-center bg-slate-100 p-6 text-center text-sm font-bold text-slate-600">Loading vessel map…</div></div>
                 <aside class="max-h-[680px] overflow-y-auto border-t border-slate-200 p-4 xl:border-l xl:border-t-0">
                     <div class="mb-3 flex items-center justify-between"><h2 class="text-sm font-extrabold text-slate-900">Voyage Track History</h2><span class="rounded-full bg-villa-50 px-2.5 py-1 text-xs font-extrabold text-villa-700">{{ $voyages->count() }}</span></div>
                     <div class="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[.68rem] font-bold text-slate-600">
                         <span><i class="bi bi-circle-fill mr-1 text-emerald-600"></i>Origin</span>
                         <span><i class="bi bi-ship mr-1 text-villa-700"></i>Current</span>
-                        <span><i class="bi bi-dash-lg mr-1 text-villa-700"></i>Recorded track</span>
+                        <span><i class="bi bi-dash-lg mr-1 text-villa-700"></i>Route-matched track</span>
                         <span><i class="bi bi-circle-fill mr-1 text-rose-600"></i>Destination</span>
                     </div>
                     <div class="space-y-2">
@@ -118,13 +122,14 @@
                 </aside>
             </div>
         </article>
-        <p class="mt-3 text-xs text-slate-500"><i class="bi bi-info-circle me-1"></i>The solid line is the saved tracking history. For an active voyage, the dashed arrow points from its latest position to the destination. Completed voyage tracks remain available for reference. This is operational monitoring, not continuous AIS tracking.</p>
+        <p class="mt-3 text-xs text-slate-500"><i class="bi bi-info-circle me-1"></i>The solid line follows the approved planned route up to the vessel's reported progress. Original reported pins remain visible and a warning appears when a position is more than 5 NM from the route. This is operational monitoring, not continuous AIS tracking.</p>
     </div>
 </section>
 @endsection
 
 @push('scripts')
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ asset('js/voyage-route-matcher.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const loading = document.getElementById('fleet-map-loading');
@@ -210,13 +215,39 @@ document.addEventListener('DOMContentLoaded', () => {
         appendUnique(origin);
         reports.forEach(report => appendUnique(report.coordinates));
         appendUnique(current);
+        const plannedGeoRoute = (voyage.planned_route || []).map(point => Array.isArray(point) ? [Number(point[0]), Number(point[1])] : null).filter(point => point && Number.isFinite(point[0]) && Number.isFinite(point[1]));
+        const actualGeoTrack = actualTrack.map(point => [point[1], point[0]]);
+        const routeMatch = window.VoyageRouteMatcher?.match(plannedGeoRoute, actualGeoTrack, { completed: voyage.completed, deviationThresholdNm: 5 })
+            || { track: actualGeoTrack, latestMatch: null, maxDeviationNm: null, hasDeviation: false };
+        const displayedTrack = routeMatch.track.map(point => [point[1], point[0]]);
+        const deviationMessage = routeMatch.hasDeviation
+            ? `<br><strong style="color:#b91c1c">Route deviation:</strong> ${escapeHtml(Number(routeMatch.maxDeviationNm).toFixed(2))} NM maximum`
+            : '';
 
-        if (actualTrack.length > 1) {
-            const track = L.polyline(actualTrack, { color, weight: 5, opacity: .88 }).addTo(map);
-            track.bindPopup(`<strong>${escapeHtml(voyage.vessel)}</strong><br>Voyage ${escapeHtml(voyage.voyage)}<br><strong>Status:</strong> ${escapeHtml(voyage.status)}<br><strong>Cargo:</strong> ${escapeHtml(voyage.metrics?.cargo || 'Not recorded')}<br><strong>Fuel consumed:</strong> ${voyage.metrics?.fuel_consumed !== null ? `${escapeHtml(Number(voyage.metrics.fuel_consumed).toFixed(2))} L` : 'No fuel update'}`);
-            registerLayer(track, { opacity: .88, weight: 5, emphasize: true });
+        let matchedTrackLayer = null;
+        if (displayedTrack.length > 1) {
+            matchedTrackLayer = L.polyline(displayedTrack, { color, weight: 5, opacity: .88 }).addTo(map);
+            matchedTrackLayer.bindPopup(`<strong>${escapeHtml(voyage.vessel)}</strong><br>Voyage ${escapeHtml(voyage.voyage)}<br><strong>Status:</strong> ${escapeHtml(voyage.status)}<br><strong>Cargo:</strong> ${escapeHtml(voyage.metrics?.cargo || 'Not recorded')}<br><strong>Fuel consumed:</strong> ${voyage.metrics?.fuel_consumed !== null ? `${escapeHtml(Number(voyage.metrics.fuel_consumed).toFixed(2))} L` : 'No fuel update'}${deviationMessage}`);
+            registerLayer(matchedTrackLayer, { opacity: .88, weight: 5, emphasize: true });
         }
-        if (!voyage.completed && current && destination) {
+        const savedPlannedRoute = plannedGeoRoute.map(point => [point[1], point[0]]);
+        if (savedPlannedRoute.length > 1) {
+            const plannedOpacity = voyage.completed ? .42 : .72;
+            const planned = L.polyline(savedPlannedRoute, { color, weight: 3, opacity: plannedOpacity, dashArray: '9 9' }).addTo(map);
+            planned.bindPopup(`<strong>Approved planned sea route</strong><br>${voyage.planned_distance_nm !== null ? `${escapeHtml(Number(voyage.planned_distance_nm).toFixed(2))} NM` : 'Distance not supplied'}<br>Planning reference only`);
+            registerLayer(planned, { opacity: plannedOpacity, weight: 3, emphasize: true });
+        }
+        if (routeMatch.hasDeviation && routeMatch.latestMatch) {
+            const deviationLine = L.polyline(
+                [routeMatch.latestMatch.matched, routeMatch.latestMatch.reported].map(point => [point[1], point[0]]),
+                { color: '#dc2626', weight: 2, opacity: .8, dashArray: '4 7' },
+            ).addTo(map).bindPopup(`<strong>Reported route deviation</strong><br>${escapeHtml(Number(routeMatch.latestMatch.deviationNm).toFixed(2))} NM from the approved route`);
+            registerLayer(deviationLine, { opacity: .8, weight: 2, emphasize: true });
+            const card = document.querySelector(`[data-vessel-card="${voyage.id}"]`);
+            card?.insertAdjacentHTML('beforeend', `<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[.67rem] font-bold text-amber-800"><i class="bi bi-exclamation-triangle mr-1"></i>Reported position deviated up to ${escapeHtml(Number(routeMatch.maxDeviationNm).toFixed(2))} NM from the approved route.</p>`);
+        }
+        matchedTrackLayer?.bringToFront();
+        if (!voyage.completed && savedPlannedRoute.length < 2 && current && destination) {
             const planned = L.polyline([current, destination], { color, weight: 3, opacity: .65, dashArray: '9 9' }).addTo(map);
             registerLayer(planned, { opacity: .65, weight: 3, emphasize: true });
             const angle = directionAngle(current, destination) - 90;
@@ -260,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (mapLayers.length) map.fitBounds(L.featureGroup(mapLayers).getBounds().pad(.15), { maxZoom: 12 });
                 return;
             }
-            const focusPoints = [...actualTrack, destination].filter(Boolean);
+            const focusPoints = [...displayedTrack, current, ...savedPlannedRoute, destination].filter(Boolean);
             if (focusPoints.length > 1) map.fitBounds(L.latLngBounds(focusPoints).pad(.18), { maxZoom: 11 });
             else if (focusPoints.length === 1) map.setView(focusPoints[0], Math.max(map.getZoom(), 9));
             currentMarker?.openPopup();

@@ -331,7 +331,7 @@
         background: #fff;
         padding: 13px;
         text-align: left;
-        transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+        transition: border-color .18s ease, box-shadow .18s ease, background .18s ease, opacity .18s ease, filter .18s ease;
     }
 
     .vsli-map-detail-card:hover,
@@ -340,15 +340,25 @@
         background: #eff6ff;
         box-shadow: 0 0 0 2px #bfdbfe;
     }
+    .vsli-map-detail-card.is-dimmed { opacity: .3; filter: grayscale(.55); }
+    .vsli-map-detail-card.is-selected { opacity: 1; filter: none; }
+
+    .vsli-weather-reading { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 10px; background: #eef8ff; color: #164e63; }
+    .vsli-weather-reading .weather-icon { font-size: 1.25rem; line-height: 1; }
+    .vsli-weather-attribution { font-size: .68rem; color: #64748b; }
 
     .vsli-map-marker {
         display: grid;
         place-items: center;
         width: 28px;
         height: 28px;
+        padding: 0;
+        border: 0;
+        background: transparent;
         color: var(--vessel-color, #087e8b);
         font-size: 26px;
         line-height: 1;
+        cursor: pointer;
         transform: translate(var(--marker-offset-x, 0), var(--marker-offset-y, 0));
         filter: drop-shadow(-1px -1px 0 #fff) drop-shadow(1px 1px 0 #fff) drop-shadow(0 3px 4px rgba(15, 23, 42, .5));
     }
@@ -427,6 +437,8 @@
     #live-fleet-map-section.is-monitor-fullscreen .vsli-subtext { color: #b8cbe6; }
     #live-fleet-map-section:fullscreen .vsli-dashboard-map-layout,
     #live-fleet-map-section.is-monitor-fullscreen .vsli-dashboard-map-layout { flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) 370px; }
+    #live-fleet-map-section:fullscreen .vsli-dashboard-map-layout.is-details-hidden,
+    #live-fleet-map-section.is-monitor-fullscreen .vsli-dashboard-map-layout.is-details-hidden { grid-template-columns: minmax(0, 1fr); }
     #live-fleet-map-section:fullscreen #executive-fleet-map,
     #live-fleet-map-section:fullscreen .vsli-map-details,
     #live-fleet-map-section.is-monitor-fullscreen #executive-fleet-map,
@@ -1723,6 +1735,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 @push('scripts')
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ asset('js/voyage-route-matcher.js') }}"></script>
+<script src="{{ asset('js/vsli-live-map.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const details = document.getElementById('detailed-operational-reports');
@@ -1738,323 +1752,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    const mapElement = document.getElementById('executive-fleet-map');
-    let tracks = {{ Illuminate\Support\Js::from($dashboardVoyageTracks) }};
-    const liveFleetUrl = {{ Illuminate\Support\Js::from(route('division.dashboard.live-fleet', 'Villa Shipping Lines')) }};
-    const mapSection = document.getElementById('live-fleet-map-section');
-    const fullscreenButton = document.getElementById('dashboard-map-fullscreen');
-    const liveTime = document.getElementById('dashboard-live-time');
-    const liveDate = document.getElementById('dashboard-live-date');
-    const liveSync = document.getElementById('dashboard-live-sync');
-
-    if (!mapElement) return;
-    if (typeof L === 'undefined') {
-        mapElement.classList.add('d-flex', 'align-items-center', 'justify-content-center', 'text-muted');
-        mapElement.textContent = 'The live map could not be loaded. Check the internet connection and refresh the page.';
-        return;
-    }
-
-    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
-    })[character]);
-    const map = L.map(mapElement, { scrollWheelZoom: false }).setView([12.4, 122.2], 5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    const layers = {
-        active: L.layerGroup(),
-        previous: L.layerGroup(),
-    };
-    const groupBounds = { active: [], previous: [] };
-    const voyageFeatures = new Map();
-    const mapLayout = document.getElementById('dashboard-map-layout');
-    const detailsToggle = document.getElementById('dashboard-map-details-toggle');
-    const detailsTitle = document.getElementById('dashboard-map-details-title');
-    const detailsList = document.getElementById('dashboard-map-details-list');
-    const colors = ['#1d4ed8', '#0f766e', '#7c3aed', '#be123c', '#d97706', '#0284c7', '#c026d3', '#15803d', '#e11d48', '#4f46e5', '#0891b2', '#9333ea'];
-    const coordinates = (point) => {
-        const latitude = Number(point?.lat);
-        const longitude = Number(point?.lng);
-        return Number.isFinite(latitude) && Number.isFinite(longitude) ? [latitude, longitude] : null;
-    };
-    const addUnique = (collection, point) => {
-        if (point && (!collection.length || collection.at(-1)[0] !== point[0] || collection.at(-1)[1] !== point[1])) {
-            collection.push(point);
-        }
-    };
-    const colorForVoyage = (voyage) => {
-        const identity = String(voyage?.id ?? voyage?.vessel ?? 'vessel');
-        let hash = 0;
-        for (let index = 0; index < identity.length; index++) hash = ((hash << 5) - hash) + identity.charCodeAt(index);
-        return colors[Math.abs(hash) % colors.length];
-    };
-    const shipIcon = (completed, color, offset = {x: 0, y: 0}) => L.divIcon({
-        className: '',
-        html: `<span class="vsli-map-marker ${completed ? 'is-completed' : ''}" style="--vessel-color:${color};--marker-offset-x:${offset.x}px;--marker-offset-y:${offset.y}px" title="Current vessel location"><svg viewBox="0 0 36 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" d="M3 17.5h27.5l-4.8 8H8.2L3 17.5Z"/><path fill="currentColor" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" d="M8 13.5h17l5.5 4H3l5-4Zm2-7h11v7H10v-7Zm11 3h5v4h-5v-4Z"/><path fill="#fff" d="M12 8.5h2.6v2.2H12zm4.2 0h2.6v2.2h-2.6zm6.2 2.5h2v1.5h-2z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7 28.5c2 1.1 4 1.1 6 0s4-1.1 6 0 4 1.1 6 0"/></svg></span>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-        popupAnchor: [0, -14],
+    window.initializeVsliLiveMap?.({
+        tracks: {{ Illuminate\Support\Js::from($dashboardVoyageTracks) }},
+        liveFleetUrl: {{ Illuminate\Support\Js::from(route('division.dashboard.live-fleet', 'Villa Shipping Lines')) }},
+        weatherUrl: {{ Illuminate\Support\Js::from(route('division.dashboard.weather', 'Villa Shipping Lines')) }},
     });
-
-    const rebuildMapLayers = (nextTracks) => {
-        tracks = Array.isArray(nextTracks) ? nextTracks : [];
-        Object.values(layers).forEach((layer) => layer.clearLayers());
-        groupBounds.active.length = 0;
-        groupBounds.previous.length = 0;
-        voyageFeatures.clear();
-
-        const currentPoints = tracks.map((voyage) => {
-            const savedPositions = (voyage.positions || []).map(coordinates).filter(Boolean);
-            return coordinates(voyage.current) || savedPositions.at(-1) || coordinates(voyage.origin);
-        });
-        const collisionTotals = new Map();
-        currentPoints.forEach((point, index) => {
-            if (!point) return;
-            const mode = tracks[index].completed ? 'previous' : 'active';
-            const key = `${mode}:${point[0].toFixed(5)}:${point[1].toFixed(5)}`;
-            collisionTotals.set(key, (collisionTotals.get(key) || 0) + 1);
-        });
-        const collisionSlots = new Map();
-
-        tracks.forEach((voyage, index) => {
-        const mode = voyage.completed ? 'previous' : 'active';
-        const layer = layers[mode];
-        const color = colorForVoyage(voyage);
-        const origin = coordinates(voyage.origin);
-        const destination = coordinates(voyage.destination);
-        const savedPositions = (voyage.positions || []).map(coordinates).filter(Boolean);
-        const current = currentPoints[index];
-        const actualTrack = [];
-        addUnique(actualTrack, origin);
-        savedPositions.forEach((point) => addUnique(actualTrack, point));
-        addUnique(actualTrack, current);
-
-        let trackLine = null;
-        if (actualTrack.length > 1) {
-            trackLine = L.polyline(actualTrack, {
-                color,
-                weight: 5,
-                opacity: .88,
-            }).addTo(layer);
-        }
-
-        if (!voyage.completed && current && destination) {
-            L.polyline([current, destination], {
-                color,
-                weight: 3,
-                opacity: .72,
-                dashArray: '9 9',
-            }).addTo(layer);
-        }
-
-        if (origin) {
-            L.circleMarker(origin, { radius: 7, color: '#fff', weight: 3, fillColor: '#059669', fillOpacity: 1 })
-                .addTo(layer)
-                .bindPopup(`<strong>Origin</strong><br>${escapeHtml(voyage.origin?.name || 'Not named')}<br>${escapeHtml(voyage.vessel)}`);
-        }
-        if (destination) {
-            L.circleMarker(destination, { radius: 7, color: '#fff', weight: 3, fillColor: '#dc2626', fillOpacity: 1 })
-                .addTo(layer)
-                .bindPopup(`<strong>Destination</strong><br>${escapeHtml(voyage.destination?.name || 'Not named')}<br>${escapeHtml(voyage.vessel)}`);
-        }
-        let vesselMarker = null;
-        if (current) {
-            const collisionKey = `${mode}:${current[0].toFixed(5)}:${current[1].toFixed(5)}`;
-            const collisionTotal = collisionTotals.get(collisionKey) || 1;
-            const collisionSlot = collisionSlots.get(collisionKey) || 0;
-            collisionSlots.set(collisionKey, collisionSlot + 1);
-            const angle = (Math.PI * 2 * collisionSlot / collisionTotal) - (Math.PI / 2);
-            const offset = collisionTotal > 1 ? {x: Math.round(Math.cos(angle) * 19), y: Math.round(Math.sin(angle) * 19)} : {x: 0, y: 0};
-            vesselMarker = L.marker(current, { icon: shipIcon(voyage.completed, color, offset), zIndexOffset: 1000 + collisionSlot })
-                .addTo(layer)
-                .bindPopup(`
-                    <div style="min-width:220px">
-                        <strong>${escapeHtml(voyage.vessel)}</strong><br>
-                        <span>${escapeHtml(voyage.voyage)} &middot; ${escapeHtml(voyage.status)}</span><hr class="my-2">
-                        <strong>${voyage.completed ? 'Final' : 'Current'}:</strong> ${escapeHtml(voyage.current?.name || voyage.positions?.at(-1)?.name || 'Position recorded')}<br>
-                        <strong>Destination:</strong> ${escapeHtml(voyage.destination?.name || 'Not set')}<br>
-                        <small class="text-muted">Last update: ${escapeHtml(voyage.last_update || 'Unknown')}</small>
-                    </div>
-                `);
-        }
-
-        const voyageBounds = [...actualTrack, destination].filter(Boolean);
-        voyageBounds.forEach((point) => groupBounds[mode].push(point));
-            voyageFeatures.set(String(voyage.id), { voyage, mode, color, bounds: voyageBounds, trackLine, vesselMarker });
-        });
-
-        voyageFeatures.forEach((feature, voyageId) => {
-            feature.trackLine?.on('click', () => focusVoyage(voyageId, false));
-            feature.vesselMarker?.on('click', () => focusVoyage(voyageId, false));
-        });
-    };
-
-    const filterButtons = document.querySelectorAll('[data-dashboard-map-filter]');
-    const countBadge = document.getElementById('dashboard-map-count');
-    const emptyMessage = document.getElementById('dashboard-map-empty');
-    const detailValue = (value, fallback = 'Not recorded') => {
-        const normalized = String(value ?? '').trim();
-        return normalized ? escapeHtml(normalized) : fallback;
-    };
-    const fuelValue = (value, fallback = 'Not recorded') => {
-        const amount = Number(value);
-        return value !== null && value !== '' && Number.isFinite(amount)
-            ? `${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} L`
-            : fallback;
-    };
-    const focusVoyage = (voyageId, openPopup = true) => {
-        const feature = voyageFeatures.get(String(voyageId));
-        if (!feature) return;
-
-        detailsList?.querySelectorAll('[data-dashboard-voyage]').forEach((card) => {
-            card.classList.toggle('is-selected', card.dataset.dashboardVoyage === String(voyageId));
-        });
-        const selectedCard = detailsList?.querySelector(`[data-dashboard-voyage="${CSS.escape(String(voyageId))}"]`);
-        selectedCard?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-        if (feature.bounds.length === 1) map.setView(feature.bounds[0], 10);
-        else if (feature.bounds.length > 1) map.fitBounds(feature.bounds, { padding: [50, 50], maxZoom: 10 });
-        if (openPopup) feature.vesselMarker?.openPopup();
-    };
-    const renderVoyageDetails = (mode) => {
-        if (!detailsList || !detailsTitle) return;
-        const visibleVoyages = tracks.filter((voyage) => (voyage.completed ? 'previous' : 'active') === mode);
-        detailsTitle.textContent = mode === 'active' ? 'Active Voyages' : 'Previous Voyages';
-
-        if (!visibleVoyages.length) {
-            detailsList.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-map d-block fs-3 mb-2"></i>No voyage details available.</div>';
-            return;
-        }
-
-        detailsList.innerHTML = visibleVoyages.map((voyage) => {
-            const voyageColor = colorForVoyage(voyage);
-            const locationLabel = voyage.completed ? 'Final location' : 'Current location';
-            const dateLabel = voyage.completed ? 'Completed' : 'ETA';
-            const dateValue = voyage.completed ? voyage.completed_at : voyage.eta;
-            return `
-                <button type="button" class="vsli-map-detail-card" style="border-left:5px solid ${voyageColor}" data-dashboard-voyage="${escapeHtml(voyage.id)}">
-                    <span class="d-flex align-items-start justify-content-between gap-2 mb-2">
-                        <span><strong class="d-flex align-items-center gap-2 text-dark"><i class="vsli-voyage-color" style="background:${voyageColor}"></i>${detailValue(voyage.vessel, 'Unknown vessel')}</strong><small class="text-muted">${detailValue(voyage.voyage, 'Voyage not set')}</small></span>
-                        <span class="badge rounded-pill ${voyage.completed ? 'bg-secondary' : 'bg-success'}">${detailValue(voyage.status, voyage.completed ? 'Completed' : 'Active')}</span>
-                    </span>
-                    <span class="d-grid gap-1 small text-secondary">
-                        <span><strong class="text-dark">Cargo:</strong> ${detailValue(voyage.cargo)}</span>
-                        <span><strong class="text-dark">Fuel departure:</strong> ${fuelValue(voyage.fuel_at_departure)}</span>
-                        <span><strong class="text-dark">Fuel consumed:</strong> ${fuelValue(voyage.fuel_consumed)}</span>
-                        <span><strong class="text-dark">${locationLabel}:</strong> ${detailValue(voyage.current?.name || voyage.positions?.at(-1)?.name)}</span>
-                        <span><strong class="text-dark">Destination:</strong> ${detailValue(voyage.destination?.name)}</span>
-                        <span><strong class="text-dark">${dateLabel}:</strong> ${detailValue(dateValue)}</span>
-                        <span><strong class="text-dark">Last update:</strong> ${detailValue(voyage.last_update)}</span>
-                    </span>
-                    <span class="d-block mt-2 small fw-semibold text-primary"><i class="bi bi-crosshair me-1"></i>Focus this voyage</span>
-                </button>
-            `;
-        }).join('');
-
-        detailsList.querySelectorAll('[data-dashboard-voyage]').forEach((card) => {
-            card.addEventListener('click', () => focusVoyage(card.dataset.dashboardVoyage));
-        });
-    };
-
-    let currentMapMode = 'active';
-    const showMapMode = (mode, fitMap = true) => {
-        currentMapMode = mode;
-        Object.values(layers).forEach((layer) => map.removeLayer(layer));
-        layers[mode].addTo(map);
-        filterButtons.forEach((button) => {
-            const selected = button.dataset.dashboardMapFilter === mode;
-            button.classList.toggle('is-active', selected);
-            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-        });
-        const count = tracks.filter((voyage) => (voyage.completed ? 'previous' : 'active') === mode).length;
-        countBadge.textContent = `${count} ${count === 1 ? 'track' : 'tracks'}`;
-        renderVoyageDetails(mode);
-        emptyMessage.classList.toggle('d-none', count > 0);
-        emptyMessage.querySelector('span').textContent = mode === 'active'
-            ? 'No active voyage has saved coordinates yet. Update its current location to start the dashboard track.'
-            : 'No completed voyage tracking history is available yet.';
-
-        const visibleBounds = groupBounds[mode];
-        if (fitMap) {
-            if (visibleBounds.length === 1) map.setView(visibleBounds[0], 9);
-            else if (visibleBounds.length > 1) map.fitBounds(visibleBounds, { padding: [36, 36], maxZoom: 9 });
-            else map.setView([12.4, 122.2], 5);
-        }
-        window.setTimeout(() => map.invalidateSize(), 50);
-    };
-
-    filterButtons.forEach((button) => button.addEventListener('click', () => showMapMode(button.dataset.dashboardMapFilter)));
-    detailsToggle?.addEventListener('click', () => {
-        const hidden = mapLayout?.classList.toggle('is-details-hidden') ?? false;
-        detailsToggle.setAttribute('aria-expanded', hidden ? 'false' : 'true');
-        const label = detailsToggle.querySelector('span');
-        if (label) label.textContent = hidden ? 'Show details' : 'Hide details';
-        window.setTimeout(() => map.invalidateSize(), 50);
-    });
-
-    const updateClock = () => {
-        const now = new Date();
-        const timeOptions = { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-        const dateOptions = { timeZone: 'Asia/Manila', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
-        if (liveTime) liveTime.textContent = new Intl.DateTimeFormat('en-PH', timeOptions).format(now);
-        if (liveDate) liveDate.textContent = new Intl.DateTimeFormat('en-PH', dateOptions).format(now);
-    };
-    updateClock();
-    window.setInterval(updateClock, 1000);
-
-    let liveRefreshRunning = false;
-    const refreshLiveFleet = async () => {
-        if (liveRefreshRunning || document.hidden) return;
-        liveRefreshRunning = true;
-        if (liveSync) liveSync.textContent = 'Checking vessel updates...';
-        try {
-            const response = await fetch(liveFleetUrl, {
-                cache: 'no-store',
-                credentials: 'same-origin',
-                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            if (!response.ok) throw new Error('Live data request failed');
-            const payload = await response.json();
-            rebuildMapLayers(payload.tracks);
-            showMapMode(currentMapMode, false);
-            if (liveSync) liveSync.textContent = `Live · synced ${new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date())}`;
-        } catch (error) {
-            if (liveSync) liveSync.textContent = 'Connection interrupted · retrying';
-        } finally {
-            liveRefreshRunning = false;
-        }
-    };
-
-    const syncFullscreenState = () => {
-        const active = document.fullscreenElement === mapSection || mapSection?.classList.contains('is-monitor-fullscreen');
-        fullscreenButton?.setAttribute('aria-pressed', active ? 'true' : 'false');
-        const label = fullscreenButton?.querySelector('span');
-        const icon = fullscreenButton?.querySelector('i');
-        if (label) label.textContent = active ? 'Exit full screen' : 'Full screen';
-        if (icon) icon.className = `bi ${active ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'} me-1`;
-        active ? map.scrollWheelZoom.enable() : map.scrollWheelZoom.disable();
-        window.setTimeout(() => map.invalidateSize(), 120);
-    };
-
-    fullscreenButton?.addEventListener('click', async () => {
-        if (document.fullscreenElement) {
-            await document.exitFullscreen();
-        } else if (mapSection?.requestFullscreen) {
-            await mapSection.requestFullscreen();
-        } else {
-            mapSection?.classList.toggle('is-monitor-fullscreen');
-            syncFullscreenState();
-        }
-    });
-    document.addEventListener('fullscreenchange', syncFullscreenState);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLiveFleet(); });
-
-    rebuildMapLayers(tracks);
-    showMapMode('active');
-    if (liveSync) liveSync.textContent = 'Live · refreshes every 15 seconds';
-    window.setInterval(refreshLiveFleet, 15000);
 });
 </script>
 @endpush

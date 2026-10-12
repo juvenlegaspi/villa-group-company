@@ -2,6 +2,7 @@
 @section('title', $log->log_no.' | JMV Daily Production')
 @section('content')
 <section class="min-h-[calc(100svh-74px)] bg-slate-50 px-4 py-6 sm:px-7 lg:px-10"><div class="mx-auto max-w-6xl">
+    @include('jmv.operations.production.partials.module-header')
     @if(session('success'))<div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{{ session('success') }}</div>@endif
     <a href="{{ route('jmv.operations.production.index') }}" class="mb-4 inline-flex items-center gap-2 text-sm font-bold text-villa-700 no-underline"><i class="bi bi-arrow-left"></i>Back to daily monitoring</a>
     <header class="mb-5 rounded-3xl bg-gradient-to-r from-slate-950 via-villa-900 to-amber-600 p-6 text-white shadow-xl"><div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="mb-1 text-xs font-black uppercase tracking-[.18em] text-amber-200">Daily Production Log</p><h1 class="m-0 text-2xl font-black sm:text-3xl">{{ $log->log_no }}</h1><p class="mt-1 text-sm text-white/75">{{ $log->log_date->format('F d, Y') }} · {{ $log->location }} · {{ $log->shift }}</p></div>@if($canManage)<a href="{{ route('jmv.operations.production.edit',$log) }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-5 text-sm font-black text-villa-900 no-underline"><i class="bi bi-pencil-square"></i>Edit Log</a>@else<span class="w-fit rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold"><i class="bi bi-eye me-1"></i>Read-only</span>@endif</div></header>

@@ -15,6 +15,7 @@ use App\Models\VesselCertificate;
 use App\Models\VesselPositionLog;
 use App\Models\VoyageActivity;
 use App\Models\VoyageLogHeader;
+use App\Services\VesselWeatherService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -111,6 +112,21 @@ class DashboardController extends Controller
             'tracks' => $this->shippingVoyageTracks(),
             'updated_at' => now()->toIso8601String(),
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+
+    public function shippingWeather(Request $request, string $division, VesselWeatherService $weatherService)
+    {
+        $divisionModel = Division::whereRaw('LOWER(name) = ?', [strtolower(trim($division))])->firstOrFail();
+        $this->authorizeDivisionAccess($divisionModel);
+        abort_unless(strcasecmp($divisionModel->name, 'Villa Shipping Lines') === 0, 404);
+
+        $data = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        return response()->json($weatherService->current((float) $data['lat'], (float) $data['lng']))
+            ->header('Cache-Control', 'private, max-age=300');
     }
 
     protected function buildShippingMetrics(Request $request): array
@@ -543,6 +559,8 @@ class DashboardController extends Controller
                         'lng' => $position->longitude,
                         'recorded_at' => $position->recorded_at?->format('M d, Y h:i A'),
                     ])->values(),
+                    'planned_route' => data_get($voyage->planned_route_geojson, 'geometry.coordinates', []),
+                    'planned_distance_nm' => $voyage->planned_route_distance_nm,
                     'last_update' => $positionUpdatedAt?->format('M d, Y h:i A'),
                 ];
             })->values();

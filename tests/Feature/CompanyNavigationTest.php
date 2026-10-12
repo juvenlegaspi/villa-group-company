@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class CompanyNavigationTest extends TestCase
@@ -471,9 +473,9 @@ class CompanyNavigationTest extends TestCase
             ->assertSee('Previous Voyages')
             ->assertSee('Hide details')
             ->assertSee('Full screen')
-            ->assertSee('refreshes every 15 seconds')
             ->assertSee('Voyage details')
-            ->assertSee('Focus this voyage')
+            ->assertSee('leaflet@1.9.4')
+            ->assertSee('js/vsli-live-map.js')
             ->assertSee('Priority action list')
             ->assertViewHas('liveOpenVoyages', 1)
             ->assertViewHas('liveSailingVoyages', 1)
@@ -485,6 +487,14 @@ class CompanyNavigationTest extends TestCase
                 && $tracks->where('completed', false)->count() === 1
                 && $tracks->where('completed', true)->count() === 1);
 
+        $mapScript = file_get_contents(public_path('js/vsli-live-map.js'));
+        $this->assertStringContainsString('startLeafletMap', $mapScript);
+        $this->assertStringContainsString('scrollWheelZoom: true', $mapScript);
+        $this->assertStringContainsString('highlightVoyage', $mapScript);
+        $this->assertStringContainsString("opacity: selected ? opacity : .12", $mapScript);
+        $this->assertStringContainsString('refreshes every 15 seconds', $mapScript);
+        $this->assertStringContainsString('Focus this voyage', $mapScript);
+
         $liveResponse = $this->actingAs($admin)
             ->getJson(route('division.dashboard.live-fleet', 'Villa shipping Lines'))
             ->assertOk()
@@ -493,6 +503,53 @@ class CompanyNavigationTest extends TestCase
             ->assertJsonPath('tracks.1.id', $voyageId)
             ->assertJsonStructure(['tracks' => [['id', 'vessel', 'status', 'completed', 'current', 'positions', 'last_update']], 'updated_at']);
         $this->assertStringContainsString('no-store', (string) $liveResponse->headers->get('Cache-Control'));
+    }
+
+    public function test_shipping_dashboard_returns_cached_weather_for_a_vessel_position(): void
+    {
+        Cache::flush();
+        $this->seedCompanies();
+        $admin = $this->user(['role' => 'admin', 'is_admin' => true]);
+        Http::fake([
+            'api.met.no/*' => Http::response([
+                'properties' => [
+                    'timeseries' => [[
+                        'time' => '2026-09-30T03:00:00Z',
+                        'data' => [
+                            'instant' => ['details' => [
+                                'air_temperature' => 29.4,
+                                'relative_humidity' => 81,
+                                'wind_speed' => 6.2,
+                                'wind_from_direction' => 90,
+                            ]],
+                            'next_1_hours' => [
+                                'summary' => ['symbol_code' => 'rainshowers_day'],
+                                'details' => ['precipitation_amount' => 1.7],
+                            ],
+                        ],
+                    ]],
+                ],
+            ]),
+        ]);
+
+        $route = route('division.dashboard.weather', [
+            'division' => 'Villa Shipping Lines',
+            'lat' => 10.3157,
+            'lng' => 123.8854,
+        ]);
+
+        $this->actingAs($admin)->getJson($route)
+            ->assertOk()
+            ->assertJsonPath('available', true)
+            ->assertJsonPath('condition', 'Rain showers')
+            ->assertJsonPath('temperature_c', 29.4)
+            ->assertJsonPath('wind_direction', 'E')
+            ->assertJsonPath('precipitation_mm', 1.7);
+
+        $this->actingAs($admin)->getJson($route)->assertOk();
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/locationforecast/2.0/compact')
+            && str_contains($request->header('User-Agent')[0] ?? '', 'VillaGroupVesselTracking'));
     }
 
     private function seedCompanies(): array

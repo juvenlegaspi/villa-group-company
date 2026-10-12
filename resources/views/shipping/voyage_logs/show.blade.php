@@ -705,6 +705,7 @@
                         <p class="mb-0 text-xs leading-5 text-slate-500"><i class="bi bi-keyboard mr-1"></i>You may type the latitude and longitude manually. The map pin will move automatically.</p>
                         <button type="button" id="use-activity-device-location" class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-villa-300 bg-white px-4 text-sm font-extrabold text-villa-700 shadow-sm hover:bg-villa-50"><i class="bi bi-crosshair"></i> Use My GPS Location</button>
                         <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800"><i class="bi bi-info-circle mr-1"></i>Saving this point updates the voyage's current position and adds it to the tracking history.</div>
+                        <div id="activity-route-deviation-warning" class="hidden rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-800"><i class="bi bi-exclamation-triangle mr-1"></i><span></span></div>
                     </aside>
                     <div class="activity-map-panel relative"><div id="activity-location-map" role="application" aria-label="Pin current vessel location"></div><div id="activity-map-loading" class="absolute inset-0 z-[500] grid place-items-center bg-slate-100 p-6 text-center text-sm font-bold text-slate-600">Loading map...</div></div>
                 </div>
@@ -849,6 +850,7 @@
     </div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ asset('js/voyage-route-matcher.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const mapModalElement = document.getElementById('activityLocationMapModal');
@@ -865,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const locationUpdateForm = document.getElementById('current-location-update-form');
     const voyageCompletionForm = document.getElementById('voyage-completion-location-form');
     const loading = document.getElementById('activity-map-loading');
+    const deviationWarning = document.getElementById('activity-route-deviation-warning');
     const reverseUrl = @js(route('voyage-map.reverse'));
     const initialLocationName = @js($voyage->current_location);
     const initialLatitude = @js($voyage->current_latitude);
@@ -872,6 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const originPoint = @json($activityMapOrigin);
     const destinationPoint = @json($activityMapDestination);
     const trackingHistory = @json($activityMapHistory);
+    const plannedRouteCoordinates = @json(data_get($voyage->planned_route_geojson, 'geometry.coordinates', []));
     let activityModal = null;
     let activeDetailId = null;
     let map = null;
@@ -881,6 +885,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let completionAction = null;
     let trackLine = null;
     let destinationLine = null;
+    let deviationLine = null;
     let directionArrows = [];
     let manualCoordinateTimer = null;
 
@@ -903,6 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!map || !current) return;
         if (trackLine) trackLine.remove();
         if (destinationLine) destinationLine.remove();
+        if (deviationLine) deviationLine.remove();
         directionArrows.forEach(arrow => arrow.remove());
         directionArrows = [];
 
@@ -913,11 +919,30 @@ document.addEventListener('DOMContentLoaded', () => {
         addUnique(coordinates(originPoint));
         trackingHistory.map(coordinates).forEach(addUnique);
         addUnique(current);
-        if (track.length > 1) trackLine = L.polyline(track, { color: '#24477f', weight: 5, opacity: .88 }).addTo(map);
 
         const destination = coordinates(destinationPoint);
+        const approvedGeoRoute = plannedRouteCoordinates.map(point => Array.isArray(point) ? [Number(point[0]), Number(point[1])] : null).filter(point => point && Number.isFinite(point[0]) && Number.isFinite(point[1]));
+        const reportedGeoTrack = track.map(point => [point[1], point[0]]);
+        const routeMatch = window.VoyageRouteMatcher?.match(approvedGeoRoute, reportedGeoTrack, { deviationThresholdNm: 5 })
+            || { track: reportedGeoTrack, latestMatch: null, maxDeviationNm: null, hasDeviation: false, followsPlannedRoute: false };
+        const displayedTrack = routeMatch.track.map(point => [point[1], point[0]]);
+        if (displayedTrack.length > 1) trackLine = L.polyline(displayedTrack, { color: '#24477f', weight: 5, opacity: .88 }).addTo(map);
+
+        deviationWarning?.classList.toggle('hidden', !routeMatch.hasDeviation);
+        if (routeMatch.hasDeviation && routeMatch.latestMatch) {
+            deviationWarning.querySelector('span').textContent = `Reported position is ${routeMatch.latestMatch.deviationNm.toFixed(2)} NM from the approved route. The original pin is preserved while the solid tracking line follows the plan.`;
+            deviationLine = L.polyline(
+                [routeMatch.latestMatch.matched, routeMatch.latestMatch.reported].map(point => [point[1], point[0]]),
+                { color: '#dc2626', weight: 2, opacity: .8, dashArray: '4 7' },
+            ).addTo(map);
+        }
+
         if (!destination) return;
-        destinationLine = L.polyline([current, destination], { color: '#0891b2', weight: 3, opacity: .75, dashArray: '9 9' }).addTo(map);
+        const approvedRoute = approvedGeoRoute.map(point => [point[1], point[0]]);
+        destinationLine = L.polyline(approvedRoute.length > 1 ? approvedRoute : [current, destination], { color: '#0891b2', weight: 3, opacity: .75, dashArray: '9 9' }).addTo(map);
+        trackLine?.bringToFront();
+        deviationLine?.bringToFront();
+        if (approvedRoute.length > 1) return;
         const angle = directionAngle(current, destination);
         [.35, .65].forEach(fraction => {
             const point = [current[0] + (destination[0] - current[0]) * fraction, current[1] + (destination[1] - current[1]) * fraction];

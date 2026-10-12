@@ -3,11 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\FuelRobMonitoring;
 
 class VoyageLogHeader extends Model
 {
     protected $table = 'voyage_logs_header';
+
     protected $primaryKey = 'voyage_id';
 
     protected $fillable = [
@@ -35,6 +35,12 @@ class VoyageLogHeader extends Model
         'arrival_date',
         'date_completed',
         'total_hours_voyage',
+        'planned_route_geojson',
+        'planned_route_provider',
+        'planned_route_distance_nm',
+        'planned_route_duration_hours',
+        'planned_route_approved_by',
+        'planned_route_approved_at',
     ];
 
     protected $casts = [
@@ -47,6 +53,10 @@ class VoyageLogHeader extends Model
         'destination_longitude' => 'float',
         'current_latitude' => 'float',
         'current_longitude' => 'float',
+        'planned_route_geojson' => 'array',
+        'planned_route_distance_nm' => 'float',
+        'planned_route_duration_hours' => 'float',
+        'planned_route_approved_at' => 'datetime',
     ];
 
     public function details()
@@ -66,8 +76,9 @@ class VoyageLogHeader extends Model
 
     public function getVoyageCodeAttribute()
     {
-        return 'VL-' . str_pad($this->voyage_id, 5, '0', STR_PAD_LEFT);
+        return 'VL-'.str_pad($this->voyage_id, 5, '0', STR_PAD_LEFT);
     }
+
     public function fuelMonitorings()
     {
         return $this->hasMany(FuelRobMonitoring::class, 'voyage_id', 'voyage_id');

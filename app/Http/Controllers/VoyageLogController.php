@@ -7,17 +7,20 @@ use App\Models\ActivityVoyage;
 use App\Models\FuelRobMonitoring;
 use App\Models\Port;
 use App\Models\Vessel;
+use App\Models\VesselPositionLog;
 use App\Models\VoyageActivity;
 use App\Models\VoyageLogDetail;
 use App\Models\VoyageLogHeader;
-use App\Models\VesselPositionLog;
+use App\Services\SeaRouteService;
 use App\Services\VesselAccessService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class VoyageLogController extends Controller
@@ -50,6 +53,33 @@ class VoyageLogController extends Controller
         return view('shipping.voyage_logs.create', compact('vessel', 'voyageCode', 'ports', 'lastVoyage', 'lastCompletedVoyage'));
     }
 
+    public function suggestRoute(Request $request, SeaRouteService $seaRoutes): JsonResponse
+    {
+        $data = $request->validate([
+            'vessel_id' => 'required|exists:vessels,id',
+            'origin_latitude' => 'required|numeric|between:-90,90',
+            'origin_longitude' => 'required|numeric|between:-180,180',
+            'destination_latitude' => 'required|numeric|between:-90,90',
+            'destination_longitude' => 'required|numeric|between:-180,180',
+        ]);
+
+        $vessel = Vessel::findOrFail($data['vessel_id']);
+        $this->authorizeVesselAccess($vessel);
+
+        try {
+            return response()->json($seaRoutes->generate(
+                (float) $data['origin_latitude'],
+                (float) $data['origin_longitude'],
+                (float) $data['destination_latitude'],
+                (float) $data['destination_longitude'],
+                is_numeric($vessel->service_speed) ? (float) $vessel->service_speed : null,
+                $vessel->imo_number,
+            ));
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -75,6 +105,11 @@ class VoyageLogController extends Controller
             'voyage_no' => 'required|string|max:255',
             'fuel_rob' => 'required|numeric|min:0',
             'arrival_date' => 'nullable|date',
+            'planned_route_geojson' => 'nullable|string|max:1000000',
+            'planned_route_provider' => 'nullable|required_with:planned_route_geojson|in:searoutes',
+            'planned_route_distance_nm' => 'nullable|numeric|min:0|max:1000000',
+            'planned_route_duration_hours' => 'nullable|numeric|min:0|max:1000000',
+            'planned_route_approved' => 'sometimes|accepted',
         ]);
 
         $vessel = Vessel::findOrFail($data['vessel_id']);
@@ -88,7 +123,9 @@ class VoyageLogController extends Controller
         $currentName = trim((string) ($data['current_location_name'] ?? $currentLocation?->port_name));
         $cargoVolume = $data['cargo_volume'].' '.$data['cargo_unit'];
 
-        $voyage = DB::transaction(function () use ($data, $port, $portDestination, $currentLocation, $originName, $destinationName, $currentName, $cargoVolume) {
+        $plannedRoute = $this->validatedPlannedRoute($data);
+
+        $voyage = DB::transaction(function () use ($data, $port, $portDestination, $currentLocation, $originName, $destinationName, $currentName, $cargoVolume, $plannedRoute) {
             $hasOpenVoyage = VoyageLogHeader::where('vessel_id', $data['vessel_id'])
                 ->where('status', '!=', 'COMPLETED')
                 ->lockForUpdate()
@@ -113,6 +150,12 @@ class VoyageLogController extends Controller
                 'cargo_volume' => $cargoVolume,
                 'status' => 'OPEN',
                 'created_by' => auth()->id(),
+                'planned_route_geojson' => $plannedRoute,
+                'planned_route_provider' => $plannedRoute ? $data['planned_route_provider'] : null,
+                'planned_route_distance_nm' => $plannedRoute ? ($data['planned_route_distance_nm'] ?? null) : null,
+                'planned_route_duration_hours' => $plannedRoute ? ($data['planned_route_duration_hours'] ?? null) : null,
+                'planned_route_approved_by' => $plannedRoute ? auth()->id() : null,
+                'planned_route_approved_at' => $plannedRoute ? now() : null,
             ]);
 
             VesselPositionLog::create([
@@ -958,6 +1001,62 @@ class VoyageLogController extends Controller
             'status_id' => 'required|exists:activity_status_voyage,id',
             'remarks' => 'nullable|string|max:255',
         ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    protected function validatedPlannedRoute(array $data): ?array
+    {
+        if (empty($data['planned_route_geojson'])) {
+            return null;
+        }
+
+        if (empty($data['planned_route_approved'])) {
+            throw ValidationException::withMessages([
+                'planned_route_approved' => 'Review and approve the suggested sea route before saving the voyage.',
+            ]);
+        }
+
+        $route = json_decode($data['planned_route_geojson'], true);
+        $coordinates = data_get($route, 'geometry.coordinates');
+
+        if (
+            ! is_array($route)
+            || data_get($route, 'type') !== 'Feature'
+            || data_get($route, 'geometry.type') !== 'LineString'
+            || ! is_array($coordinates)
+            || count($coordinates) < 2
+            || count($coordinates) > 10000
+        ) {
+            throw ValidationException::withMessages([
+                'planned_route_geojson' => 'Generate and approve a valid suggested sea route again.',
+            ]);
+        }
+
+        foreach ($coordinates as $coordinate) {
+            if (
+                ! is_array($coordinate)
+                || count($coordinate) < 2
+                || ! is_numeric($coordinate[0])
+                || ! is_numeric($coordinate[1])
+                || (float) $coordinate[0] < -180
+                || (float) $coordinate[0] > 180
+                || (float) $coordinate[1] < -90
+                || (float) $coordinate[1] > 90
+            ) {
+                throw ValidationException::withMessages([
+                    'planned_route_geojson' => 'The suggested sea route contains invalid coordinates.',
+                ]);
+            }
+        }
+
+        return [
+            'type' => 'Feature',
+            'properties' => [],
+            'geometry' => [
+                'type' => 'LineString',
+                'coordinates' => array_values($coordinates),
+            ],
+        ];
     }
 
     protected function authorizeVesselAccess(Vessel $vessel): void

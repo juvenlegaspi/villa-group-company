@@ -79,6 +79,9 @@ Route::middleware(['auth', 'active'])->group(function (): void {
             ->name('division.dashboard');
         Route::get('/division/{division}/live-fleet', [DashboardController::class, 'shippingLiveFleet'])
             ->name('division.dashboard.live-fleet');
+        Route::get('/division/{division}/weather', [DashboardController::class, 'shippingWeather'])
+            ->middleware('throttle:120,1')
+            ->name('division.dashboard.weather');
 
         Route::middleware('admin')->group(function (): void {
             Route::get('/departments/{id}', function ($id) {
@@ -157,6 +160,9 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                     Route::get('/fleet-map', [VoyageLogController::class, 'fleetMap'])->name('voyage-logs.fleet-map');
                     Route::get('/map/search', [MapGeocodingController::class, 'search'])->name('voyage-map.search');
                     Route::get('/map/reverse', [MapGeocodingController::class, 'reverse'])->name('voyage-map.reverse');
+                    Route::post('/map/suggest-route', [VoyageLogController::class, 'suggestRoute'])
+                        ->middleware('throttle:20,1')
+                        ->name('voyage-map.suggest-route');
                     Route::post('/store', [VoyageLogController::class, 'store'])->name('voyages.store');
                     Route::get('/{id}/pdf', [VoyageLogController::class, 'exportPdf'])->name('voyage.pdf');
                     Route::get('/{id}', [VoyageLogController::class, 'show'])->name('voyages.show');

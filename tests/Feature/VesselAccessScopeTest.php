@@ -10,16 +10,16 @@ use App\Models\Department;
 use App\Models\Division;
 use App\Models\DryDockingHeader;
 use App\Models\FuelRobMonitoring;
-use App\Models\Position;
-use App\Models\Port;
 use App\Models\Permission;
+use App\Models\Port;
+use App\Models\Position;
 use App\Models\User;
 use App\Models\UserVesselAssignment;
 use App\Models\Vessel;
 use App\Models\VesselPositionLog;
-use App\Models\VoyageLogHeader;
-use App\Models\VoyageLogDetail;
 use App\Models\VoyageActivity;
+use App\Models\VoyageLogDetail;
+use App\Models\VoyageLogHeader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -29,8 +29,11 @@ class VesselAccessScopeTest extends TestCase
     use RefreshDatabase;
 
     private Division $company;
+
     private Department $technical;
+
     private Vessel $assigned;
+
     private Vessel $unassigned;
 
     protected function setUp(): void
@@ -159,6 +162,39 @@ class VesselAccessScopeTest extends TestCase
         $this->assertDatabaseHas('ports', ['id' => $origin->id, 'latitude' => 10.3098, 'longitude' => 123.8854]);
     }
 
+    public function test_authorized_manager_can_generate_a_searoutes_suggested_sea_route(): void
+    {
+        config(['services.searoutes.api_key' => 'private-test-key']);
+        \Illuminate\Support\Facades\Http::fake([
+            'api.searoutes.com/*' => \Illuminate\Support\Facades\Http::response([
+                'type' => 'FeatureCollection',
+                'features' => [[
+                    'type' => 'Feature',
+                    'properties' => ['distance' => 185200, 'duration' => 36000000],
+                    'geometry' => [
+                        'type' => 'LineString',
+                        'coordinates' => [[123.9185, 10.3077], [123.1, 10.5], [122.5813, 10.695]],
+                    ],
+                ]],
+            ]),
+        ]);
+        $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');
+
+        $response = $this->actingAs($manager)->postJson(route('voyage-map.suggest-route'), [
+            'vessel_id' => $this->assigned->id,
+            'origin_latitude' => 10.3077,
+            'origin_longitude' => 123.9185,
+            'destination_latitude' => 10.6950,
+            'destination_longitude' => 122.5813,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('provider', 'searoutes')
+            ->assertJsonPath('geojson.geometry.type', 'LineString');
+
+        $this->assertGreaterThan(2, count($response->json('geojson.geometry.coordinates')));
+    }
+
     public function test_new_voyage_prefills_current_map_point_from_last_completed_voyage(): void
     {
         $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');
@@ -174,8 +210,7 @@ class VesselAccessScopeTest extends TestCase
 
         $this->actingAs($manager)->get(route('voyages.create', $this->assigned->id))
             ->assertOk()
-            ->assertViewHas('lastCompletedVoyage', fn ($voyage) =>
-                $voyage?->current_location === 'Previous Final Arrival'
+            ->assertViewHas('lastCompletedVoyage', fn ($voyage) => $voyage?->current_location === 'Previous Final Arrival'
                 && (float) $voyage->current_latitude === 14.5995
                 && (float) $voyage->current_longitude === 120.9842
             )
@@ -314,6 +349,7 @@ class VesselAccessScopeTest extends TestCase
 
         $this->actingAs($engineer)->get(route('voyage-logs.fleet-map', ['vessel' => $this->assigned->id]))
             ->assertOk()
+            ->assertSee('fleet-map-layout')
             ->assertSee('Back to Voyage Records')
             ->assertSee('VISIBLE-VOYAGE')
             ->assertSee('COMPLETED-HISTORY')

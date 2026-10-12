@@ -2,6 +2,7 @@
 @section('title', 'Edit '.$log->log_no.' | JMV Daily Production')
 @section('content')
 <section class="min-h-[calc(100svh-74px)] bg-slate-50 px-4 py-6 sm:px-7"><div class="mx-auto max-w-5xl">
+    @include('jmv.operations.production.partials.module-header')
     <a href="{{ route('jmv.operations.production.show',$log) }}" class="mb-4 inline-flex items-center gap-2 text-sm font-bold text-villa-700 no-underline"><i class="bi bi-arrow-left"></i>Back to log</a>
     <header class="mb-5 rounded-3xl bg-gradient-to-r from-slate-950 via-villa-900 to-amber-600 p-6 text-white shadow-xl"><p class="mb-1 text-xs font-black uppercase tracking-[.18em] text-amber-200">JMV Operations</p><h1 class="m-0 text-2xl font-black">Edit Daily Production Log</h1><p class="mb-0 mt-1 text-sm text-white/75">{{ $log->log_no }}</p></header>
     @if($errors->any())<div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
