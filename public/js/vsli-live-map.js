@@ -47,10 +47,10 @@
                 collection.push(point);
             }
         };
-        const matchRoute = (plannedRoute, reportedPositions, completed = false) => window.VoyageRouteMatcher?.match(
+        const matchRoute = (plannedRoute, reportedPositions, completed = false, completionPoint = null) => window.VoyageRouteMatcher?.match(
             plannedRoute,
             reportedPositions,
-            { completed, deviationThresholdNm: 5 },
+            { completed, completionPoint, deviationThresholdNm: 5 },
         ) || { track: reportedPositions, latestMatch: null, maxDeviationNm: null, hasDeviation: false, followsPlannedRoute: false };
         const deviationWarning = (voyage) => voyage.route_deviation
             ? `<span class="alert alert-warning d-block py-2 px-2 mt-2 mb-0 small"><i class="bi bi-exclamation-triangle me-1"></i>Reported position is up to ${Number(voyage.route_deviation_nm).toFixed(2)} NM from the approved route.</span>`
@@ -252,16 +252,18 @@
                     const color = colorForVoyage(voyage);
                     const origin = coordinates(voyage.origin);
                     const destination = coordinates(voyage.destination);
-                    const savedPositions = (voyage.positions || []).map(coordinates).filter(Boolean);
+                    const savedPositionReports = (voyage.positions || []).map(position => ({ ...position, coordinates: coordinates(position) })).filter(position => position.coordinates);
                     const current = currentPoints[index];
                     const visualLayers = [];
                     const actualTrack = [];
                     addUnique(actualTrack, origin);
-                    savedPositions.forEach((point) => addUnique(actualTrack, point));
-                    addUnique(actualTrack, current);
+                    savedPositionReports.filter(position => position.source !== 'voyage_completion').forEach(position => addUnique(actualTrack, position.coordinates));
+                    if (!voyage.completed) addUnique(actualTrack, current);
+                    const completionReport = voyage.completed ? savedPositionReports.findLast(position => position.source === 'voyage_completion') : null;
+                    const completionPoint = completionReport?.coordinates || (voyage.completed ? current : null);
                     const toLatLng = (point) => [point[1], point[0]];
                     const plannedRoute = (voyage.planned_route || []).map((point) => Array.isArray(point) && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1])) ? [Number(point[0]), Number(point[1])] : null).filter(Boolean);
-                    const routeMatch = matchRoute(plannedRoute, actualTrack, voyage.completed);
+                    const routeMatch = matchRoute(plannedRoute, actualTrack, voyage.completed, completionPoint);
                     const displayedTrack = routeMatch.track;
                     voyage.route_deviation = routeMatch.hasDeviation;
                     voyage.route_deviation_nm = routeMatch.maxDeviationNm;

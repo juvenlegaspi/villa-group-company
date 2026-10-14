@@ -1735,8 +1735,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 @push('scripts')
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{{ asset('js/voyage-route-matcher.js') }}"></script>
-<script src="{{ asset('js/vsli-live-map.js') }}"></script>
+<script src="{{ asset('js/voyage-route-matcher.js') }}?v=20261014-completion-route"></script>
+<script src="{{ asset('js/vsli-live-map.js') }}?v=20261014-completion-route"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const details = document.getElementById('detailed-operational-reports');

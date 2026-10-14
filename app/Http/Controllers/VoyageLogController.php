@@ -106,7 +106,7 @@ class VoyageLogController extends Controller
             'fuel_rob' => 'required|numeric|min:0',
             'arrival_date' => 'nullable|date',
             'planned_route_geojson' => 'nullable|string|max:1000000',
-            'planned_route_provider' => 'nullable|required_with:planned_route_geojson|in:searoutes,local_grid',
+            'planned_route_provider' => 'nullable|required_with:planned_route_geojson|in:searoutes,local_grid,manual',
             'planned_route_distance_nm' => 'nullable|numeric|min:0|max:1000000',
             'planned_route_duration_hours' => 'nullable|numeric|min:0|max:1000000',
             'planned_route_approved' => 'sometimes|accepted',
@@ -1045,6 +1045,56 @@ class VoyageLogController extends Controller
             ) {
                 throw ValidationException::withMessages([
                     'planned_route_geojson' => 'The suggested sea route contains invalid coordinates.',
+                ]);
+            }
+        }
+
+        if (($data['planned_route_provider'] ?? null) === 'manual') {
+            if (count($coordinates) < 3) {
+                throw ValidationException::withMessages([
+                    'planned_route_geojson' => 'Add at least one manual route waypoint between the origin and destination.',
+                ]);
+            }
+
+            $first = $coordinates[0];
+            $last = $coordinates[array_key_last($coordinates)];
+            $originGap = $this->distanceInNauticalMiles(
+                [(float) $data['origin_latitude'], (float) $data['origin_longitude']],
+                [(float) $first[1], (float) $first[0]],
+            );
+            $destinationGap = $this->distanceInNauticalMiles(
+                [(float) $data['destination_latitude'], (float) $data['destination_longitude']],
+                [(float) $last[1], (float) $last[0]],
+            );
+
+            if ($originGap > 0.1 || $destinationGap > 0.1) {
+                throw ValidationException::withMessages([
+                    'planned_route_geojson' => 'The manual route must start at the pinned origin and end at the pinned destination.',
+                ]);
+            }
+        }
+
+        if (($data['planned_route_provider'] ?? null) === 'manual') {
+            if (count($coordinates) < 3) {
+                throw ValidationException::withMessages([
+                    'planned_route_geojson' => 'Add at least one manual route waypoint between the origin and destination.',
+                ]);
+            }
+
+            $first = $coordinates[0];
+            $last = $coordinates[array_key_last($coordinates)];
+            $originGap = $this->distanceInNauticalMiles(
+                [(float) $data['origin_latitude'], (float) $data['origin_longitude']],
+                [(float) $first[1], (float) $first[0]],
+            );
+            $destinationGap = $this->distanceInNauticalMiles(
+                [(float) $data['destination_latitude'], (float) $data['destination_longitude']],
+                [(float) $last[1], (float) $last[0]],
+            );
+
+            if ($originGap > 0.1 || $destinationGap > 0.1) {
+                throw ValidationException::withMessages([
+                    'planned_route_geojson' => 'The manual route must start at the pinned origin and end at the pinned destination.',
                 ]);
             }
         }

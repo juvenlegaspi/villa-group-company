@@ -16,12 +16,6 @@
         && Number(point[1]) >= -90
         && Number(point[1]) <= 90;
     const point = (value) => [normalizeLongitude(Number(value[0])), Number(value[1])];
-    const samePoint = (first, second) => Math.abs(first[0] - second[0]) < 1e-9
-        && Math.abs(first[1] - second[1]) < 1e-9;
-    const addUnique = (points, value) => {
-        if (value && (!points.length || !samePoint(points.at(-1), value))) points.push(value);
-    };
-
     const distanceNm = (first, second) => {
         const latitudeDelta = (second[1] - first[1]) * Math.PI / 180;
         const longitudeDifference = longitudeDelta(first[0], second[0]) * Math.PI / 180;
@@ -63,31 +57,31 @@
         return best;
     };
 
-    const routeUntil = (route, match, completed) => {
-        if (completed) return route.map((coordinate) => [...coordinate]);
-        if (!match) return [];
-
-        const segment = Math.min(route.length - 2, Math.floor(match.progress));
-        const traveled = route.slice(0, segment + 1).map((coordinate) => [...coordinate]);
-        addUnique(traveled, match.matched);
-        return traveled;
-    };
-
     const match = (plannedCoordinates, reportedCoordinates, options = {}) => {
         const route = (Array.isArray(plannedCoordinates) ? plannedCoordinates : []).filter(validPoint).map(point);
         const reports = (Array.isArray(reportedCoordinates) ? reportedCoordinates : []).filter(validPoint).map(point);
+        const completionPoint = validPoint(options.completionPoint) ? point(options.completionPoint) : null;
         const thresholdNm = Number.isFinite(Number(options.deviationThresholdNm))
             ? Math.max(0, Number(options.deviationThresholdNm))
             : DEFAULT_DEVIATION_THRESHOLD_NM;
 
+        const appendUnique = (collection, coordinate) => {
+            if (!coordinate) return;
+            const previous = collection.at(-1);
+            if (!previous || distanceNm(previous, coordinate) > 0.000001) collection.push([...coordinate]);
+        };
+
         if (route.length < 2) {
+            const track = reports.map((coordinate) => [...coordinate]);
+            if (options.completed) appendUnique(track, completionPoint);
             return {
-                track: reports,
+                track,
                 matches: [],
                 latestMatch: null,
                 maxDeviationNm: null,
                 hasDeviation: false,
                 followsPlannedRoute: false,
+                usesPlannedCompletion: false,
             };
         }
 
@@ -102,14 +96,44 @@
 
         const maxDeviationNm = matches.length ? Math.max(...matches.map((item) => item.deviationNm)) : null;
         const latestMatch = matches.at(-1) || null;
+        const track = reports.map((coordinate) => [...coordinate]);
+        let completionMatch = null;
+        let usesPlannedCompletion = false;
+
+        if (options.completed && completionPoint) {
+            const startMatch = latestMatch || { matched: route[0], progress: 0 };
+            completionMatch = closestForwardMatch(route, completionPoint, startMatch.progress);
+
+            if (completionMatch) {
+                // Keep every actual report untouched. From the final genuine
+                // report, connect to its nearest forward point on the approved
+                // route, follow the remaining saved route vertices, then end
+                // at the confirmed completion pin.
+                appendUnique(track, startMatch.matched);
+                const firstRouteVertex = Math.floor(startMatch.progress) + 1;
+                const lastRouteVertex = Math.floor(completionMatch.progress);
+                for (let index = firstRouteVertex; index <= lastRouteVertex && index < route.length; index++) {
+                    appendUnique(track, route[index]);
+                }
+                appendUnique(track, completionMatch.matched);
+                appendUnique(track, completionPoint);
+                usesPlannedCompletion = true;
+            }
+        }
 
         return {
-            track: routeUntil(route, latestMatch, Boolean(options.completed)),
+            // Preserve the approved route separately and draw the tracking line
+            // through the coordinates that were actually reported. Matching is
+            // used only for progress/deviation analysis; it must never move a
+            // vessel report onto the planned line.
+            track,
             matches,
             latestMatch,
+            completionMatch,
             maxDeviationNm,
             hasDeviation: maxDeviationNm !== null && maxDeviationNm > thresholdNm,
             followsPlannedRoute: true,
+            usesPlannedCompletion,
             deviationThresholdNm: thresholdNm,
         };
     };

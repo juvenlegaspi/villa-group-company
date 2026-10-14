@@ -198,6 +198,53 @@ class VesselAccessScopeTest extends TestCase
         $this->assertGreaterThan(2, count($response->json('geojson.geometry.coordinates')));
     }
 
+    public function test_create_voyage_accepts_an_approved_manual_planned_route(): void
+    {
+        $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');
+        $coordinates = [
+            [123.8854, 10.3098],
+            [123.3, 11.2],
+            [122.4, 12.5],
+            [120.9842, 14.5995],
+        ];
+
+        $response = $this->actingAs($manager)->post(route('voyages.store'), [
+            'vessel_id' => $this->assigned->id,
+            'cargo_type' => 'General Cargo',
+            'cargo_volume' => 120,
+            'cargo_unit' => 'MT',
+            'crew_on_board' => 18,
+            'origin_location_name' => 'Cebu Port',
+            'destination_location_name' => 'Manila Port',
+            'current_location_name' => 'Cebu Anchorage',
+            'origin_latitude' => 10.3098,
+            'origin_longitude' => 123.8854,
+            'destination_latitude' => 14.5995,
+            'destination_longitude' => 120.9842,
+            'current_latitude' => 10.3157,
+            'current_longitude' => 123.9010,
+            'current_position_source' => 'map_pin',
+            'voyage_no' => 'VS-MANUAL-001',
+            'fuel_rob' => 5000,
+            'planned_route_geojson' => json_encode([
+                'type' => 'Feature',
+                'properties' => ['source' => 'Manual route'],
+                'geometry' => ['type' => 'LineString', 'coordinates' => $coordinates],
+            ]),
+            'planned_route_provider' => 'manual',
+            'planned_route_distance_nm' => 350.25,
+            'planned_route_duration_hours' => 35.03,
+            'planned_route_approved' => '1',
+        ]);
+
+        $voyage = VoyageLogHeader::firstOrFail();
+        $response->assertRedirect('/shipping/voyage-logs/'.$voyage->voyage_id);
+        $this->assertSame('manual', $voyage->planned_route_provider);
+        $this->assertSame($coordinates, $voyage->planned_route_geojson['geometry']['coordinates']);
+        $this->assertNotNull($voyage->planned_route_approved_at);
+        $this->assertSame($manager->id, $voyage->planned_route_approved_by);
+    }
+
     public function test_new_voyage_prefills_current_map_point_from_last_completed_voyage(): void
     {
         $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');

@@ -557,6 +557,7 @@ class DashboardController extends Controller
                         'name' => $position->location_name,
                         'lat' => $position->latitude,
                         'lng' => $position->longitude,
+                        'source' => $position->source,
                         'recorded_at' => $position->recorded_at?->format('M d, Y h:i A'),
                     ])->values(),
                     'planned_route' => data_get($voyage->planned_route_geojson, 'geometry.coordinates', []),

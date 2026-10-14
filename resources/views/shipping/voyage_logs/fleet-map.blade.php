@@ -26,6 +26,7 @@
             'lat' => $position->latitude,
             'lng' => $position->longitude,
             'location' => $position->location_name,
+            'source' => $position->source,
             'recorded_at' => optional($position->recorded_at)->format('M d, Y h:i A'),
         ])->values();
 
@@ -129,7 +130,7 @@
 
 @push('scripts')
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{{ asset('js/voyage-route-matcher.js') }}"></script>
+<script src="{{ asset('js/voyage-route-matcher.js') }}?v=20261014-completion-route"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const loading = document.getElementById('fleet-map-loading');
@@ -213,11 +214,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const actualTrack = [];
         const appendUnique = point => { if (point && (!actualTrack.length || actualTrack.at(-1)[0] !== point[0] || actualTrack.at(-1)[1] !== point[1])) actualTrack.push(point); };
         appendUnique(origin);
-        reports.forEach(report => appendUnique(report.coordinates));
-        appendUnique(current);
+        reports.filter(report => report.source !== 'voyage_completion').forEach(report => appendUnique(report.coordinates));
+        if (!voyage.completed) appendUnique(current);
+        const completionReport = voyage.completed ? reports.findLast(report => report.source === 'voyage_completion') : null;
+        const completionPoint = completionReport?.coordinates || (voyage.completed ? current : null);
         const plannedGeoRoute = (voyage.planned_route || []).map(point => Array.isArray(point) ? [Number(point[0]), Number(point[1])] : null).filter(point => point && Number.isFinite(point[0]) && Number.isFinite(point[1]));
         const actualGeoTrack = actualTrack.map(point => [point[1], point[0]]);
-        const routeMatch = window.VoyageRouteMatcher?.match(plannedGeoRoute, actualGeoTrack, { completed: voyage.completed, deviationThresholdNm: 5 })
+        const routeMatch = window.VoyageRouteMatcher?.match(plannedGeoRoute, actualGeoTrack, { completed: voyage.completed, completionPoint: completionPoint ? [completionPoint[1], completionPoint[0]] : null, deviationThresholdNm: 5 })
             || { track: actualGeoTrack, latestMatch: null, maxDeviationNm: null, hasDeviation: false };
         const displayedTrack = routeMatch.track.map(point => [point[1], point[0]]);
         const deviationMessage = routeMatch.hasDeviation

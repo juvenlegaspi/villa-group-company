@@ -47,6 +47,7 @@
         'name' => $position->location_name,
         'lat' => $position->latitude,
         'lng' => $position->longitude,
+        'source' => $position->source,
     ])->values();
 @endphp
 
@@ -850,7 +851,7 @@
     </div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{{ asset('js/voyage-route-matcher.js') }}"></script>
+<script src="{{ asset('js/voyage-route-matcher.js') }}?v=20261014-completion-route"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const mapModalElement = document.getElementById('activityLocationMapModal');
@@ -917,20 +918,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (point && (!track.length || track.at(-1)[0] !== point[0] || track.at(-1)[1] !== point[1])) track.push(point);
         };
         addUnique(coordinates(originPoint));
-        trackingHistory.map(coordinates).forEach(addUnique);
-        addUnique(current);
+        trackingHistory.filter(point => point.source !== 'voyage_completion').map(coordinates).forEach(addUnique);
+        if (!@js($voyageCompleted)) addUnique(current);
 
         const destination = coordinates(destinationPoint);
+        const completionReport = @js($voyageCompleted)
+            ? trackingHistory.findLast(point => point.source === 'voyage_completion')
+            : null;
+        const completionGeoPoint = coordinates(completionReport || (@js($voyageCompleted) ? { lat: initialLatitude, lng: initialLongitude } : null));
         const approvedGeoRoute = plannedRouteCoordinates.map(point => Array.isArray(point) ? [Number(point[0]), Number(point[1])] : null).filter(point => point && Number.isFinite(point[0]) && Number.isFinite(point[1]));
         const reportedGeoTrack = track.map(point => [point[1], point[0]]);
-        const routeMatch = window.VoyageRouteMatcher?.match(approvedGeoRoute, reportedGeoTrack, { deviationThresholdNm: 5 })
+        const routeMatch = window.VoyageRouteMatcher?.match(approvedGeoRoute, reportedGeoTrack, { completed: @js($voyageCompleted), completionPoint: completionGeoPoint ? [completionGeoPoint[1], completionGeoPoint[0]] : null, deviationThresholdNm: 5 })
             || { track: reportedGeoTrack, latestMatch: null, maxDeviationNm: null, hasDeviation: false, followsPlannedRoute: false };
         const displayedTrack = routeMatch.track.map(point => [point[1], point[0]]);
         if (displayedTrack.length > 1) trackLine = L.polyline(displayedTrack, { color: '#24477f', weight: 5, opacity: .88 }).addTo(map);
 
         deviationWarning?.classList.toggle('hidden', !routeMatch.hasDeviation);
         if (routeMatch.hasDeviation && routeMatch.latestMatch) {
-            deviationWarning.querySelector('span').textContent = `Reported position is ${routeMatch.latestMatch.deviationNm.toFixed(2)} NM from the approved route. The original pin is preserved while the solid tracking line follows the plan.`;
+            deviationWarning.querySelector('span').textContent = `Reported position is ${routeMatch.latestMatch.deviationNm.toFixed(2)} NM from the approved route. The solid line shows the vessel's actual reported track; the dashed line keeps the approved plan.`;
             deviationLine = L.polyline(
                 [routeMatch.latestMatch.matched, routeMatch.latestMatch.reported].map(point => [point[1], point[0]]),
                 { color: '#dc2626', weight: 2, opacity: .8, dashArray: '4 7' },
