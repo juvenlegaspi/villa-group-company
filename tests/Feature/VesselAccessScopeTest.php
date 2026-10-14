@@ -164,7 +164,10 @@ class VesselAccessScopeTest extends TestCase
 
     public function test_authorized_manager_can_generate_a_searoutes_suggested_sea_route(): void
     {
-        config(['services.searoutes.api_key' => 'private-test-key']);
+        config([
+            'services.voyage_routes.provider' => 'searoutes',
+            'services.searoutes.api_key' => 'private-test-key',
+        ]);
         \Illuminate\Support\Facades\Http::fake([
             'api.searoutes.com/*' => \Illuminate\Support\Facades\Http::response([
                 'type' => 'FeatureCollection',

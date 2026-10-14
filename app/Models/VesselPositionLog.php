@@ -13,6 +13,10 @@ class VesselPositionLog extends Model
         'latitude',
         'longitude',
         'accuracy_meters',
+        'speed_over_ground',
+        'course_over_ground',
+        'true_heading',
+        'ais_message_type',
         'location_name',
         'source',
         'recorded_by',
@@ -26,6 +30,9 @@ class VesselPositionLog extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'accuracy_meters' => 'float',
+        'speed_over_ground' => 'float',
+        'course_over_ground' => 'float',
+        'true_heading' => 'integer',
         'recorded_at' => 'datetime',
     ];
 

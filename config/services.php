@@ -67,4 +67,25 @@ return [
         'timeout' => (int) env('SEAROUTES_TIMEOUT', 25),
     ],
 
+    'voyage_routes' => [
+        // Use "local" without an API subscription. Change to "searoutes" after access is activated.
+        'provider' => env('VOYAGE_ROUTE_PROVIDER', 'local'),
+        'local_fallback' => env('VOYAGE_ROUTE_LOCAL_FALLBACK', true),
+    ],
+
+    'aisstream' => [
+        'enabled' => env('AISSTREAM_ENABLED', false),
+        'api_key' => env('AISSTREAM_API_KEY'),
+        'endpoint' => env('AISSTREAM_ENDPOINT', 'wss://stream.aisstream.io/v0/stream'),
+        'bounding_boxes' => [
+            [
+                [(float) env('AISSTREAM_NORTH_LATITUDE', 21.5), (float) env('AISSTREAM_WEST_LONGITUDE', 116.0)],
+                [(float) env('AISSTREAM_SOUTH_LATITUDE', 4.0), (float) env('AISSTREAM_EAST_LONGITUDE', 127.5)],
+            ],
+        ],
+        'minimum_log_interval_seconds' => (int) env('AISSTREAM_MIN_LOG_INTERVAL_SECONDS', 120),
+        'minimum_log_distance_meters' => (float) env('AISSTREAM_MIN_LOG_DISTANCE_METERS', 100),
+        'reconnect_max_seconds' => (int) env('AISSTREAM_RECONNECT_MAX_SECONDS', 60),
+    ],
+
 ];

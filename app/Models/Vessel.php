@@ -18,11 +18,16 @@ class Vessel extends Model
         'service_speed',
         'charter_type',
         'vessel_status',
+        'mmsi',
+        'ais_enabled',
+        'ais_last_seen_at',
         'location_update_token',
         'location_update_token_created_at',
     ];
 
     protected $casts = [
+        'ais_enabled' => 'boolean',
+        'ais_last_seen_at' => 'datetime',
         'location_update_token_created_at' => 'datetime',
     ];
 

@@ -11,7 +11,7 @@ use App\Models\VesselPositionLog;
 use App\Models\VoyageActivity;
 use App\Models\VoyageLogDetail;
 use App\Models\VoyageLogHeader;
-use App\Services\SeaRouteService;
+use App\Services\SuggestedRouteService;
 use App\Services\VesselAccessService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -53,7 +53,7 @@ class VoyageLogController extends Controller
         return view('shipping.voyage_logs.create', compact('vessel', 'voyageCode', 'ports', 'lastVoyage', 'lastCompletedVoyage'));
     }
 
-    public function suggestRoute(Request $request, SeaRouteService $seaRoutes): JsonResponse
+    public function suggestRoute(Request $request, SuggestedRouteService $routes): JsonResponse
     {
         $data = $request->validate([
             'vessel_id' => 'required|exists:vessels,id',
@@ -67,7 +67,7 @@ class VoyageLogController extends Controller
         $this->authorizeVesselAccess($vessel);
 
         try {
-            return response()->json($seaRoutes->generate(
+            return response()->json($routes->generate(
                 (float) $data['origin_latitude'],
                 (float) $data['origin_longitude'],
                 (float) $data['destination_latitude'],
@@ -106,7 +106,7 @@ class VoyageLogController extends Controller
             'fuel_rob' => 'required|numeric|min:0',
             'arrival_date' => 'nullable|date',
             'planned_route_geojson' => 'nullable|string|max:1000000',
-            'planned_route_provider' => 'nullable|required_with:planned_route_geojson|in:searoutes',
+            'planned_route_provider' => 'nullable|required_with:planned_route_geojson|in:searoutes,local_grid',
             'planned_route_distance_nm' => 'nullable|numeric|min:0|max:1000000',
             'planned_route_duration_hours' => 'nullable|numeric|min:0|max:1000000',
             'planned_route_approved' => 'sometimes|accepted',
