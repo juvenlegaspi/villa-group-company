@@ -70,6 +70,7 @@ class OrganizationAccessSeeder extends Seeder
             'second-engineer' => ['vessels.view_assigned', 'tech_defects.view_assigned', 'tech_defects.assess', 'tech_defects.perform_action', 'tech_defects.update_closeout', 'tech_defects.upload_evidence', 'tech_defects.request_support', 'tech_defects.submit'],
             'maintenance-technician' => ['vessels.view_assigned', 'tech_defects.view_assigned', 'tech_defects.perform_action', 'tech_defects.update_closeout', 'tech_defects.upload_evidence', 'tech_defects.request_support', 'tech_defects.submit'],
             'operations-manager' => ['vessels.view_all', 'tech_defects.create', 'tech_defects.view_company', 'tech_defects.submit_review', 'tech_defects.review', 'tech_defects.verify', 'certificates.manage'],
+            'operation-manager' => ['vessels.view_assigned', 'tech_defects.create', 'tech_defects.view_assigned', 'tech_defects.submit_review', 'tech_defects.review', 'tech_defects.verify', 'certificates.manage'],
             'liaison-officer' => ['vessels.view_assigned', 'certificates.manage'],
         ];
         foreach ($catalog as $company => $departments) {

@@ -44,7 +44,8 @@ class OrganizationController extends Controller
         $departmentName = strtolower((string) Department::whereKey($data['department_id'])->value('name'));
         $divisionName = strtolower((string) Division::whereKey($data['division_id'])->value('name'));
         $permissionSlugs = match (true) {
-            in_array($code, ['operations-manager', 'operation-manager', 'marine-operations-manager', 'vessel-manager'], true) => ['vessels.view_all', 'tech_defects.create', 'tech_defects.view_company', 'tech_defects.submit_review', 'tech_defects.review', 'tech_defects.verify'],
+            in_array($code, ['operations-manager', 'marine-operations-manager', 'vessel-manager'], true) => ['vessels.view_all', 'tech_defects.create', 'tech_defects.view_company', 'tech_defects.submit_review', 'tech_defects.review', 'tech_defects.verify'],
+            $code === 'operation-manager' => ['vessels.view_assigned', 'tech_defects.create', 'tech_defects.view_assigned', 'tech_defects.submit_review', 'tech_defects.review', 'tech_defects.verify'],
             $code === 'technical-manager' => ['vessels.view_all', 'tech_defects.create', 'tech_defects.view_company', 'tech_defects.submit_review', 'tech_defects.assess', 'tech_defects.assign_action', 'tech_defects.perform_action', 'tech_defects.update_closeout', 'tech_defects.upload_evidence', 'tech_defects.request_support', 'tech_defects.submit', 'tech_defects.verify'],
             $departmentName === 'technical department' => ['vessels.view_assigned', 'tech_defects.view_assigned', 'tech_defects.perform_action', 'tech_defects.update_closeout', 'tech_defects.upload_evidence', 'tech_defects.request_support', 'tech_defects.submit'],
             $departmentName === 'marine operations' => ['vessels.view_assigned', 'tech_defects.view_assigned', 'tech_defects.create', 'tech_defects.submit_review'],

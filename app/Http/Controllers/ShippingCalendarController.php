@@ -31,6 +31,8 @@ class ShippingCalendarController extends Controller
 
     private const OPERATIONS_MANAGER_CODES = ['operations-manager', 'operation-manager', 'marine-operations-manager'];
 
+    private const COMPANY_WIDE_OPERATIONS_MANAGER_CODES = ['operations-manager', 'marine-operations-manager'];
+
     public function __construct(
         private VesselAccessService $vesselAccess,
         private ShippingChecklistReminderService $checklistReminders,
@@ -475,7 +477,7 @@ class ShippingCalendarController extends Controller
     private function accessibleQuery(User $user): Builder
     {
         $query = ShippingCalendarEvent::query()->where('division_id', $this->shippingDivisionId())->whereNotNull('vessel_id');
-        if ($user->isSystemAdministrator() || $this->isOperationsManager($user)) {
+        if ($user->isSystemAdministrator() || $this->isCompanyWideOperationsManager($user)) {
             return $query;
         }
         $vesselIds = $this->vesselAccess->scopeAccessible(Vessel::query(), $user)->pluck('id');
@@ -499,8 +501,12 @@ class ShippingCalendarController extends Controller
             return false;
         }
 
-        if ($user->isSystemAdministrator() || $this->isOperationsManager($user)) {
+        if ($user->isSystemAdministrator() || $this->isCompanyWideOperationsManager($user)) {
             return true;
+        }
+
+        if ($this->isOperationsManager($user)) {
+            return $this->vesselAccess->canAccess($user, (int) $event->vessel_id);
         }
 
         return $this->isCaptain($user)
@@ -525,8 +531,12 @@ class ShippingCalendarController extends Controller
         if ($user->isExecutiveViewer() || (int) $event->division_id !== $this->shippingDivisionId()) {
             return false;
         }
-        if ($user->isSystemAdministrator() || $this->isOperationsManager($user)) {
+        if ($user->isSystemAdministrator() || $this->isCompanyWideOperationsManager($user)) {
             return true;
+        }
+
+        if ($this->isOperationsManager($user)) {
+            return $this->vesselAccess->canAccess($user, (int) $event->vessel_id);
         }
 
         return $this->isCaptain($user) && $this->vesselAccess->canAccess($user, (int) $event->vessel_id);
@@ -539,6 +549,15 @@ class ShippingCalendarController extends Controller
 
         return in_array($department, ['marine operation', 'marine operations'], true)
             && in_array(strtolower((string) $user->position?->code), self::OPERATIONS_MANAGER_CODES, true);
+    }
+
+    private function isCompanyWideOperationsManager(User $user): bool
+    {
+        $user->loadMissing(['position', 'department']);
+        $department = strtolower(trim((string) $user->department?->name));
+
+        return in_array($department, ['marine operation', 'marine operations'], true)
+            && in_array(strtolower((string) $user->position?->code), self::COMPANY_WIDE_OPERATIONS_MANAGER_CODES, true);
     }
 
     private function isCaptain(User $user): bool

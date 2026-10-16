@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const companyName = division.selectedOptions[0]?.dataset.name || '';
             const departmentName = department.selectedOptions[0]?.dataset.name || '';
             const positionCode = position?.selectedOptions[0]?.dataset.code || '';
-            const managerPositions = ['operations-manager', 'operation-manager', 'marine-operations-manager', 'vessel-manager', 'technical-manager'];
+            const managerPositions = ['operations-manager', 'marine-operations-manager', 'vessel-manager', 'technical-manager'];
             const requiresAssignment = companyName === 'villa shipping lines'
                 && ['marine operations', 'technical department'].includes(departmentName)
                 && !managerPositions.includes(positionCode);

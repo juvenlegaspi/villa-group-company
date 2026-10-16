@@ -11,7 +11,6 @@ class VesselAccessService
     /** Positions that own company-wide vessel visibility inside Villa Shipping. */
     private const ALL_VESSEL_POSITION_CODES = [
         'operations-manager',
-        'operation-manager',
         'marine-operations-manager',
         'vessel-manager',
         'technical-manager',

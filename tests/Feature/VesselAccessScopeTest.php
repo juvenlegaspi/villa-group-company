@@ -20,6 +20,7 @@ use App\Models\VesselPositionLog;
 use App\Models\VoyageActivity;
 use App\Models\VoyageLogDetail;
 use App\Models\VoyageLogHeader;
+use App\Services\VesselAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -77,6 +78,49 @@ class VesselAccessScopeTest extends TestCase
         $this->actingAs($unrelatedManager)->get(route('vessels.index'))
             ->assertOk()->assertDontSee('MV Assigned')->assertDontSee('MV Restricted');
         $this->actingAs($unrelatedManager)->get(route('vessels.show', $this->assigned))->assertForbidden();
+    }
+
+    public function test_operation_manager_is_limited_to_assigned_vessels_while_operations_manager_sees_all(): void
+    {
+        $marine = Department::create(['division_id' => $this->company->id, 'name' => 'Marine Operations']);
+        $assignedPosition = Position::create([
+            'division_id' => $this->company->id, 'department_id' => $marine->id,
+            'name' => 'Operation Manager', 'code' => 'operation-manager', 'legacy_role' => 'manager', 'is_active' => true,
+        ]);
+        $companyWidePosition = Position::create([
+            'division_id' => $this->company->id, 'department_id' => $marine->id,
+            'name' => 'Operations Manager', 'code' => 'operations-manager', 'legacy_role' => 'manager', 'is_active' => true,
+        ]);
+        $assignedPosition->permissions()->sync(Permission::where('slug', 'vessels.view_assigned')->pluck('id'));
+        $companyWidePosition->permissions()->sync(Permission::where('slug', 'vessels.view_all')->pluck('id'));
+        $standardRoleId = AccessRole::where('slug', 'standard-user')->value('id');
+        $assignedManager = User::create([
+            'name' => 'Assigned Operation', 'lastname' => 'Manager', 'username' => 'assigned-operation-manager',
+            'email' => 'assigned-operation-manager@example.test', 'cell_number' => '09170000001',
+            'password' => Hash::make('password-for-tests'), 'role' => 'manager', 'is_admin' => false,
+            'division_id' => $this->company->id, 'department_id' => $marine->id,
+            'position_id' => $assignedPosition->id, 'access_role_id' => $standardRoleId,
+            'must_change_password' => false, 'status' => true,
+        ]);
+        $companyWideManager = User::create([
+            'name' => 'Company Wide Operations', 'lastname' => 'Manager', 'username' => 'company-wide-operations-manager',
+            'email' => 'company-wide-operations-manager@example.test', 'cell_number' => '09170000002',
+            'password' => Hash::make('password-for-tests'), 'role' => 'manager', 'is_admin' => false,
+            'division_id' => $this->company->id, 'department_id' => $marine->id,
+            'position_id' => $companyWidePosition->id, 'access_role_id' => $standardRoleId,
+            'must_change_password' => false, 'status' => true,
+        ]);
+        UserVesselAssignment::create([
+            'user_id' => $assignedManager->id, 'vessel_id' => $this->assigned->id,
+            'assigned_by' => $companyWideManager->id, 'is_primary' => true, 'is_active' => true,
+            'effective_from' => today(),
+        ]);
+
+        $access = app(VesselAccessService::class);
+        $this->assertTrue($access->canAccess($assignedManager, $this->assigned));
+        $this->assertFalse($access->canAccess($assignedManager, $this->unassigned));
+        $this->assertTrue($access->canAccess($companyWideManager, $this->assigned));
+        $this->assertTrue($access->canAccess($companyWideManager, $this->unassigned));
     }
 
     public function test_user_management_saves_and_removes_vessel_assignments_without_deleting_history(): void

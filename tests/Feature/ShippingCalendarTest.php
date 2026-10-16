@@ -84,6 +84,60 @@ class ShippingCalendarTest extends TestCase
         $this->assertSoftDeleted('shipping_calendar_events', ['id' => $eventId]);
     }
 
+    public function test_singular_operation_manager_can_manage_and_receive_reminders_only_for_assigned_vessels(): void
+    {
+        $org = $this->organization();
+        $position = Position::create([
+            'division_id' => $org['division']->id,
+            'department_id' => $org['department']->id,
+            'name' => 'Operation Manager',
+            'code' => 'operation-manager',
+            'legacy_role' => 'manager',
+            'is_active' => true,
+        ]);
+        $assignedManager = $this->user(
+            $org['division'], $org['department'], $position,
+            'Assigned Operation Manager', 'assigned-operation-manager@example.test', '09170000006', 'manager'
+        );
+        DB::table('user_vessel_assignments')->insert([
+            'user_id' => $assignedManager->id,
+            'vessel_id' => $org['vessel']->id,
+            'assigned_by' => $org['manager']->id,
+            'is_primary' => true,
+            'is_active' => true,
+            'effective_from' => today(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($assignedManager)->get(route('shipping.calendar'))
+            ->assertOk()
+            ->assertSee('MV Checklist One')
+            ->assertDontSee('MV Checklist Two');
+
+        $response = $this->actingAs($assignedManager)
+            ->postJson(route('shipping.calendar.events.store'), $this->payload($org['vessel']->id, ['title' => 'Assigned manager checklist']))
+            ->assertCreated();
+        $this->actingAs($assignedManager)
+            ->postJson(route('shipping.calendar.events.store'), $this->payload($org['otherVessel']->id, ['title' => 'Restricted manager checklist']))
+            ->assertForbidden();
+
+        $event = ShippingCalendarEvent::findOrFail($response->json('event_id'));
+        $recipientIds = app(ShippingChecklistReminderService::class)->recipients($event)->pluck('id');
+        $this->assertTrue($recipientIds->contains($assignedManager->id));
+
+        $otherEvent = ShippingCalendarEvent::create([
+            ...$this->payload($org['otherVessel']->id, ['title' => 'Other vessel checklist']),
+            'division_id' => $org['division']->id,
+            'created_by' => $org['manager']->id,
+            'updated_by' => $org['manager']->id,
+            'visibility' => 'vessel',
+            'email_reminder' => true,
+            'status' => 'scheduled',
+        ]);
+        $this->assertFalse(app(ShippingChecklistReminderService::class)->recipients($otherEvent)->pluck('id')->contains($assignedManager->id));
+    }
+
     public function test_vessel_filter_multiple_checklists_and_daily_recurrence_are_supported(): void
     {
         $org = $this->organization();

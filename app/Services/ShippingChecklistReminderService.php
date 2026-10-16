@@ -14,7 +14,7 @@ use RuntimeException;
 
 class ShippingChecklistReminderService
 {
-    private const OPERATIONS_MANAGER_CODES = ['operations-manager', 'operation-manager', 'marine-operations-manager'];
+    private const COMPANY_WIDE_OPERATIONS_MANAGER_CODES = ['operations-manager', 'marine-operations-manager'];
 
     private const MARINE_DEPARTMENT_NAMES = ['marine operation', 'marine operations'];
 
@@ -71,11 +71,21 @@ class ShippingChecklistReminderService
     public function recipients(ShippingCalendarEvent $event): Collection
     {
         $event->loadMissing('vessel');
-        $managerIds = User::where('division_id', $event->division_id)
+        $companyWideManagerIds = User::where('division_id', $event->division_id)
             ->where('status', true)
             ->whereHas('department', fn (Builder $departments) => $departments
                 ->whereIn(DB::raw('LOWER(name)'), self::MARINE_DEPARTMENT_NAMES))
-            ->whereHas('position', fn (Builder $positions) => $positions->whereIn('code', self::OPERATIONS_MANAGER_CODES))
+            ->whereHas('position', fn (Builder $positions) => $positions->whereIn('code', self::COMPANY_WIDE_OPERATIONS_MANAGER_CODES))
+            ->pluck('id');
+        $assignedManagerIds = User::where('division_id', $event->division_id)
+            ->where('status', true)
+            ->whereHas('department', fn (Builder $departments) => $departments
+                ->whereIn(DB::raw('LOWER(name)'), self::MARINE_DEPARTMENT_NAMES))
+            ->whereHas('position', fn (Builder $positions) => $positions->where('code', 'operation-manager'))
+            ->whereHas('vesselAssignments', fn (Builder $assignments) => $assignments
+                ->where('vessel_id', $event->vessel_id)->where('is_active', true)
+                ->where(fn (Builder $dates) => $dates->whereNull('effective_from')->orWhereDate('effective_from', '<=', today()))
+                ->where(fn (Builder $dates) => $dates->whereNull('effective_until')->orWhereDate('effective_until', '>=', today())))
             ->pluck('id');
         $captainIds = User::where('division_id', $event->division_id)
             ->where('status', true)
@@ -88,7 +98,7 @@ class ShippingChecklistReminderService
                 ->orWhereHas('position', fn (Builder $positions) => $positions->where('code', 'vessel-captain')))
             ->pluck('id');
 
-        return User::whereIn('id', $managerIds->merge($captainIds)->filter()->unique())->where('status', true)->get();
+        return User::whereIn('id', $companyWideManagerIds->merge($assignedManagerIds)->merge($captainIds)->filter()->unique())->where('status', true)->get();
     }
 
     private function dueOccurrences(ShippingCalendarEvent $event, Carbon $now, int $catchUpMinutes): array
