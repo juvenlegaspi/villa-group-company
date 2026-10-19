@@ -6,7 +6,7 @@
     @if(session('success'))<div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><strong>Production log was not saved.</strong><ul class="mb-0 mt-1">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
-    <header class="mb-5 overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-villa-900 to-amber-600 p-5 text-white shadow-xl sm:p-7"><div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="mb-1 text-xs font-black uppercase tracking-[.18em] text-amber-200">Monitoring workspace</p><h2 class="m-0 text-2xl font-black sm:text-3xl">Production Records</h2><p class="mt-1 text-sm text-white/75">Daily workforce, resource consumption, and mine production records.</p></div><div class="flex flex-wrap gap-2"><a href="{{ route('jmv.applications') }}" class="inline-flex min-h-11 items-center rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white no-underline">Back</a>@if($canManage)<button data-bs-toggle="modal" data-bs-target="#addProductionLog" class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-amber-400 px-5 text-sm font-black text-slate-950"><i class="bi bi-plus-lg"></i>Add Log</button>@endif</div></div></header>
+    <header class="mb-5 overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-villa-900 to-amber-600 p-5 text-white shadow-xl sm:p-7"><div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="mb-1 text-xs font-black uppercase tracking-[.18em] text-amber-200">Monitoring workspace</p><h2 class="m-0 text-2xl font-black sm:text-3xl">Production Records</h2><p class="mt-1 text-sm text-white/75">Daily workforce, resource consumption, and mine production records.</p></div><div class="flex flex-wrap gap-2"><a href="{{ route('jmv.applications') }}" class="inline-flex min-h-11 items-center rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white no-underline">Back</a>@if($canManage)<button type="button" data-new-production-log data-bs-toggle="modal" data-bs-target="#addProductionLog" class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-amber-400 px-5 text-sm font-black text-slate-950"><i class="bi bi-plus-lg"></i>Add Log</button>@endif</div></div></header>
 
     <div class="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         @foreach([['Logs',$summary['logs'],'bi-journal-text','text-blue-700 bg-blue-50'],['Workers',$summary['workers'],'bi-people','text-violet-700 bg-violet-50'],['Soil Output',$summary['soil'].' Bagon','bi-layers','text-amber-700 bg-amber-50'],['Coal Output',$summary['coal'].' Bagon','bi-gem','text-slate-700 bg-slate-100'],['Fuel',number_format($summary['fuel'],2).' LTRS','bi-fuel-pump','text-emerald-700 bg-emerald-50']] as [$label,$value,$icon,$tone])
@@ -37,8 +37,46 @@
 <datalist id="productionLocations">@foreach($locations as $location)<option value="{{ $location }}">@endforeach<option value="Mine 1"><option value="Mine 2"></datalist>
 <datalist id="productionShifts">@foreach($shifts as $shift)<option value="{{ $shift }}">@endforeach<option value="8:00 AM - 5:00 PM"><option value="5:00 PM - 2:00 AM"></datalist>
 
-@if($canManage)<div class="modal fade" id="addProductionLog" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><form method="POST" enctype="multipart/form-data" action="{{ route('jmv.operations.production.store') }}" class="modal-content overflow-hidden rounded-4 border-0 shadow-2xl">@csrf<div class="modal-header border-bottom px-4 py-3"><div><p class="mb-1 text-xs font-black uppercase tracking-wider text-amber-700">JMV Operations</p><h2 class="modal-title fs-4 fw-black">New Daily Production Log</h2></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body bg-slate-50 px-4 py-4 sm:px-5">@include('jmv.operations.production.partials.form')</div><div class="modal-footer border-top bg-white"><button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary rounded-3 px-4"><i class="bi bi-check-circle me-2"></i>Save Log</button></div></form></div></div></div>@endif
+@if($canManage)<div class="modal fade" id="addProductionLog" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><form id="addProductionLogForm" method="POST" enctype="multipart/form-data" autocomplete="off" action="{{ route('jmv.operations.production.store') }}" class="modal-content overflow-hidden rounded-4 border-0 shadow-2xl">@csrf<div class="modal-header border-bottom px-4 py-3"><div><p class="mb-1 text-xs font-black uppercase tracking-wider text-amber-700">JMV Operations</p><h2 class="modal-title fs-4 fw-black">New Daily Production Log</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body bg-slate-50 px-4 py-4 sm:px-5">@include('jmv.operations.production.partials.form')</div><div class="modal-footer border-top bg-white"><button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary rounded-3 px-4"><i class="bi bi-check-circle me-2"></i>Save Log</button></div></form></div></div></div>@endif
 @endsection
 @push('scripts')
-@if($errors->any() && $canManage)<script>document.addEventListener('DOMContentLoaded',()=>bootstrap.Modal.getOrCreateInstance(document.getElementById('addProductionLog')).show());</script>@endif
+@if($canManage)
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const modalElement = document.getElementById('addProductionLog');
+    const form = document.getElementById('addProductionLogForm');
+    if (!modalElement || !form) return;
+
+    const clearNewLogForm = () => {
+        form.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach((field) => {
+            if (field.type === 'file') {
+                field.value = '';
+            } else if (field.tagName === 'SELECT') {
+                field.selectedIndex = 0;
+            } else {
+                field.value = '';
+            }
+        });
+    };
+
+    let openingFreshLog = false;
+    document.querySelectorAll('[data-new-production-log]').forEach((button) => {
+        button.addEventListener('click', () => {
+            openingFreshLog = true;
+            clearNewLogForm();
+        });
+    });
+    modalElement.addEventListener('shown.bs.modal', () => {
+        if (!openingFreshLog) return;
+        clearNewLogForm();
+        openingFreshLog = false;
+    });
+    modalElement.addEventListener('hidden.bs.modal', clearNewLogForm);
+
+    @if($errors->any())
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    @endif
+});
+</script>
+@endif
 @endpush

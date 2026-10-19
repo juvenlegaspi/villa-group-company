@@ -13,7 +13,7 @@ class SimpleXlsxWriter
      * @param  array<int, array<int, mixed>>  $rows
      * @param  array<int, float|int>  $widths
      */
-    public function make(string $title, array $metadata, array $headers, array $rows, array $widths = []): string
+    public function make(string $title, array $metadata, array $headers, array $rows, array $widths = [], string $sheetName = 'Technical Defects'): string
     {
         $columnCount = count($headers);
         $lastColumn = $this->columnName($columnCount);
@@ -66,7 +66,7 @@ class SimpleXlsxWriter
         $files = [
             '[Content_Types].xml' => $this->contentTypes(),
             '_rels/.rels' => $this->rootRelationships(),
-            'xl/workbook.xml' => $this->workbook(),
+            'xl/workbook.xml' => $this->workbook($sheetName),
             'xl/_rels/workbook.xml.rels' => $this->workbookRelationships(),
             'xl/styles.xml' => $this->styles(),
             'xl/worksheets/sheet1.xml' => $sheetXml,
@@ -156,9 +156,12 @@ class SimpleXlsxWriter
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
     }
 
-    private function workbook(): string
+    private function workbook(string $sheetName): string
     {
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Technical Defects" sheetId="1" r:id="rId1"/></sheets></workbook>';
+        $sheetName = mb_substr(preg_replace('/[\\[\\]:*?\\/\\\\]/', ' ', $sheetName) ?: 'Report', 0, 31);
+
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="'
+            .htmlspecialchars($sheetName, ENT_XML1 | ENT_QUOTES, 'UTF-8').'" sheetId="1" r:id="rId1"/></sheets></workbook>';
     }
 
     private function workbookRelationships(): string

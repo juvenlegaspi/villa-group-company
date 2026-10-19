@@ -49,8 +49,12 @@ class JmvDailyProductionTest extends TestCase
         $this->assertSame(20, $log->fresh()->coal_output);
         $this->assertDatabaseHas('jmv_daily_production_audits', ['jmv_daily_production_log_id' => $log->id, 'action' => 'log_updated']);
 
-        $this->actingAs($manager)->get(route('jmv.operations.production.export', ['location' => 'Mine 1']))
-            ->assertOk()->assertHeader('content-type', 'application/vnd.ms-excel; charset=UTF-8');
+        $export = $this->actingAs($manager)->get(route('jmv.operations.production.export', ['location' => 'Mine 1']));
+        $export->assertOk()
+            ->assertDownload()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringContainsString('.xlsx"', $export->headers->get('content-disposition'));
+        $this->assertStringStartsWith("PK\x03\x04", $export->getContent());
     }
 
     public function test_log_requires_output_and_is_unique_by_date_location_and_shift(): void

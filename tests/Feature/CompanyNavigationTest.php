@@ -85,7 +85,8 @@ class CompanyNavigationTest extends TestCase
         $this->actingAs($executive)->get(route('suppliers.index'))->assertOk();
         $this->actingAs($executive)->get(route('yatira.inventory.index'))->assertOk();
         $this->actingAs($executive)->get(route('yatira.sales.index'))->assertOk()->assertDontSee('Register Lead');
-        $this->actingAs($executive)->get(route('jmv.applications'))->assertOk()->assertSee('Stock Requests');
+        $this->actingAs($executive)->get(route('jmv.applications'))->assertOk()->assertSee('Inventory')->assertDontSee('Stock Requests');
+        $this->actingAs($executive)->get(route('jmv.inventory.index'))->assertOk()->assertSee('Stock Requests')->assertDontSee(route('jmv.operations.production.index'), false);
         $this->actingAs($executive)->get(route('jmv.inventory.index'))->assertOk();
         $this->actingAs($executive)->get(route('jmv.stockin.index'))->assertOk();
         $this->actingAs($executive)->get(route('jmv.stockout.index'))->assertOk();
@@ -169,9 +170,28 @@ class CompanyNavigationTest extends TestCase
             ->assertOk()
             ->assertSee('JMV Mining &amp; Development', false)
             ->assertSee('Company Applications')
+            ->assertSee('Operations')
+            ->assertSee('Inventory')
+            ->assertSee('User Management')
+            ->assertDontSee('Stock In')
+            ->assertDontSee('Stock Out')
+            ->assertSee(route('jmv.operations.production.index'), false)
+            ->assertSee(route('jmv.inventory.index'), false);
+
+        $this->actingAs($user)->get(route('jmv.operations.production.index'))
+            ->assertOk()
+            ->assertSee('Daily Production Monitoring')
+            ->assertSee('Operations')
+            ->assertDontSee('Stock In')
+            ->assertDontSee('Stock Out');
+
+        $this->actingAs($user)->get(route('jmv.inventory.index'))
+            ->assertOk()
             ->assertSee('Inventory')
             ->assertSee('Stock In')
             ->assertSee('Stock Out')
+            ->assertSee('Stock Requests')
+            ->assertDontSee(route('jmv.operations.production.index'), false)
             ->assertSee(route('jmv.inventory.index'), false)
             ->assertSee(route('jmv.stockin.index'), false)
             ->assertSee(route('jmv.stockout.index'), false);

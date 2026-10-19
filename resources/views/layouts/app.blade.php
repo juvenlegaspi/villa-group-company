@@ -317,6 +317,8 @@
     $isYatiraApplications = request()->routeIs('yatira.applications');
     $isJmvArea = ! $isStandaloneDashboard && request()->is('jmv/*');
     $isJmvApplications = request()->routeIs('jmv.applications');
+    $isJmvOperationsArea = request()->routeIs('jmv.operations.*');
+    $isJmvInventoryArea = request()->routeIs('jmv.inventory.*', 'jmv.stockin.*', 'jmv.stockout.*', 'jmv.requests.*', 'jmv.transactions.*');
     $companiesActive = request()->routeIs('companies')
         || request()->is('shipping/*', 'vessel-certificates*', 'yatira/*', 'jmv/*', 'hyve/*', 'users*');
     $vesselAccess = app(\App\Services\VesselAccessService::class);
@@ -406,17 +408,17 @@
             @elseif ($isJmvApplications)
                 <a class="app-nav-link active" href="{{ route('jmv.applications') }}" title="Applications"><i class="bi bi-grid"></i><span>Applications</span></a>
             @elseif ($isJmvArea)
-                @if($currentUser->hasPermission('jmv.operations.daily_production.view'))
+                @if($isJmvOperationsArea && $currentUser->hasPermission('jmv.operations.daily_production.view'))
                 <a class="app-nav-link {{ request()->routeIs('jmv.operations.production.*') ? 'active' : '' }}" href="{{ route('jmv.operations.production.index') }}" title="Operations"><i class="bi bi-graph-up-arrow"></i><span>Operations</span></a>
                 @endif
-                @if($currentUser->hasPermission('jmv.inventory.view'))
+                @if($isJmvInventoryArea && $currentUser->hasPermission('jmv.inventory.view'))
                 <a class="app-nav-link {{ request()->routeIs('jmv.inventory.*') ? 'active' : '' }}" href="{{ route('jmv.inventory.index') }}" title="Inventory"><i class="bi bi-box-seam"></i><span>Inventory</span></a>
                 @endif
-                @if($currentUser->isExecutiveViewer() || $currentUser->hasPermission('jmv.inventory.movements.manage'))
+                @if($isJmvInventoryArea && ($currentUser->isExecutiveViewer() || $currentUser->hasPermission('jmv.inventory.movements.manage')))
                 <a class="app-nav-link {{ request()->routeIs('jmv.stockin.*') ? 'active' : '' }}" href="{{ route('jmv.stockin.index') }}" title="Stock In"><i class="bi bi-box-arrow-in-down"></i><span>Stock In</span></a>
                 <a class="app-nav-link {{ request()->routeIs('jmv.stockout.*') ? 'active' : '' }}" href="{{ route('jmv.stockout.index') }}" title="Stock Out"><i class="bi bi-box-arrow-up"></i><span>Stock Out</span></a>
                 @endif
-                @if($currentUser->isExecutiveViewer() || $currentUser->hasPermission('jmv.inventory.requests.create') || $currentUser->hasPermission('jmv.inventory.requests.approve'))
+                @if($isJmvInventoryArea && ($currentUser->isExecutiveViewer() || $currentUser->hasPermission('jmv.inventory.requests.create') || $currentUser->hasPermission('jmv.inventory.requests.approve')))
                 <a class="app-nav-link {{ request()->routeIs('jmv.requests.*') ? 'active' : '' }}" href="{{ route('jmv.requests.index') }}" title="Stock Requests"><i class="bi bi-clipboard-check"></i><span>Stock Requests</span></a>
                 @endif
             @else

@@ -6,13 +6,13 @@ use App\Models\Division;
 use App\Models\JmvDailyProductionAttachment;
 use App\Models\JmvDailyProductionAudit;
 use App\Models\JmvDailyProductionLog;
+use App\Services\SimpleXlsxWriter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class JmvDailyProductionController extends Controller
 {
@@ -104,28 +104,49 @@ class JmvDailyProductionController extends Controller
         return response()->download(Storage::disk('local')->path($attachment->path), $attachment->original_name);
     }
 
-    public function export(Request $request): StreamedResponse
+    public function export(Request $request, SimpleXlsxWriter $xlsx)
     {
         $this->authorizePermission('jmv.operations.daily_production.reports.view');
         $logs = $this->filteredQuery($request)->orderBy('log_date')->orderBy('location')->get();
-        $filename = 'jmv-daily-production-'.now()->format('Y-m-d-His').'.xml';
-        return response()->streamDownload(function () use ($logs): void {
-            $escape = fn ($value) => htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-            echo '<?xml version="1.0" encoding="UTF-8"?>';
-            echo '<?mso-application progid="Excel.Sheet"?>';
-            echo '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
-            echo '<Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#17345F" ss:Pattern="Solid"/></Style><Style ss:ID="Title"><Font ss:Bold="1" ss:Size="16" ss:Color="#17345F"/></Style><Style ss:ID="Number"><NumberFormat ss:Format="0.00"/></Style></Styles>';
-            echo '<Worksheet ss:Name="Daily Production"><Table>';
-            echo '<Row><Cell ss:MergeAcross="16" ss:StyleID="Title"><Data ss:Type="String">JMV Mining &amp; Development - Daily Production Monitoring</Data></Cell></Row>';
-            echo '<Row><Cell ss:MergeAcross="16"><Data ss:Type="String">Generated '.now()->format('F d, Y h:i A').'</Data></Cell></Row><Row></Row>';
-            $headers = ['Log No.','Date','Location','Shift','Leadman','Foreman','Total Workers','Timber Used','Timber Unit','Nails Used','Nails Unit','Fuel','Fuel Unit','Soil Output (Bagon)','Coal Output (Bagon)','Excess / Deficit','Remarks'];
-            echo '<Row>'; foreach ($headers as $header) echo '<Cell ss:StyleID="Header"><Data ss:Type="String">'.$escape($header).'</Data></Cell>'; echo '</Row>';
-            foreach ($logs as $log) {
-                $values = [$log->log_no,$log->log_date->format('Y-m-d'),$log->location,$log->shift,$log->leadman,$log->foreman,$log->total_workers,$log->timber_used,$log->timber_unit,$log->nails_used,$log->nails_unit,$log->fuel_consumed,$log->fuel_unit,$log->soil_output,$log->coal_output,$log->excess_deficit,$log->remarks];
-                echo '<Row>'; foreach ($values as $index => $value) { $numeric = in_array($index, [6,7,9,11,13,14,15], true) && $value !== null; echo '<Cell'.($numeric ? ' ss:StyleID="Number"' : '').'><Data ss:Type="'.($numeric ? 'Number' : 'String').'">'.$escape($value).'</Data></Cell>'; } echo '</Row>';
-            }
-            echo '</Table><AutoFilter x:Range="R4C1:R'.($logs->count() + 4).'C17" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>';
-        }, $filename, ['Content-Type' => 'application/vnd.ms-excel; charset=UTF-8']);
+        $headers = ['Log No.','Date','Location','Shift','Leadman','Foreman','Total Workers','Timber Used','Timber Unit','Nails Used','Nails Unit','Fuel','Fuel Unit','Soil Output (Bagon)','Coal Output (Bagon)','Excess / Deficit','Remarks'];
+        $rows = $logs->map(fn (JmvDailyProductionLog $log) => [
+            $log->log_no,
+            $log->log_date->format('Y-m-d'),
+            $log->location,
+            $log->shift,
+            $log->leadman,
+            $log->foreman,
+            (int) $log->total_workers,
+            (float) $log->timber_used,
+            $log->timber_unit,
+            (float) $log->nails_used,
+            $log->nails_unit,
+            (float) $log->fuel_consumed,
+            $log->fuel_unit,
+            (int) $log->soil_output,
+            (int) $log->coal_output,
+            $log->excess_deficit === null ? null : (int) $log->excess_deficit,
+            $log->remarks,
+        ])->all();
+        $contents = $xlsx->make(
+            'JMV MINING & DEVELOPMENT - DAILY PRODUCTION MONITORING',
+            [
+                ['Records', (string) $logs->count()],
+                ['Generated', now()->format('M d, Y h:i A')],
+            ],
+            $headers,
+            $rows,
+            [20, 14, 22, 22, 20, 20, 15, 14, 13, 14, 13, 13, 12, 20, 20, 18, 36],
+            'Daily Production',
+        );
+        $filename = 'jmv-daily-production-'.now()->format('Y-m-d-His').'.xlsx';
+
+        return response($contents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Length' => (string) strlen($contents),
+            'Cache-Control' => 'private, max-age=0, must-revalidate',
+        ]);
     }
 
     private function filteredQuery(Request $request): Builder

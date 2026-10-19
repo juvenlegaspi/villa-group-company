@@ -37,9 +37,11 @@ class JmvInventoryWorkflowTest extends TestCase{
  }
  public function test_report_and_application_visibility_follow_position_permissions():void{
   $warehouse=$this->positionUser('warehouse-staff');$procurement=$this->positionUser('purchaser');
-  $this->actingAs($warehouse)->get(route('jmv.applications'))->assertOk()->assertSee('Stock In')->assertSee('Stock Requests')->assertDontSee('Inventory Report');
+  $this->actingAs($warehouse)->get(route('jmv.applications'))->assertOk()->assertSee('Inventory')->assertDontSee('Stock In')->assertDontSee('Stock Requests');
+  $this->actingAs($warehouse)->get(route('jmv.inventory.index'))->assertOk()->assertSee('Stock In')->assertSee('Stock Requests')->assertDontSee(route('jmv.operations.production.index'),false);
   $this->actingAs($warehouse)->get(route('jmv.inventory.report'))->assertForbidden();
-  $this->actingAs($procurement)->get(route('jmv.applications'))->assertOk()->assertSee('Inventory Report')->assertDontSee('Stock In');
+  $this->actingAs($procurement)->get(route('jmv.applications'))->assertOk()->assertSee('Inventory')->assertDontSee('Inventory Report')->assertDontSee('Stock In');
+  $this->actingAs($procurement)->get(route('jmv.inventory.index'))->assertOk()->assertDontSee('Stock In')->assertDontSee(route('jmv.operations.production.index'),false);
   $this->actingAs($procurement)->get(route('jmv.inventory.report'))->assertOk()->assertHeader('content-type','text/csv; charset=UTF-8');
  }
  private function item(User $manager,int $stock,int $maximum):array{$locationId=DB::table('jmv_inventory_locations')->value('id');$categoryId=DB::table('jmv_inventory_categories')->where('name','General')->value('id');static$i=0;$i++;$this->actingAs($manager)->post(route('jmv.inventory.store'),['item_name'=>'Test Item '.$i,'unit'=>'pcs','category_id'=>$categoryId,'default_location_id'=>$locationId,'minimum_quantity'=>5,'maximum_quantity'=>$maximum,'stock_on_hand'=>$stock,'unit_cost'=>10])->assertSessionHasNoErrors();return[ItemInventoryHeader::where('item_name','Test Item '.$i)->firstOrFail(),$locationId];}
