@@ -55,7 +55,7 @@
             <span><span class="block text-sm font-extrabold uppercase text-villa-900">User Management</span><span class="mt-1 block text-xs leading-5 text-slate-500">Manage company departments, positions and employee access.</span></span>
         </a>
         @endif
-        @unless($canViewOperations || $canViewInventory || $canMoveStock || $canViewReports || $isExecutiveViewer || auth()->user()->hasPermission('jmv.inventory.requests.create') || auth()->user()->hasPermission('jmv.inventory.requests.approve') || auth()->user()->canManageUsers())
+        @unless($canViewOperations || $canViewInventory || auth()->user()->canManageUsers())
         <div class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center"><i class="bi bi-shield-lock mb-3 block text-3xl text-slate-400"></i><h2 class="text-lg font-extrabold text-slate-800">No application assigned</h2><p class="mt-1 text-sm text-slate-500">Contact your administrator to assign JMV inventory access to your position.</p></div>
         @endunless
     </div>
