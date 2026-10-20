@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\JmvDailyProductionLog;
 use App\Models\User;
+use App\Notifications\JmvDailyProductionNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -19,6 +21,7 @@ class JmvDailyProductionTest extends TestCase
     {
         parent::setUp();
         $this->seed();
+        Notification::fake();
     }
 
     public function test_operations_manager_can_create_filter_update_download_and_export_daily_logs(): void
@@ -71,17 +74,112 @@ class JmvDailyProductionTest extends TestCase
         $this->assertDatabaseCount('jmv_daily_production_logs', 1);
     }
 
-    public function test_geologist_can_manage_but_chief_geologist_is_read_only(): void
+    public function test_daily_production_access_follows_jmv_operational_positions(): void
     {
+        Storage::fake('local');
+        $adminStaff = $this->positionUser('admin-staff');
+        $miningStaff = $this->positionUser('mining-staff');
+        $supervisor = $this->positionUser('mine-supervisor');
         $geologist = $this->positionUser('geologist');
         $chief = $this->positionUser('chief-geologist');
-        $this->actingAs($geologist)->post(route('jmv.operations.production.store'), $this->payload())->assertSessionHasNoErrors();
+
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.store'), $this->payload([
+            'attachments' => [UploadedFile::fake()->create('daily-report.pdf', 100, 'application/pdf')],
+        ]))->assertSessionHasNoErrors();
         $log = JmvDailyProductionLog::firstOrFail();
 
-        $this->actingAs($chief)->get(route('jmv.operations.production.index'))->assertOk()->assertSee($log->log_no);
+        $this->assertTrue($supervisor->hasPermission('jmv.operations.daily_production.approve'));
+        $this->assertFalse($adminStaff->hasPermission('jmv.operations.daily_production.approve'));
+        $this->assertSame(JmvDailyProductionLog::STATUS_DRAFT, $log->status);
+        $this->actingAs($adminStaff)->get(route('jmv.operations.production.edit', $log))->assertOk();
+        $this->actingAs($adminStaff)->get(route('jmv.operations.production.export'))->assertForbidden();
+        $this->actingAs($miningStaff)->post(route('jmv.operations.production.store'), $this->payload(['location' => 'Mine 2']))->assertForbidden();
+        $this->actingAs($supervisor)->get(route('jmv.operations.production.show', $log))->assertOk();
+        $this->actingAs($supervisor)->get(route('jmv.operations.production.edit', $log))->assertStatus(422);
+
+        $this->actingAs($chief)->get(route('jmv.operations.production.index'))->assertOk()->assertDontSee($log->log_no);
+        $this->actingAs($chief)->get(route('jmv.operations.production.show', $log))->assertNotFound();
         $this->actingAs($chief)->get(route('jmv.operations.production.export'))->assertOk();
         $this->actingAs($chief)->post(route('jmv.operations.production.store'), $this->payload(['location' => 'Mine 2']))->assertForbidden();
-        $this->actingAs($chief)->get(route('jmv.operations.production.edit', $log))->assertForbidden();
+        $this->actingAs($geologist)->get(route('jmv.operations.production.index'))->assertOk();
+        $this->actingAs($geologist)->post(route('jmv.operations.production.store'), $this->payload(['location' => 'Mine 3']))->assertForbidden();
+    }
+
+    public function test_admin_staff_can_submit_and_supervisor_can_approve_an_official_log(): void
+    {
+        Storage::fake('local');
+        $adminStaff = $this->positionUser('admin-staff');
+        $supervisor = $this->positionUser('mine-supervisor');
+        $manager = $this->positionUser('mine-operations-manager');
+        $chief = $this->positionUser('chief-geologist');
+
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.store'), $this->payload([
+            'attachments' => [UploadedFile::fake()->create('accomplishment.pdf', 100, 'application/pdf')],
+        ]))->assertSessionHasNoErrors();
+        $log = JmvDailyProductionLog::firstOrFail();
+
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.submit', $log))->assertSessionHasNoErrors();
+        $this->assertSame(JmvDailyProductionLog::STATUS_PENDING_REVIEW, $log->fresh()->status);
+        $this->assertNotNull($log->fresh()->submitted_at);
+        Notification::assertSentTo([$supervisor, $manager], JmvDailyProductionNotification::class);
+        $this->actingAs($adminStaff)->get(route('jmv.operations.production.edit', $log))->assertStatus(422);
+
+        $this->actingAs($supervisor)->post(route('jmv.operations.production.approve', $log), ['review_remarks' => 'Verified against the report.'])->assertSessionHasNoErrors();
+        $log->refresh();
+        $this->assertSame(JmvDailyProductionLog::STATUS_COMPLETED, $log->status);
+        $this->assertSame($supervisor->id, $log->reviewed_by);
+        $this->assertNotNull($log->completed_at);
+        $this->assertDatabaseHas('jmv_daily_production_audits', ['jmv_daily_production_log_id' => $log->id, 'action' => 'log_approved']);
+        Notification::assertSentTo($adminStaff, JmvDailyProductionNotification::class);
+        $this->actingAs($chief)->get(route('jmv.operations.production.index'))->assertOk()->assertSee($log->log_no);
+    }
+
+    public function test_return_correction_resubmit_and_self_approval_controls_work(): void
+    {
+        Storage::fake('local');
+        $adminStaff = $this->positionUser('admin-staff');
+        $supervisor = $this->positionUser('mine-supervisor');
+        $manager = $this->positionUser('mine-operations-manager');
+
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.store'), $this->payload([
+            'location' => 'Mine 2',
+            'attachments' => [UploadedFile::fake()->create('mine-2-report.pdf', 100, 'application/pdf')],
+        ]));
+        $log = JmvDailyProductionLog::where('location', 'Mine 2')->firstOrFail();
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.submit', $log))->assertSessionHasNoErrors();
+        $this->actingAs($supervisor)->post(route('jmv.operations.production.return', $log), ['review_remarks' => 'Correct the coal output.'])->assertSessionHasNoErrors();
+
+        $log->refresh();
+        $this->assertSame(JmvDailyProductionLog::STATUS_FOR_CORRECTION, $log->status);
+        $this->assertSame('Correct the coal output.', $log->review_remarks);
+        $this->assertSame(1, $log->revision_count);
+        $this->actingAs($adminStaff)->put(route('jmv.operations.production.update', $log), $this->payload(['location' => 'Mine 2', 'coal_output' => 25]))->assertSessionHasNoErrors();
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.submit', $log))->assertSessionHasNoErrors();
+        $this->actingAs($manager)->post(route('jmv.operations.production.approve', $log))->assertSessionHasNoErrors();
+        $this->assertSame(JmvDailyProductionLog::STATUS_COMPLETED, $log->fresh()->status);
+
+        $this->actingAs($supervisor)->post(route('jmv.operations.production.store'), $this->payload([
+            'location' => 'Mine 3',
+            'attachments' => [UploadedFile::fake()->create('mine-3-report.pdf', 100, 'application/pdf')],
+        ]));
+        $ownLog = JmvDailyProductionLog::where('location', 'Mine 3')->firstOrFail();
+        $this->actingAs($supervisor)->post(route('jmv.operations.production.submit', $ownLog))->assertSessionHasNoErrors();
+        $this->actingAs($supervisor)->post(route('jmv.operations.production.approve', $ownLog))->assertStatus(422);
+        $this->actingAs($manager)->post(route('jmv.operations.production.approve', $ownLog))->assertSessionHasNoErrors();
+        $this->assertSame(JmvDailyProductionLog::STATUS_COMPLETED, $ownLog->fresh()->status);
+    }
+
+    public function test_submission_requires_a_supporting_document_and_export_excludes_drafts(): void
+    {
+        $adminStaff = $this->positionUser('admin-staff');
+        $manager = $this->positionUser('mine-operations-manager');
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.store'), $this->payload());
+        $draft = JmvDailyProductionLog::firstOrFail();
+        $this->actingAs($adminStaff)->post(route('jmv.operations.production.submit', $draft))->assertStatus(422);
+
+        $export = $this->actingAs($manager)->get(route('jmv.operations.production.export'));
+        $export->assertOk();
+        $this->assertStringNotContainsString($draft->log_no, $export->getContent());
     }
 
     private function payload(array $overrides = []): array

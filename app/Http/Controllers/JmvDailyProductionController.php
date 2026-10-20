@@ -6,10 +6,13 @@ use App\Models\Division;
 use App\Models\JmvDailyProductionAttachment;
 use App\Models\JmvDailyProductionAudit;
 use App\Models\JmvDailyProductionLog;
+use App\Models\User;
+use App\Notifications\JmvDailyProductionNotification;
 use App\Services\SimpleXlsxWriter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -20,8 +23,8 @@ class JmvDailyProductionController extends Controller
     {
         $this->authorizePermission('jmv.operations.daily_production.view');
         $query = $this->filteredQuery($request);
-        $summaryQuery = clone $query;
-        $logs = $query->with(['creator:id,name,lastname'])->latest('log_date')->latest('id')->paginate(15)->withQueryString();
+        $summaryQuery = (clone $query)->where('status', JmvDailyProductionLog::STATUS_COMPLETED);
+        $logs = $query->with(['creator:id,name,lastname', 'reviewer:id,name,lastname'])->latest('log_date')->latest('id')->paginate(15)->withQueryString();
         $summary = [
             'logs' => (clone $summaryQuery)->count(),
             'workers' => (int) (clone $summaryQuery)->sum('total_workers'),
@@ -30,24 +33,26 @@ class JmvDailyProductionController extends Controller
             'fuel' => (float) (clone $summaryQuery)->sum('fuel_consumed'),
         ];
         $divisionId = $this->jmvDivisionId();
-        $locations = JmvDailyProductionLog::where('division_id', $divisionId)->distinct()->orderBy('location')->pluck('location');
-        $shifts = JmvDailyProductionLog::where('division_id', $divisionId)->distinct()->orderBy('shift')->pluck('shift');
+        $locations = $this->visibleQuery()->distinct()->orderBy('location')->pluck('location');
+        $shifts = $this->visibleQuery()->distinct()->orderBy('shift')->pluck('shift');
 
         return view('jmv.operations.production.index', compact('logs', 'summary', 'locations', 'shifts') + [
-            'canManage' => $this->can('jmv.operations.daily_production.manage'),
+            'canCreate' => $this->can('jmv.operations.daily_production.create'),
             'canExport' => $this->can('jmv.operations.daily_production.reports.view'),
+            'canApprove' => $this->can('jmv.operations.daily_production.approve'),
+            'statuses' => JmvDailyProductionLog::STATUSES,
         ]);
     }
 
     public function store(Request $request)
     {
-        $this->authorizePermission('jmv.operations.daily_production.manage');
+        $this->authorizePermission('jmv.operations.daily_production.create');
         $divisionId = $this->jmvDivisionId();
         $data = $this->validated($request, $divisionId);
         $storedPaths = [];
         try {
             $log = DB::transaction(function () use ($request, $data, $divisionId, &$storedPaths): JmvDailyProductionLog {
-                $log = JmvDailyProductionLog::create([...$data, 'division_id' => $divisionId, 'log_no' => $this->generateLogNo(), 'created_by' => auth()->id(), 'updated_by' => auth()->id()]);
+                $log = JmvDailyProductionLog::create([...$data, 'division_id' => $divisionId, 'log_no' => $this->generateLogNo(), 'status' => JmvDailyProductionLog::STATUS_DRAFT, 'created_by' => auth()->id(), 'updated_by' => auth()->id()]);
                 $this->storeAttachments($request, $log, $storedPaths);
                 $this->audit($log, 'log_created', ['log_no' => $log->log_no]);
                 return $log;
@@ -57,28 +62,38 @@ class JmvDailyProductionController extends Controller
             throw $exception;
         }
 
-        return redirect()->route('jmv.operations.production.show', $log)->with('success', 'Daily production log saved successfully.');
+        return redirect()->route('jmv.operations.production.show', $log)->with('success', 'Daily production log saved as a draft. Review it, then submit it for approval.');
     }
 
     public function show(JmvDailyProductionLog $productionLog)
     {
         $this->authorizePermission('jmv.operations.daily_production.view');
         $this->ensureJmvLog($productionLog);
-        $productionLog->load(['creator:id,name,lastname', 'updater:id,name,lastname', 'attachments.uploader:id,name,lastname', 'audits.user:id,name,lastname']);
-        return view('jmv.operations.production.show', ['log' => $productionLog, 'canManage' => $this->can('jmv.operations.daily_production.manage')]);
+        $this->ensureVisibleLog($productionLog);
+        $productionLog->load(['creator:id,name,lastname', 'updater:id,name,lastname', 'submitter:id,name,lastname', 'reviewer:id,name,lastname', 'attachments.uploader:id,name,lastname', 'audits.user:id,name,lastname']);
+        return view('jmv.operations.production.show', [
+            'log' => $productionLog,
+            'canUpdate' => $this->canEditLog($productionLog),
+            'canSubmit' => $this->canSubmitLog($productionLog),
+            'canReview' => $this->canReviewLog($productionLog),
+        ]);
     }
 
     public function edit(JmvDailyProductionLog $productionLog)
     {
-        $this->authorizePermission('jmv.operations.daily_production.manage');
+        $this->authorizePermission('jmv.operations.daily_production.update');
         $this->ensureJmvLog($productionLog);
+        $this->ensureVisibleLog($productionLog);
+        abort_unless($this->canEditLog($productionLog), 422, 'Only your own Draft or For Correction log can be edited.');
         return view('jmv.operations.production.edit', ['log' => $productionLog]);
     }
 
     public function update(Request $request, JmvDailyProductionLog $productionLog)
     {
-        $this->authorizePermission('jmv.operations.daily_production.manage');
+        $this->authorizePermission('jmv.operations.daily_production.update');
         $this->ensureJmvLog($productionLog);
+        $this->ensureVisibleLog($productionLog);
+        abort_unless($this->canEditLog($productionLog), 422, 'Only your own Draft or For Correction log can be edited.');
         $data = $this->validated($request, $this->jmvDivisionId(), $productionLog);
         $before = $productionLog->only(array_keys($data));
         $storedPaths = [];
@@ -92,13 +107,93 @@ class JmvDailyProductionController extends Controller
             foreach ($storedPaths as $path) Storage::disk('local')->delete($path);
             throw $exception;
         }
-        return redirect()->route('jmv.operations.production.show', $productionLog)->with('success', 'Daily production log updated successfully.');
+        return redirect()->route('jmv.operations.production.show', $productionLog)->with('success', 'Daily production draft updated successfully.');
+    }
+
+    public function submit(JmvDailyProductionLog $productionLog)
+    {
+        $this->authorizePermission('jmv.operations.daily_production.submit');
+        $this->ensureJmvLog($productionLog);
+        abort_unless($this->canSubmitLog($productionLog), 422, 'Only your own Draft or For Correction log can be submitted.');
+        abort_unless($productionLog->attachments()->exists(), 422, 'Upload the supporting Daily Accomplishment Report before submitting for review.');
+
+        DB::transaction(function () use ($productionLog): void {
+            $log = JmvDailyProductionLog::whereKey($productionLog->id)->lockForUpdate()->firstOrFail();
+            abort_unless(in_array($log->status, [JmvDailyProductionLog::STATUS_DRAFT, JmvDailyProductionLog::STATUS_FOR_CORRECTION], true), 422, 'This log is no longer available for submission.');
+            $previousStatus = $log->status;
+            $log->update([
+                'status' => JmvDailyProductionLog::STATUS_PENDING_REVIEW,
+                'submitted_by' => auth()->id(),
+                'submitted_at' => now(),
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+                'review_remarks' => null,
+                'updated_by' => auth()->id(),
+            ]);
+            $this->audit($log, $previousStatus === JmvDailyProductionLog::STATUS_FOR_CORRECTION ? 'log_resubmitted' : 'log_submitted', ['from' => $previousStatus, 'to' => JmvDailyProductionLog::STATUS_PENDING_REVIEW]);
+        });
+
+        $this->notifyApprovers($productionLog->fresh());
+        return back()->with('success', 'Daily production log submitted and is now Pending Review.');
+    }
+
+    public function approve(Request $request, JmvDailyProductionLog $productionLog)
+    {
+        $this->authorizePermission('jmv.operations.daily_production.approve');
+        $this->ensureJmvLog($productionLog);
+        $data = $request->validate(['review_remarks' => 'nullable|string|max:2000']);
+        abort_if((int) $productionLog->created_by === (int) auth()->id(), 422, 'You cannot approve a daily production log that you created.');
+
+        DB::transaction(function () use ($productionLog, $data): void {
+            $log = JmvDailyProductionLog::whereKey($productionLog->id)->lockForUpdate()->firstOrFail();
+            abort_unless($log->status === JmvDailyProductionLog::STATUS_PENDING_REVIEW, 422, 'Only Pending Review logs can be approved.');
+            abort_if((int) $log->created_by === (int) auth()->id(), 422, 'You cannot approve a daily production log that you created.');
+            $log->update([
+                'status' => JmvDailyProductionLog::STATUS_COMPLETED,
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'review_remarks' => $data['review_remarks'] ?? null,
+                'completed_at' => now(),
+                'updated_by' => auth()->id(),
+            ]);
+            $this->audit($log, 'log_approved', ['to' => JmvDailyProductionLog::STATUS_COMPLETED, 'remarks' => $data['review_remarks'] ?? null]);
+        });
+
+        $this->notifyCreator($productionLog->fresh(), 'Daily production log approved', "{$productionLog->log_no} was approved and is now Completed / Logged.");
+        return back()->with('success', 'Daily production log approved and marked Completed / Logged.');
+    }
+
+    public function returnForCorrection(Request $request, JmvDailyProductionLog $productionLog)
+    {
+        $this->authorizePermission('jmv.operations.daily_production.approve');
+        $this->ensureJmvLog($productionLog);
+        $data = $request->validate(['review_remarks' => 'required|string|max:2000']);
+        abort_if((int) $productionLog->created_by === (int) auth()->id(), 422, 'You cannot review a daily production log that you created.');
+
+        DB::transaction(function () use ($productionLog, $data): void {
+            $log = JmvDailyProductionLog::whereKey($productionLog->id)->lockForUpdate()->firstOrFail();
+            abort_unless($log->status === JmvDailyProductionLog::STATUS_PENDING_REVIEW, 422, 'Only Pending Review logs can be returned for correction.');
+            abort_if((int) $log->created_by === (int) auth()->id(), 422, 'You cannot review a daily production log that you created.');
+            $log->update([
+                'status' => JmvDailyProductionLog::STATUS_FOR_CORRECTION,
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'review_remarks' => $data['review_remarks'],
+                'revision_count' => $log->revision_count + 1,
+                'updated_by' => auth()->id(),
+            ]);
+            $this->audit($log, 'log_returned_for_correction', ['to' => JmvDailyProductionLog::STATUS_FOR_CORRECTION, 'remarks' => $data['review_remarks']]);
+        });
+
+        $this->notifyCreator($productionLog->fresh(), 'Daily production log returned for correction', "{$productionLog->log_no} was returned: {$data['review_remarks']}");
+        return back()->with('success', 'Daily production log returned to the Admin Staff for correction.');
     }
 
     public function attachment(JmvDailyProductionLog $productionLog, JmvDailyProductionAttachment $attachment)
     {
         $this->authorizePermission('jmv.operations.daily_production.view');
         $this->ensureJmvLog($productionLog);
+        $this->ensureVisibleLog($productionLog);
         abort_unless((int) $attachment->jmv_daily_production_log_id === (int) $productionLog->id, 404);
         abort_unless(Storage::disk('local')->exists($attachment->path), 404);
         return response()->download(Storage::disk('local')->path($attachment->path), $attachment->original_name);
@@ -107,7 +202,7 @@ class JmvDailyProductionController extends Controller
     public function export(Request $request, SimpleXlsxWriter $xlsx)
     {
         $this->authorizePermission('jmv.operations.daily_production.reports.view');
-        $logs = $this->filteredQuery($request)->orderBy('log_date')->orderBy('location')->get();
+        $logs = $this->filteredQuery($request)->where('status', JmvDailyProductionLog::STATUS_COMPLETED)->orderBy('log_date')->orderBy('location')->get();
         $headers = ['Log No.','Date','Location','Shift','Leadman','Foreman','Total Workers','Timber Used','Timber Unit','Nails Used','Nails Unit','Fuel','Fuel Unit','Soil Output (Bagon)','Coal Output (Bagon)','Excess / Deficit','Remarks'];
         $rows = $logs->map(fn (JmvDailyProductionLog $log) => [
             $log->log_no,
@@ -151,7 +246,7 @@ class JmvDailyProductionController extends Controller
 
     private function filteredQuery(Request $request): Builder
     {
-        $query = JmvDailyProductionLog::where('division_id', $this->jmvDivisionId());
+        $query = $this->visibleQuery();
         $search = trim((string) $request->input('search'));
         return $query
             ->when($search !== '', fn (Builder $q) => $q->where(fn (Builder $nested) => $nested
@@ -159,7 +254,8 @@ class JmvDailyProductionController extends Controller
                 ->orWhere('shift', 'like', "%{$search}%")->orWhere('leadman', 'like', "%{$search}%")->orWhere('foreman', 'like', "%{$search}%")))
             ->when($request->filled('month'), fn (Builder $q) => $q->whereRaw("DATE_FORMAT(log_date, '%Y-%m') = ?", [$request->input('month')]))
             ->when($request->filled('location'), fn (Builder $q) => $q->where('location', $request->input('location')))
-            ->when($request->filled('shift'), fn (Builder $q) => $q->where('shift', $request->input('shift')));
+            ->when($request->filled('shift'), fn (Builder $q) => $q->where('shift', $request->input('shift')))
+            ->when(array_key_exists((string) $request->input('status'), JmvDailyProductionLog::STATUSES), fn (Builder $q) => $q->where('status', $request->input('status')));
     }
 
     private function validated(Request $request, int $divisionId, ?JmvDailyProductionLog $log = null): array
@@ -224,6 +320,75 @@ class JmvDailyProductionController extends Controller
         do { $number = 'JMV-DPM-'.now()->format('Ymd').'-'.strtoupper(bin2hex(random_bytes(2))); }
         while (JmvDailyProductionLog::where('log_no', $number)->exists());
         return $number;
+    }
+
+    private function visibleQuery(): Builder
+    {
+        $query = JmvDailyProductionLog::where('division_id', $this->jmvDivisionId());
+        if (auth()->user()->isSystemAdministrator() || $this->can('jmv.operations.daily_production.approve')) return $query;
+
+        if ($this->can('jmv.operations.daily_production.create')) {
+            return $query->where(fn (Builder $scope) => $scope
+                ->where('status', JmvDailyProductionLog::STATUS_COMPLETED)
+                ->orWhere('created_by', auth()->id()));
+        }
+
+        return $query->where('status', JmvDailyProductionLog::STATUS_COMPLETED);
+    }
+
+    private function canEditLog(JmvDailyProductionLog $log): bool
+    {
+        return $this->can('jmv.operations.daily_production.update')
+            && (auth()->user()->isSystemAdministrator() || (int) $log->created_by === (int) auth()->id())
+            && in_array($log->status, [JmvDailyProductionLog::STATUS_DRAFT, JmvDailyProductionLog::STATUS_FOR_CORRECTION], true);
+    }
+
+    private function canSubmitLog(JmvDailyProductionLog $log): bool
+    {
+        return $this->can('jmv.operations.daily_production.submit')
+            && (auth()->user()->isSystemAdministrator() || (int) $log->created_by === (int) auth()->id())
+            && in_array($log->status, [JmvDailyProductionLog::STATUS_DRAFT, JmvDailyProductionLog::STATUS_FOR_CORRECTION], true);
+    }
+
+    private function canReviewLog(JmvDailyProductionLog $log): bool
+    {
+        return $this->can('jmv.operations.daily_production.approve')
+            && $log->status === JmvDailyProductionLog::STATUS_PENDING_REVIEW
+            && (int) $log->created_by !== (int) auth()->id();
+    }
+
+    private function ensureVisibleLog(JmvDailyProductionLog $log): void
+    {
+        abort_unless($this->visibleQuery()->whereKey($log->id)->exists(), 404);
+    }
+
+    private function notifyApprovers(JmvDailyProductionLog $log): void
+    {
+        $users = User::where('division_id', $this->jmvDivisionId())
+            ->where('status', true)
+            ->whereKeyNot($log->created_by)
+            ->whereHas('position.permissions', fn ($query) => $query->where('slug', 'jmv.operations.daily_production.approve'))
+            ->get();
+        try {
+            Notification::send($users, new JmvDailyProductionNotification(
+                'Daily production log pending review',
+                "{$log->log_no} is waiting for your review and approval.",
+                route('jmv.operations.production.show', $log),
+            ));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    private function notifyCreator(JmvDailyProductionLog $log, string $subject, string $message): void
+    {
+        $creator = $log->creator()->first();
+        if (! $creator || ! $creator->status) return;
+        try {
+            $creator->notify(new JmvDailyProductionNotification($subject, $message, route('jmv.operations.production.show', $log)));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 
     private function can(string $permission): bool { return auth()->user()->isSystemAdministrator() || auth()->user()->hasPermission($permission); }

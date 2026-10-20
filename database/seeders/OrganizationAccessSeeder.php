@@ -34,7 +34,7 @@ class OrganizationAccessSeeder extends Seeder
                 'Human Resources' => [['HR Manager', 'manager'], ['HR Officer', 'hr']],
             ],
             'JMV' => [
-                'Mining Operations' => [['Mine Operations Manager', 'manager'], ['Mine Supervisor', 'staff'], ['Mining Staff', 'staff']],
+                'Mining Operations' => [['Mine Operations Manager', 'manager'], ['Mine Supervisor', 'staff'], ['Admin Staff', 'staff'], ['Mining Staff', 'staff']],
                 'Equipment Maintenance' => [['Maintenance Manager', 'manager'], ['Heavy Equipment Technician', 'staff']],
                 'Geology' => [['Chief Geologist', 'manager'], ['Geologist', 'staff']],
                 'Safety and Environment' => [['HSE Manager', 'manager'], ['Safety Officer', 'staff']],
@@ -94,6 +94,10 @@ class OrganizationAccessSeeder extends Seeder
                         ? $this->yatiraPermissionsFor($departmentName, $code)
                         : [];
                     $jmvPermissions = strtolower($company) === 'jmv' ? $this->jmvPermissionsFor($code) : [];
+                    if (strtolower($company) === 'jmv') {
+                        $dailyProductionPermissionIds = DB::table('permissions')->where('slug', 'like', 'jmv.operations.daily_production.%')->pluck('id');
+                        DB::table('permission_position')->where('position_id', $positionId)->whereIn('permission_id', $dailyProductionPermissionIds)->delete();
+                    }
                     $slugs = array_values(array_unique([...($positionPermissions[$code] ?? []), ...$modulePermissions, ...$yatiraPermissions, ...$jmvPermissions]));
                     foreach (DB::table('permissions')->whereIn('slug', $slugs)->pluck('id') as $permissionId) {
                         DB::table('permission_position')->insertOrIgnore(['position_id' => $positionId, 'permission_id' => $permissionId]);
@@ -142,9 +146,10 @@ class OrganizationAccessSeeder extends Seeder
             'inventory-manager' => ['jmv.inventory.view','jmv.inventory.items.manage','jmv.inventory.movements.manage','jmv.inventory.adjustments.manage','jmv.inventory.reports.view','jmv.inventory.requests.create','jmv.inventory.requests.approve'],
             'warehouse-staff' => ['jmv.inventory.view','jmv.inventory.movements.manage','jmv.inventory.requests.create'],
             'procurement-manager', 'purchaser', 'finance-manager', 'accountant' => ['jmv.inventory.view','jmv.inventory.reports.view'],
-            'mine-operations-manager', 'mine-supervisor', 'department-manager' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage','jmv.operations.daily_production.reports.view'],
+            'mine-operations-manager', 'mine-supervisor' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.create','jmv.operations.daily_production.update','jmv.operations.daily_production.submit','jmv.operations.daily_production.approve','jmv.operations.daily_production.reports.view'],
+            'admin-staff' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.create','jmv.operations.daily_production.update','jmv.operations.daily_production.submit'],
             'chief-geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.reports.view'],
-            'geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage'],
+            'geologist' => ['jmv.operations.daily_production.view'],
             default => [],
         };
     }

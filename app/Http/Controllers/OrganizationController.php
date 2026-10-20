@@ -102,9 +102,10 @@ class OrganizationController extends Controller
             'inventory-manager' => ['jmv.inventory.view','jmv.inventory.items.manage','jmv.inventory.movements.manage','jmv.inventory.adjustments.manage','jmv.inventory.reports.view','jmv.inventory.requests.create','jmv.inventory.requests.approve'],
             'warehouse-staff' => ['jmv.inventory.view','jmv.inventory.movements.manage','jmv.inventory.requests.create'],
             'procurement-manager', 'purchaser', 'finance-manager', 'accountant' => ['jmv.inventory.view','jmv.inventory.reports.view'],
-            'mine-operations-manager', 'mine-supervisor', 'department-manager' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage','jmv.operations.daily_production.reports.view'],
+            'mine-operations-manager', 'mine-supervisor' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.create','jmv.operations.daily_production.update','jmv.operations.daily_production.submit','jmv.operations.daily_production.approve','jmv.operations.daily_production.reports.view'],
+            'admin-staff' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.create','jmv.operations.daily_production.update','jmv.operations.daily_production.submit'],
             'chief-geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.reports.view'],
-            'geologist' => ['jmv.operations.daily_production.view','jmv.operations.daily_production.manage'],
+            'geologist' => ['jmv.operations.daily_production.view'],
             default => [],
         };
     }

@@ -267,6 +267,9 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                 Route::get('/', [JmvDailyProductionController::class, 'index'])->name('index');
                 Route::post('/', [JmvDailyProductionController::class, 'store'])->name('store');
                 Route::get('/export', [JmvDailyProductionController::class, 'export'])->name('export');
+                Route::post('/{productionLog}/submit', [JmvDailyProductionController::class, 'submit'])->name('submit');
+                Route::post('/{productionLog}/approve', [JmvDailyProductionController::class, 'approve'])->name('approve');
+                Route::post('/{productionLog}/return', [JmvDailyProductionController::class, 'returnForCorrection'])->name('return');
                 Route::get('/{productionLog}', [JmvDailyProductionController::class, 'show'])->name('show');
                 Route::get('/{productionLog}/edit', [JmvDailyProductionController::class, 'edit'])->name('edit');
                 Route::put('/{productionLog}', [JmvDailyProductionController::class, 'update'])->name('update');
