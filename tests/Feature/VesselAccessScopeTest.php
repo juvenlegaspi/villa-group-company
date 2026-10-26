@@ -647,6 +647,62 @@ class VesselAccessScopeTest extends TestCase
         ]);
     }
 
+    public function test_remarks_can_only_be_updated_after_an_activity_has_been_ongoing_for_24_hours(): void
+    {
+        $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');
+        $status = ActivityStatusVoyage::create(['name' => 'Sailing', 'status' => true]);
+        $activityDefinition = ActivityVoyage::create([
+            'activity_status_voyage_id' => $status->id,
+            'name' => 'Underway Check',
+            'status' => true,
+        ]);
+        $voyage = VoyageLogHeader::create([
+            'vessel_id' => $this->assigned->id,
+            'voyage_no' => 'DELAY-REMARKS-001',
+            'status' => 'Sailing',
+        ]);
+        $detail = VoyageLogDetail::create([
+            'voyage_id' => $voyage->voyage_id,
+            'vessel_id' => $this->assigned->id,
+            'status' => $status->id,
+            'main_status' => 'ONGOING',
+        ]);
+        $activity = VoyageActivity::create([
+            'voyage_id' => $voyage->voyage_id,
+            'voyage_detail_id' => $detail->dtl_id,
+            'vessel_id' => $this->assigned->id,
+            'status_id' => $status->id,
+            'status_activity_id' => $activityDefinition->id,
+            'start_date_time' => now()->subHours(23),
+            'main_status' => 'ONGOING',
+        ]);
+
+        $this->actingAs($manager)->post(route('voyage.activity.remarks', $activity->activity_id), [
+            'remarks' => 'Waiting for weather clearance.',
+        ])->assertStatus(422);
+
+        $activity->update(['start_date_time' => now()->subHours(25)]);
+
+        $this->actingAs($manager)->get(route('voyages.show', $voyage->voyage_id))
+            ->assertOk()
+            ->assertSee('Add Remarks');
+
+        $this->actingAs($manager)->post(route('voyage.activity.remarks', $activity->activity_id), [
+            'remarks' => 'Waiting for weather clearance.',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('voyage_activities', [
+            'activity_id' => $activity->activity_id,
+            'remarks' => 'Waiting for weather clearance.',
+        ]);
+
+        $activity->update(['end_date_time' => now(), 'main_status' => 'COMPLETED']);
+
+        $this->actingAs($manager)->post(route('voyage.activity.remarks', $activity->activity_id), [
+            'remarks' => 'This must not replace the saved explanation.',
+        ])->assertStatus(422);
+    }
+
     public function test_current_location_can_be_updated_without_starting_an_activity(): void
     {
         $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');

@@ -572,6 +572,83 @@ class CompanyNavigationTest extends TestCase
             && str_contains($request->header('User-Agent')[0] ?? '', 'VillaGroupVesselTracking'));
     }
 
+    public function test_pms_headers_and_details_are_saved_and_scoped_to_the_vessel(): void
+    {
+        config()->set('pms.development_only', false);
+        $companies = $this->seedCompanies();
+        $admin = $this->user(['role' => 'admin', 'is_admin' => true, 'division_id' => $companies['Villa shipping Lines']]);
+        $vessel = \App\Models\Vessel::create(['vessel_name' => 'PMS Vessel']);
+        $other = \App\Models\Vessel::create(['vessel_name' => 'Other PMS Vessel']);
+
+        $this->actingAs($admin)->get(route('shipping.pms.index'))->assertOk()->assertSee('PMS Vessel');
+        $this->post(route('shipping.pms.headers.store', $vessel), ['name' => 'Life Saving Equipment'])
+            ->assertRedirect(route('shipping.pms.vessels.show', $vessel));
+        $header = \App\Models\ShippingPmsHeader::firstOrFail();
+        $this->get(route('shipping.pms.vessels.show', $vessel))->assertOk()->assertSee('Life Saving Equipment');
+        $this->post(route('shipping.pms.details.store', [$vessel, $header]), [
+            'name' => 'Lifebuoy', 'activity' => 'Lighted', 'frequency' => 'Weekly', 'start_date' => '2026-10-23',
+        ])->assertRedirect(route('shipping.pms.headers.show', [$vessel, $header]));
+        $this->get(route('shipping.pms.headers.show', [$vessel, $header]))->assertOk()->assertSee('Lifebuoy')->assertSee('Weekly');
+        $this->get(route('shipping.pms.headers.show', [$other, $header]))->assertNotFound();
+        $this->post(route('shipping.pms.details.store', [$other, $header]), ['name' => 'Wrong vessel'])->assertNotFound();
+        $this->post(route('shipping.pms.headers.store', $vessel), ['name' => 'Life Saving Equipment'])->assertSessionHasErrors('name');
+        $this->post(route('shipping.pms.details.store', [$vessel, $header]), ['name' => 'Invalid', 'status' => 'Invalid'])->assertSessionHasErrors('status');
+
+        $captain = $this->user(['role' => 'captain', 'division_id' => $companies['Villa shipping Lines']]);
+        $permission = \App\Models\Permission::firstOrCreate(['slug' => 'shipping.operations.access'], ['name' => 'Operations', 'module' => 'shipping']);
+        $position = \App\Models\Position::create(['division_id' => $captain->division_id, 'department_id' => $captain->department_id, 'name' => 'Captain', 'code' => 'pms-captain', 'legacy_role' => 'captain', 'is_active' => true]);
+        $position->permissions()->attach($permission);
+        $captain->update(['position_id' => $position->id]);
+        $vessel->update(['captain_id' => $captain->id]);
+        $this->actingAs($captain)->get(route('shipping.pms.vessels.show', $vessel))->assertOk();
+        $this->get(route('shipping.pms.vessels.show', $other))->assertForbidden();
+        $this->post(route('shipping.pms.headers.store', $other), ['name' => 'Forbidden'])->assertForbidden();
+        $this->assertDatabaseCount('shipping_pms_details', 1);
+    }
+
+    public function test_pms_development_access_is_limited_to_the_configured_account(): void
+    {
+        $companies = $this->seedCompanies();
+        $developer = $this->user(['role' => 'admin', 'is_admin' => true, 'division_id' => $companies['Villa shipping Lines']]);
+        $other = $this->user(['role' => 'admin', 'is_admin' => true, 'division_id' => $companies['Villa shipping Lines']]);
+        $vessel = \App\Models\Vessel::create(['vessel_name' => 'Development Vessel']);
+        $header = \App\Models\ShippingPmsHeader::create(['vessel_id' => $vessel->id, 'name' => 'Development Equipment']);
+        config()->set('pms.development_only', true);
+        config()->set('pms.developer_user_id', $developer->id);
+
+        $this->actingAs($developer)->get(route('shipping.pms.index'))->assertOk()->assertSee('title="PMS"', false);
+        $this->actingAs($other)->get(route('shipping.calendar'))->assertOk()->assertDontSee('title="PMS"', false);
+        $this->get(route('shipping.pms.index'))->assertForbidden();
+        $this->get(route('shipping.pms.vessels.show', $vessel))->assertForbidden();
+        $this->get(route('shipping.pms.headers.show', [$vessel, $header]))->assertForbidden();
+        $this->post(route('shipping.pms.headers.store', $vessel), ['name' => 'Blocked'])->assertForbidden();
+        $this->put(route('shipping.pms.headers.update', [$vessel, $header]), ['name' => 'Blocked'])->assertForbidden();
+        $this->post(route('shipping.pms.details.store', [$vessel, $header]), ['name' => 'Blocked'])->assertForbidden();
+
+        config()->set('pms.developer_user_id', 0);
+        $this->actingAs($developer)->get(route('shipping.pms.index'))->assertForbidden();
+        config()->set('pms.development_only', false);
+        $this->actingAs($other)->get(route('shipping.pms.index'))->assertOk();
+    }
+
+    public function test_dry_docking_is_restricted_to_the_developer_during_development(): void
+    {
+        $companies = $this->seedCompanies();
+        $developer = $this->user(['role' => 'admin', 'is_admin' => true, 'division_id' => $companies['Villa shipping Lines']]);
+        $other = $this->user(['role' => 'admin', 'is_admin' => true, 'division_id' => $companies['Villa shipping Lines']]);
+        config()->set('dry_docking.development_only', true);
+        config()->set('dry_docking.developer_user_id', $developer->id);
+        $this->actingAs($developer)->get(route('dry-docking.index'))->assertOk()->assertSee('title="Dry Docking"', false);
+        $this->actingAs($other)->get(route('shipping.calendar'))->assertOk()->assertDontSee('title="Dry Docking"', false);
+        $this->get(route('dry-docking.index'))->assertForbidden();
+        $this->get(route('dry-docking.create'))->assertForbidden();
+        $this->post(route('dry-docking.store'), [])->assertForbidden();
+        $this->get(route('dry-docking.details', 999))->assertForbidden();
+        $this->post(route('dry-docking.details.store', 999), [])->assertForbidden();
+        config()->set('dry_docking.development_only', false);
+        $this->get(route('dry-docking.index'))->assertOk();
+    }
+
     private function seedCompanies(): array
     {
         return collect(['Yatira', 'Villa shipping Lines', 'JMV', 'Villa Group', 'HYVE'])

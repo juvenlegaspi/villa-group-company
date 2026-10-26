@@ -8,10 +8,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     private const PERMISSIONS = [
+        'jmv.operations.daily_production.view' => 'View JMV daily production monitoring',
         'jmv.operations.daily_production.create' => 'Create JMV daily production logs',
         'jmv.operations.daily_production.update' => 'Update JMV daily production logs',
         'jmv.operations.daily_production.submit' => 'Submit JMV daily production logs for review',
         'jmv.operations.daily_production.approve' => 'Approve JMV daily production logs',
+        'jmv.operations.daily_production.reports.view' => 'Export JMV daily production reports',
     ];
 
     public function up(): void

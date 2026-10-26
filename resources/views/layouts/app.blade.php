@@ -384,11 +384,17 @@
                     <span>Certificates</span>
                 </a>
                 @endif
-                @if($currentUser->hasPermission('shipping.dry_docking.access') && $hasVesselScope)
+                @if($currentUser->canAccessDryDocking() && $hasVesselScope)
                     <a class="app-nav-link {{ request()->routeIs('dry-docking.*') ? 'active' : '' }}" href="{{ route('dry-docking.index') }}" title="Dry Docking">
                         <i class="bi bi-wrench-adjustable" aria-hidden="true"></i>
                         <span>Dry Docking</span>
                     </a>
+                @endif
+                @if($currentUser->canAccessPms())
+                <a class="app-nav-link {{ request()->routeIs('shipping.pms.*') ? 'active' : '' }}" href="{{ route('shipping.pms.index') }}" title="PMS">
+                    <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+                    <span>PMS</span>
+                </a>
                 @endif
             @elseif ($isYatiraApplications)
                 <a class="app-nav-link active" href="{{ route('yatira.applications') }}" title="Applications"><i class="bi bi-grid"></i><span>Applications</span></a>

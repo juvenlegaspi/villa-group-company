@@ -10,6 +10,10 @@ class EnsureModuleAccess
 {
     public function handle(Request $request, Closure $next, string $permission): Response
     {
+        if ($permission === 'shipping.dry_docking.access') {
+            abort_unless($request->user()?->canAccessDryDocking(), 403);
+        }
+
         if ($request->user()?->isExecutiveViewer() && $request->isMethodSafe()) {
             return $next($request);
         }

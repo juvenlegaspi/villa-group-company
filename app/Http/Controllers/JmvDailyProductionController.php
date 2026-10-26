@@ -24,7 +24,7 @@ class JmvDailyProductionController extends Controller
         $this->authorizePermission('jmv.operations.daily_production.view');
         $query = $this->filteredQuery($request);
         $summaryQuery = (clone $query)->where('status', JmvDailyProductionLog::STATUS_COMPLETED);
-        $logs = $query->with(['creator:id,name,lastname', 'reviewer:id,name,lastname'])->latest('log_date')->latest('id')->paginate(15)->withQueryString();
+        $logs = $query->with(['creator:id,name,lastname', 'reviewer:id,name,lastname'])->latest('log_date')->latest('id')->paginate(10)->withQueryString();
         $summary = [
             'logs' => (clone $summaryQuery)->count(),
             'workers' => (int) (clone $summaryQuery)->sum('total_workers'),

@@ -11,6 +11,8 @@ class OrganizationAccessSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->ensureJmvDailyProductionPermissions();
+
         $catalog = [
             'Villa shipping Lines' => [
                 'Marine Operations' => [['Operations Manager', 'manager'], ['Liaison Officer', 'staff'], ['Vessel Manager', 'manager'], ['Vessel Captain', 'captain'], ['Chief Officer', 'staff'], ['Deck Officer', 'staff']],
@@ -106,6 +108,31 @@ class OrganizationAccessSeeder extends Seeder
             }
         }
         $this->ensureJmvInventoryDefaults();
+    }
+
+    private function ensureJmvDailyProductionPermissions(): void
+    {
+        $permissions = [
+            'jmv.operations.daily_production.view' => 'View JMV daily production monitoring',
+            'jmv.operations.daily_production.create' => 'Create JMV daily production logs',
+            'jmv.operations.daily_production.update' => 'Update JMV daily production logs',
+            'jmv.operations.daily_production.submit' => 'Submit JMV daily production logs for review',
+            'jmv.operations.daily_production.approve' => 'Approve JMV daily production logs',
+            'jmv.operations.daily_production.reports.view' => 'Export JMV daily production reports',
+        ];
+
+        foreach ($permissions as $slug => $name) {
+            DB::table('permissions')->updateOrInsert(
+                ['slug' => $slug],
+                [
+                    'name' => $name,
+                    'module' => 'jmv',
+                    'description' => $name.'.',
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ],
+            );
+        }
     }
 
     private function yatiraPermissionsFor(string $departmentName, string $positionCode): array

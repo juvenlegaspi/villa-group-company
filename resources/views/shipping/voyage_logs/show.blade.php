@@ -178,6 +178,9 @@
                                @foreach($detail->activities as $act)
                                     @php
                                         $totalAll += $act->total_hours ?? 0;
+                                        $canUpdateDelayRemarks = !$act->end_date_time
+                                            && $act->start_date_time
+                                            && $act->start_date_time->lte(now()->subHours(24));
                                     @endphp
                                     <tr>
                                         <td>{{ $act->activity->name ?? '-' }}</td>
@@ -219,15 +222,16 @@
                                                 ? $act->updated_at->format('M d, Y h:i A') 
                                                 : '--' }}
                                         </td>
-                                        <td>
+                                        <td class="align-middle">
                                             @unless($isExecutiveViewer)
+                                            <div class="inline-flex min-w-[132px] flex-col items-stretch gap-2">
                                             @if(!$act->end_date_time)
                                                 <button
-                                                    class="btn btn-danger btn-sm"
+                                                    class="btn btn-danger btn-sm w-full whitespace-nowrap"
                                                     data-bs-toggle="modal"
                                                     data-bs-target="#endActivityModal{{ $act->activity_id }}"
                                                 >
-                                                    End
+                                                    <i class="bi bi-stop-circle mr-1"></i> End Activity
                                                 </button>
                                                 @php
                                                     $showFuelButton =
@@ -238,24 +242,69 @@
                                                 @endphp
                                                 @if($showFuelButton)
                                                     <button
-                                                        class="btn btn-info btn-sm"
+                                                        class="btn btn-info btn-sm w-full whitespace-nowrap"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#fuelModal{{ $act->activity_id }}"
                                                     >
                                                         Fuel
                                                     </button>
                                                 @endif
+                                                @if($canUpdateDelayRemarks)
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-warning btn-sm w-full whitespace-nowrap"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#activityRemarksModal{{ $act->activity_id }}"
+                                                    >
+                                                        <i class="bi bi-chat-left-text mr-1"></i>{{ filled($act->remarks) ? 'Update Remarks' : 'Add Remarks' }}
+                                                    </button>
+                                                @endif
                                             @else
                                                 @if($lastActivity && $act->activity_id == $lastActivity->activity_id && !$act->edited_at && $detail->main_status != 'COMPLETED')
-                                                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editActivityModal{{ $act->activity_id }}">
+                                                    <button class="btn btn-warning btn-sm w-full whitespace-nowrap" data-bs-toggle="modal" data-bs-target="#editActivityModal{{ $act->activity_id }}">
                                                         Edit
                                                     </button>
                                                 @endif
                                             @endif
+                                            </div>
                                             @endunless
                                         </td>
                                         
                                     </tr>
+                                    @if($canUpdateDelayRemarks && !$isExecutiveViewer)
+                                    <div class="modal fade" id="activityRemarksModal{{ $act->activity_id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <div>
+                                                        <p class="mb-1 text-[.65rem] font-extrabold uppercase tracking-wider text-amber-700">Ongoing for more than 24 hours</p>
+                                                        <h5 class="modal-title">{{ filled($act->remarks) ? 'Update Activity Remarks' : 'Add Activity Remarks' }}</h5>
+                                                    </div>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <form method="POST" action="{{ route('voyage.activity.remarks', $act->activity_id) }}">
+                                                    @csrf
+                                                    <div class="modal-body">
+                                                        <label for="delay-remarks-{{ $act->activity_id }}" class="form-label">Reason for the extended activity</label>
+                                                        <textarea
+                                                            id="delay-remarks-{{ $act->activity_id }}"
+                                                            name="remarks"
+                                                            class="form-control"
+                                                            rows="5"
+                                                            maxlength="1000"
+                                                            placeholder="Explain why this activity is taking longer than expected..."
+                                                            required>{{ $act->remarks }}</textarea>
+                                                        <p class="mb-0 mt-2 text-xs text-slate-500">You can update this explanation again while the activity remains ongoing.</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                        <button type="submit" class="btn btn-warning"><i class="bi bi-pencil-square"></i> Save Remarks</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    @endif
                                     <div class="modal fade" id="fuelModal{{ $act->activity_id }}" tabindex="-1">
                                         <div class="modal-dialog">
                                             <div class="modal-content">

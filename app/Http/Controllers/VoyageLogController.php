@@ -379,6 +379,33 @@ class VoyageLogController extends Controller
             ->with('ended_activity_id', $activity->activity_id);
     }
 
+    public function updateOngoingActivityRemarks(Request $request, $id)
+    {
+        $data = $request->validate([
+            'remarks' => 'required|string|max:1000',
+        ]);
+
+        $activity = VoyageActivity::with('voyage.vessel')->findOrFail($id);
+        $this->authorizeVoyageAccess($activity->voyage);
+
+        abort_if(
+            $activity->end_date_time || strtoupper((string) $activity->voyage->status) === 'COMPLETED',
+            422,
+            'Remarks can only be updated while the activity is ongoing.'
+        );
+        abort_if(
+            ! $activity->start_date_time || $activity->start_date_time->gt(now()->subHours(24)),
+            422,
+            'Remarks can only be added after the activity has been ongoing for 24 hours.'
+        );
+
+        $activity->update([
+            'remarks' => trim($data['remarks']),
+        ]);
+
+        return back()->with('success', 'Ongoing activity remarks updated successfully.');
+    }
+
     public function updateActivity(Request $request, $id)
     {
         $data = $request->validate([

@@ -137,6 +137,16 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                 Route::get('/applications/operations', [ShippingWorkspaceController::class, 'operations'])
                     ->middleware('module.access:shipping.operations.access')
                     ->name('shipping.operations');
+                Route::get('/pms', [ShippingWorkspaceController::class, 'pms'])
+                    ->middleware('module.access:shipping.operations.access')
+                    ->name('shipping.pms.index');
+                Route::middleware('module.access:shipping.operations.access')->prefix('pms/vessels/{vessel}')->name('shipping.pms.')->group(function (): void {
+                    Route::get('/', [\App\Http\Controllers\ShippingPmsController::class, 'show'])->name('vessels.show');
+                    Route::post('/headers', [\App\Http\Controllers\ShippingPmsController::class, 'storeHeader'])->name('headers.store');
+                    Route::put('/headers/{header}', [\App\Http\Controllers\ShippingPmsController::class, 'updateHeader'])->name('headers.update');
+                    Route::get('/headers/{header}', [\App\Http\Controllers\ShippingPmsController::class, 'details'])->name('headers.show');
+                    Route::post('/headers/{header}/details', [\App\Http\Controllers\ShippingPmsController::class, 'storeDetail'])->name('details.store');
+                });
                 Route::get('/applications/{application}', [ShippingWorkspaceController::class, 'comingSoon'])
                     ->whereIn('application', ['procurement', 'inventory'])
                     ->name('shipping.application.placeholder');
@@ -171,6 +181,7 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                     Route::post('/{id}/complete-voyage', [VoyageLogController::class, 'completeVoyage'])->name('voyage.complete');
                     Route::post('/{detail}/add-activity', [VoyageLogController::class, 'addActivity'])->name('voyage.addActivity');
                     Route::post('/activity/{id}/end', [VoyageLogController::class, 'endActivity'])->name('voyage.activity.end');
+                    Route::post('/activity/{id}/remarks', [VoyageLogController::class, 'updateOngoingActivityRemarks'])->name('voyage.activity.remarks');
                     Route::post('/activity/{id}/update', [VoyageLogController::class, 'updateActivity'])->name('voyage.activity.update');
                     Route::get('/activity/{id}/attachment', [VoyageLogController::class, 'downloadActivityAttachment'])
                         ->name('voyage.activity.attachment');

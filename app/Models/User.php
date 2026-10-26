@@ -146,6 +146,27 @@ class User extends Authenticatable
             || $this->accessRole?->slug === 'system-administrator';
     }
 
+    public function canAccessDryDocking(): bool
+    {
+        return $this->hasPermission('shipping.dry_docking.access')
+            && (! config('dry_docking.development_only')
+                || (int) $this->getKey() === (int) config('dry_docking.developer_user_id'));
+    }
+
+    public function canAccessPms(): bool
+    {
+        if (! $this->hasPermission('shipping.operations.access')
+            || ! ($this->isAdmin() || in_array($this->role, ['manager', 'captain'], true))) {
+            return false;
+        }
+
+        if (! config('pms.development_only')) {
+            return true;
+        }
+
+        return (int) $this->getKey() === (int) config('pms.developer_user_id');
+    }
+
     public function sendPasswordResetNotification($token): void
     {
         $this->notify(new ResetPasswordNotification($token));
