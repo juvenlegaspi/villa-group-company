@@ -13,7 +13,7 @@ class ShippingCalendarEvent extends Model
         'division_id', 'created_by', 'updated_by', 'department_id', 'vessel_id', 'title', 'checklist_type', 'description',
         'location', 'starts_at', 'ends_at', 'all_day', 'visibility', 'color', 'recurrence_frequency',
         'recurrence_interval', 'recurrence_ends_on', 'reminder_minutes', 'email_reminder', 'status',
-        'cancelled_at', 'cancelled_by',
+        'cancelled_at', 'cancelled_by', 'pms_detail_id',
     ];
 
     protected function casts(): array

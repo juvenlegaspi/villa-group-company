@@ -12,8 +12,25 @@
     .supplier-table-card tbody td { padding:15px 16px; border-color:#f1f5f9; }
     .supplier-table-card tbody tr { transition:background .15s ease; }
     .supplier-table-card tbody tr:hover { background:#fffbeb; }
+    .supplier-list { display:grid; gap:10px; }
+    .supplier-list-head,.supplier-row { display:grid; grid-template-columns:130px minmax(220px,1.5fr) minmax(180px,1fr) 150px 105px; gap:16px; align-items:center; }
+    .supplier-list-head { padding:0 16px 8px; color:#64748b; font-size:.7rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+    .supplier-row { min-height:86px; border:1px solid #e7edf5; border-radius:17px; padding:14px 16px; color:#334155; background:#fff; transition:.18s ease; }
+    .supplier-row:hover { border-color:#f3c96b; background:#fffcf3; box-shadow:0 8px 20px #0f172a0d; transform:translateY(-1px); }
+    .supplier-id { display:inline-flex; width:max-content; align-items:center; gap:6px; border-radius:9px; padding:7px 10px; color:#fff; background:#24477f; font-family:monospace; font-size:.75rem; font-weight:900; text-decoration:none; }
+    .supplier-id:hover { color:#fff; background:#17345f; }
+    .supplier-primary strong { display:block; overflow:hidden; color:#172554; font-size:.85rem; text-overflow:ellipsis; white-space:nowrap; }
+    .supplier-primary small,.supplier-contact small { display:block; margin-top:5px; overflow:hidden; color:#64748b; font-size:.72rem; text-overflow:ellipsis; white-space:nowrap; }
+    .supplier-contact span { display:block; overflow:hidden; color:#334155; font-size:.78rem; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
+    .supplier-term { color:#334155; font-size:.76rem; font-weight:800; }
+    .supplier-status { display:inline-flex; width:max-content; border-radius:999px; padding:6px 10px; font-size:.68rem; font-weight:900; }
+    .supplier-status.active { color:#047857; background:#d1fae5; }
+    .supplier-status.inactive { color:#475569; background:#e2e8f0; }
+    .supplier-empty { padding:50px 20px; color:#64748b; text-align:center; }
     @media(max-width:860px){.supplier-filter-grid{grid-template-columns:1fr 1fr}.supplier-filter-grid .btn{width:100%}}
+    @media(max-width:980px){.supplier-list-head{display:none}.supplier-row{grid-template-columns:120px 1fr 110px}.supplier-contact{grid-column:2}.supplier-term{display:none}}
     @media(max-width:560px){.supplier-filter-grid{grid-template-columns:1fr}}
+    @media(max-width:620px){.supplier-row{grid-template-columns:1fr auto;gap:10px}.supplier-primary,.supplier-contact{grid-column:1/-1}.supplier-contact{display:flex;gap:10px}.supplier-contact small{margin:0}.supplier-term{display:block;grid-column:1}.supplier-status{grid-column:2;grid-row:1}}
 </style>
 
 <div class="container-fluid px-2 px-sm-4 py-3">
@@ -67,75 +84,19 @@
     </div>
 
 </form>
-            <div class="table-responsive">
-            <table class="table table-hover align-middle text-nowrap mb-0">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Contact</th>
-                        <th>Business Type</th>
-                        <th>Products</th>
-                        <th>Terms</th>
-                        <th>Date</th>
-                        <th>Added By</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                  @foreach($suppliers as $supplier)
-                  <tr>
-                      <td><strong>{{ $supplier->name }}</strong></td>
-                      <td>{{ $supplier->contact_person }}</td>
-                      <td>{{ $supplier->business_type }}</td>
-                      <td>{{ $supplier->products }}</td>
-
-                      <td>
-                          <span class="badge bg-primary">
-                              {{ $supplier->credit_term ?? 'N/A' }} days
-                          </span>
-                      </td>
-
-                      <td>{{ optional($supplier->created_at)->format('M d, Y') }}</td>
-
-                      <td>
-                          <span class="badge bg-info">
-                              {{ $supplier->added_by_name }}
-                          </span>
-                      </td>
-
-                      <td><span class="badge {{ $supplier->status ? 'bg-success' : 'bg-secondary' }}">{{ $supplier->status ? 'Active' : 'Inactive' }}</span></td>
-
-                      <td>
-                        @php
-                        $user = auth()->user();
-                        @endphp
-                        <a class="btn btn-sm btn-outline-secondary" href="{{ route('suppliers.show', $supplier) }}">View</a>
-                    @if($user->hasPermission('yatira.suppliers.manage'))
-                        <button class="btn btn-sm editBtn"
-                            onclick="editSupplier(this)"
-                            data-id="{{ $supplier->id }}"
-                            data-name="{{ $supplier->name }}"
-                            data-business_type="{{ $supplier->business_type }}"
-                            data-tin="{{ $supplier->tin }}"
-                            data-address="{{ $supplier->address }}"
-                            data-products="{{ $supplier->products }}"
-                            data-tax_type="{{ $supplier->tax_type }}"
-                            data-lead_time="{{ $supplier->lead_time }}"
-                            data-credit_term="{{ $supplier->credit_term }}"
-                            data-limit_advances="{{ $supplier->limit_advances }}"
-                            data-contact_person="{{ $supplier->contact_person }}"
-                            data-telephone="{{ $supplier->telephone }}"
-                            data-mobile="{{ $supplier->mobile }}"
-                            data-email="{{ $supplier->email }}"
-                            data-status="{{ $supplier->status }}">
-                            Edit
-                        </button>
-                    @endif
-                  </tr>
-                  @endforeach
-                </tbody>
-            </table>
+            <div class="supplier-list">
+                <div class="supplier-list-head"><span>Supplier ID</span><span>Supplier</span><span>Contact</span><span>Credit Terms</span><span>Status</span></div>
+                @forelse($suppliers as $supplier)
+                    <article class="supplier-row">
+                        <a class="supplier-id" href="{{ route('suppliers.show', $supplier) }}" title="Open complete supplier profile"><i class="bi bi-box-arrow-up-right"></i>SUP-{{ str_pad($supplier->id, 5, '0', STR_PAD_LEFT) }}</a>
+                        <div class="supplier-primary"><strong>{{ $supplier->name }}</strong><small>{{ $supplier->business_type }} &bull; {{ Str::limit($supplier->products, 55) }}</small></div>
+                        <div class="supplier-contact"><span>{{ $supplier->contact_person }}</span><small>{{ $supplier->mobile ?: ($supplier->telephone ?: ($supplier->email ?: 'No contact detail')) }}</small></div>
+                        <div class="supplier-term">{{ is_null($supplier->credit_term) ? 'No terms' : $supplier->credit_term.' days' }}<small class="d-block text-muted mt-1">Added {{ optional($supplier->created_at)->format('M d, Y') }}</small></div>
+                        <span class="supplier-status {{ $supplier->status ? 'active' : 'inactive' }}">{{ $supplier->status ? 'Active' : 'Inactive' }}</span>
+                    </article>
+                @empty
+                    <div class="supplier-empty"><i class="bi bi-buildings fs-3 d-block mb-2"></i>No suppliers found.</div>
+                @endforelse
             </div>
             <div class="mt-3">
               {{ $suppliers->links() }}

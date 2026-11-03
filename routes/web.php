@@ -260,6 +260,7 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                 Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->middleware('module.access:yatira.suppliers.manage')->name('suppliers.update');
                 Route::get('/inventory', [YatiraInventoryController::class, 'index'])->name('yatira.inventory.index');
                 Route::post('/inventory/fixed-assets', [YatiraInventoryController::class, 'storeFixedAsset'])->middleware('module.access:yatira.assets.create')->name('yatira.inventory.fixed-assets.store');
+                Route::get('/inventory/fixed-assets/print/tags', [YatiraInventoryController::class, 'printAssetTags'])->middleware('module.access:yatira.assets.view')->name('yatira.inventory.fixed-assets.print-tags');
                 Route::get('/inventory/fixed-assets/{fixedAsset}', [YatiraInventoryController::class, 'showFixedAsset'])->middleware('module.access:yatira.assets.view')->name('yatira.inventory.fixed-assets.show');
                 Route::put('/inventory/fixed-assets/{fixedAsset}', [YatiraInventoryController::class, 'updateFixedAsset'])->middleware('module.access:yatira.assets.update')->name('yatira.inventory.fixed-assets.update');
                 Route::get('/inventory/fixed-assets/{fixedAsset}/document', [YatiraInventoryController::class, 'downloadAssetDocument'])->middleware('module.access:yatira.assets.view')->name('yatira.inventory.fixed-assets.document');

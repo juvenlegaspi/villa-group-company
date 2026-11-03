@@ -47,6 +47,9 @@ class ShippingChecklistReminderService
             })
             ->chunkById(100, function ($events) use ($now, $catchUpMinutes, &$summary): void {
                 foreach ($events as $event) {
+                    if ($event->pms_detail_id && config('pms.development_only')) {
+                        continue;
+                    }
                     foreach ($this->dueOccurrences($event, $now, $catchUpMinutes) as $due) {
                         $anchor = $due['anchor'];
                         $occurrence = $due['starts_at'];
@@ -70,6 +73,9 @@ class ShippingChecklistReminderService
 
     public function recipients(ShippingCalendarEvent $event): Collection
     {
+        if ($event->pms_detail_id && config('pms.development_only')) {
+            return collect();
+        }
         $event->loadMissing('vessel');
         $companyWideManagerIds = User::where('division_id', $event->division_id)
             ->where('status', true)

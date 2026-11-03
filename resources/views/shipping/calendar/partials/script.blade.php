@@ -7,7 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const requestedVessel = Number(new URLSearchParams(location.search).get('vessel'));
     const savedVessel = Number(localStorage.getItem('shippingChecklistVessel'));
     const initialVessel = vessels.find(vessel => vessel.id === requestedVessel)?.id || vessels.find(vessel => vessel.id === savedVessel)?.id || vessels[0]?.id || null;
-    const state = {date: new Date(), view: localStorage.getItem('shippingCalendarView') || 'month', vesselId: initialVessel, events: [], detail: null, detailRequestId: 0};
+    const requestedDate = new URLSearchParams(location.search).get('date');
+    const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate || '') ? new Date(`${requestedDate}T12:00:00`) : new Date();
+    const state = {date: Number.isNaN(initialDate.getTime()) ? new Date() : initialDate, view: localStorage.getItem('shippingCalendarView') || 'month', vesselId: initialVessel, events: [], detail: null, detailRequestId: 0};
     const content = document.getElementById('calendarContent');
     const title = document.getElementById('calendarTitle');
     const vesselLabel = document.getElementById('selectedVesselLabel');
@@ -130,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openCreate(day = dateOnly(state.date)) {
         if (!canCreate || !state.vesselId) return;
         document.getElementById('checklistForm').reset(); setVal('checklistId', '');
+        document.getElementById('checklistType').disabled = false;
         setVal('checklistOccurrenceStart', '');
         document.getElementById('checklistModalTitle').textContent = 'Add Checklist'; clearErrors();
         document.getElementById('checklistVessel').disabled = false;
@@ -200,8 +203,9 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.entries(fields).forEach(([field, key]) => setVal(field, event[key] ?? ''));
         setVal('checklistOccurrenceStart', state.detail.occurrence_starts_at || '');
         document.getElementById('checklistModalTitle').textContent = event.recurring ? 'Edit Selected Checklist Date' : 'Edit Checklist';
-        document.getElementById('checklistVessel').disabled = event.recurring;
-        document.getElementById('checklistRecurrencePanel').classList.toggle('hidden', event.recurring);
+        document.getElementById('checklistVessel').disabled = event.recurring || Boolean(event.pms_detail_id);
+        document.getElementById('checklistType').disabled = Boolean(event.pms_detail_id);
+        document.getElementById('checklistRecurrencePanel').classList.toggle('hidden', event.recurring || Boolean(event.pms_detail_id));
         clearErrors(); toggleRecurrence(); setTimeout(() => checklistModal.show(), 180);
     }
 
@@ -265,7 +269,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { toast(error.message, false); }
     }
 
-    function formatSchedule(event) { return `${new Date(event.starts_at).toLocaleString()} – ${new Date(event.ends_at).toLocaleString()}${event.recurrence_frequency ? ' · Repeats ' + event.recurrence_frequency : ''}`; }
+    function formatSchedule(event) {
+        const interval = Number(event.recurrence_interval || 1);
+        const unit = {daily: 'day', weekly: 'week', monthly: 'month'}[event.recurrence_frequency];
+        const repeat = unit ? ` · Every ${interval} ${unit}${interval === 1 ? '' : 's'}` : '';
+        return `${new Date(event.starts_at).toLocaleString()} – ${new Date(event.ends_at).toLocaleString()}${repeat}`;
+    }
     function formatBytes(bytes) { const size = Number(bytes || 0); if (size < 1024) return `${size} B`; if (size < 1048576) return `${(size / 1024).toFixed(1)} KB`; return `${(size / 1048576).toFixed(1)} MB`; }
     function clearErrors() { const errors = document.getElementById('checklistErrors'); if (errors) { errors.classList.add('d-none'); errors.innerHTML = ''; } }
     function showErrors(message) { const errors = document.getElementById('checklistErrors'); errors.innerHTML = `<b>Checklist was not saved.</b><div class="mt-1">${message}</div>`; errors.classList.remove('d-none'); }

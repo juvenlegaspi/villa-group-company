@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\YatiraFixedAsset;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -160,6 +161,56 @@ class YatiraProductionHardeningTest extends TestCase
             'original_name' => 'asset-photo.jpg',
             'uploaded_by' => $admin->id,
         ]);
+    }
+
+    public function test_asset_tags_can_be_printed_by_range_with_multiple_copies(): void
+    {
+        $this->seed();
+        $admin = $this->admin();
+
+        $first = YatiraFixedAsset::create([
+            'division_id' => $admin->division_id,
+            'asset_code' => 'YC-TAG001',
+            'asset_name' => 'Barcode Test Laptop',
+            'category' => 'IT Equipment',
+            'location' => 'Main Office',
+            'asset_condition' => 'Good',
+            'status' => 'Active',
+            'created_by' => $admin->id,
+            'updated_by' => $admin->id,
+        ]);
+        $second = YatiraFixedAsset::create([
+            'division_id' => $admin->division_id,
+            'asset_code' => 'YC-TAG002',
+            'asset_name' => 'Barcode Test Printer',
+            'category' => 'Office Equipment',
+            'location' => 'Admin Office',
+            'asset_condition' => 'Good',
+            'status' => 'Active',
+            'created_by' => $admin->id,
+            'updated_by' => $admin->id,
+        ]);
+        YatiraFixedAsset::create([
+            'division_id' => $admin->division_id,
+            'asset_code' => 'YC-TAG003',
+            'asset_name' => 'Outside Selected Range',
+            'category' => 'Office Equipment',
+            'asset_condition' => 'Good',
+            'status' => 'Active',
+            'created_by' => $admin->id,
+            'updated_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)->get(route('yatira.inventory.fixed-assets.print-tags', [
+            'from_asset_id' => $first->id,
+            'to_asset_id' => $second->id,
+            'copies' => 2,
+        ]))
+            ->assertOk()
+            ->assertSee('4 total tags')
+            ->assertSee('YC-TAG001')
+            ->assertSee('YC-TAG002')
+            ->assertDontSee('Outside Selected Range');
     }
 
     private function admin(): User

@@ -14,6 +14,12 @@
 @endphp
 
 <section class="min-h-[calc(100svh-74px)] bg-gradient-to-br from-white to-slate-100 px-4 py-6 sm:px-7 lg:px-12">
+    <a id="floating-vessel-back" href="{{ route('vessels.index') }}"
+       class="pointer-events-none fixed right-4 top-[82px] z-40 inline-flex min-h-11 translate-y-2 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white/95 px-4 text-sm font-extrabold text-slate-700 opacity-0 no-underline shadow-lg backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:border-villa-400 hover:bg-white hover:text-villa-900 focus:outline-none focus:ring-4 focus:ring-villa-100 sm:right-7 lg:right-12"
+       style="position:fixed;right:clamp(1rem,3vw,3rem);top:82px;z-index:1040;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(8px)"
+       aria-label="Back to vessel list">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i> Back
+    </a>
     <div class="mx-auto max-w-7xl">
         <article class="relative mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-villa-gold via-villa-600 to-villa-900"></div>
@@ -42,7 +48,7 @@
                     </div>
 
                     <div class="flex shrink-0 flex-wrap gap-2 xl:pt-1">
-                        <a href="{{ route('vessels.index') }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-700 no-underline shadow-sm hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-slate-200">
+                        <a id="vessel-back-button" href="{{ route('vessels.index') }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-700 no-underline shadow-sm hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-slate-200">
                             <i class="bi bi-arrow-left" aria-hidden="true"></i> Back
                         </a>
                         @if(!$hasOpenVoyage && !auth()->user()->isExecutiveViewer())
@@ -132,6 +138,21 @@
 
 @push('scripts')
 <script>
+const vesselBackButton = document.getElementById('vessel-back-button');
+const floatingVesselBack = document.getElementById('floating-vessel-back');
+
+if (vesselBackButton && floatingVesselBack) {
+    const backButtonObserver = new IntersectionObserver(([entry]) => {
+        const showFloatingBack = !entry.isIntersecting;
+        floatingVesselBack.style.opacity = showFloatingBack ? '1' : '0';
+        floatingVesselBack.style.visibility = showFloatingBack ? 'visible' : 'hidden';
+        floatingVesselBack.style.pointerEvents = showFloatingBack ? 'auto' : 'none';
+        floatingVesselBack.style.transform = showFloatingBack ? 'translateY(0)' : 'translateY(8px)';
+    }, { threshold: 0 });
+
+    backButtonObserver.observe(vesselBackButton);
+}
+
 document.querySelectorAll('.voyage-row').forEach((row) => {
     const openVoyage = () => window.location.assign(row.dataset.url);
     row.addEventListener('click', (event) => { if (!event.target.closest('a, button')) openVoyage(); });

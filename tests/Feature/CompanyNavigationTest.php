@@ -587,12 +587,13 @@ class CompanyNavigationTest extends TestCase
         $this->get(route('shipping.pms.vessels.show', $vessel))->assertOk()->assertSee('Life Saving Equipment');
         $this->post(route('shipping.pms.details.store', [$vessel, $header]), [
             'name' => 'Lifebuoy', 'activity' => 'Lighted', 'frequency' => 'Weekly', 'start_date' => '2026-10-23',
+            'start_time' => '08:00', 'expected_end_at' => '2026-10-23T09:00', 'reminder_minutes' => 60,
         ])->assertRedirect(route('shipping.pms.headers.show', [$vessel, $header]));
         $this->get(route('shipping.pms.headers.show', [$vessel, $header]))->assertOk()->assertSee('Lifebuoy')->assertSee('Weekly');
         $this->get(route('shipping.pms.headers.show', [$other, $header]))->assertNotFound();
         $this->post(route('shipping.pms.details.store', [$other, $header]), ['name' => 'Wrong vessel'])->assertNotFound();
         $this->post(route('shipping.pms.headers.store', $vessel), ['name' => 'Life Saving Equipment'])->assertSessionHasErrors('name');
-        $this->post(route('shipping.pms.details.store', [$vessel, $header]), ['name' => 'Invalid', 'status' => 'Invalid'])->assertSessionHasErrors('status');
+        $this->post(route('shipping.pms.details.store', [$vessel, $header]), ['name' => 'Invalid', 'frequency' => 'Invalid'])->assertSessionHasErrors('frequency');
 
         $captain = $this->user(['role' => 'captain', 'division_id' => $companies['Villa shipping Lines']]);
         $permission = \App\Models\Permission::firstOrCreate(['slug' => 'shipping.operations.access'], ['name' => 'Operations', 'module' => 'shipping']);

@@ -467,6 +467,11 @@
                                 <h5>Fixed Asset Table</h5>
                                 <p>Starter layout for long-term company assets under Yatira.</p>
                             </div>
+                            @if($assetTagOptions->isNotEmpty())
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#printAssetTagsModal">
+                                    <i class="bi bi-printer me-1"></i> Print Asset Tags
+                                </button>
+                            @endif
                         </div>
 
                         <form method="GET" action="{{ route('yatira.inventory.index') }}" class="yatira-filter-bar">
@@ -573,6 +578,63 @@
     </div>
 </div>
 </main>
+
+@if($canViewAssets && $assetTagOptions->isNotEmpty())
+<div class="modal fade" id="printAssetTagsModal" tabindex="-1" aria-labelledby="printAssetTagsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="printAssetTagsModalLabel">Print Asset Tags</h5>
+                    <small class="text-muted">Select an inclusive asset range and the number of sticker copies.</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="GET" action="{{ route('yatira.inventory.fixed-assets.print-tags') }}" target="_blank">
+                <div class="modal-body">
+                    <div class="alert alert-primary d-flex gap-2 align-items-start" role="alert">
+                        <i class="bi bi-info-circle mt-1"></i>
+                        <div>The print preview uses a compact 3-column sticker layout with scanner-friendly QR codes. You can switch between long bond, A4, or Letter paper.</div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="from_asset_id" class="form-label">Start asset</label>
+                            <select id="from_asset_id" name="from_asset_id" class="form-select" required>
+                                @foreach($assetTagOptions as $asset)
+                                    <option value="{{ $asset->id }}" @selected($asset->id === $assetTagOptions->first()->id)>{{ $asset->asset_code }} — {{ $asset->asset_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="to_asset_id" class="form-label">End asset</label>
+                            <select id="to_asset_id" name="to_asset_id" class="form-select" required>
+                                @foreach($assetTagOptions as $asset)
+                                    <option value="{{ $asset->id }}" @selected($asset->id === $assetTagOptions->last()->id)>{{ $asset->asset_code }} — {{ $asset->asset_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="asset_tag_copies" class="form-label">Copies per asset</label>
+                            <input id="asset_tag_copies" type="number" name="copies" class="form-control" value="1" min="1" max="10" required>
+                            <div class="form-text">Maximum of 10 copies per asset and 240 tags per print job.</div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="include_disposed" value="1" id="include_disposed_assets">
+                                <label class="form-check-label" for="include_disposed_assets">Include disposed assets</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-printer me-1"></i> Open Print Preview</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 
 @if($canManageConsumables)
 <div class="modal fade" id="addConsumableModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Add Consumable Item</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><form method="POST" action="{{ route('yatira.inventory.consumables.store') }}">@csrf<input type="hidden" name="_form_context" value="create_consumable"><div class="modal-body"><div class="mb-3"><label class="form-label">Item Name</label><input name="item_name" value="{{ old('item_name') }}" class="form-control" required maxlength="255"></div><div class="row"><div class="col-6 mb-3"><label class="form-label">Unit</label><input name="unit" value="{{ old('unit') }}" class="form-control" placeholder="pc, box, kg" required maxlength="50"></div><div class="col-6 mb-3"><label class="form-label">Opening Stock</label><input type="number" name="opening_stock" min="0" value="{{ old('opening_stock', 0) }}" class="form-control" required></div></div><div><label class="form-label">Reorder Level</label><input type="number" name="reorder_level" min="0" value="{{ old('reorder_level', 0) }}" class="form-control" required></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Save Item</button></div></form></div></div></div>

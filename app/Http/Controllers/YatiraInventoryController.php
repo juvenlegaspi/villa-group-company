@@ -10,6 +10,9 @@ use App\Models\YatiraConsumableTransaction;
 use App\Models\YatiraFixedAsset;
 use App\Models\YatiraFixedAssetAudit;
 use App\Models\YatiraFixedAssetDocument;
+use Endroid\QrCode\Builder\Builder as QrCodeBuilder;
+use Endroid\QrCode\ErrorCorrectionLevel;
+use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -57,6 +60,9 @@ class YatiraInventoryController extends Controller
         $conditionCounts = $canViewAssets ? YatiraFixedAsset::where('division_id', $divisionId)->selectRaw('asset_condition, COUNT(*) total')->groupBy('asset_condition')->pluck('total', 'asset_condition')->map(fn ($value) => (int) $value)->all() : [];
         $statusCounts = $canViewAssets ? YatiraFixedAsset::where('division_id', $divisionId)->selectRaw('status, COUNT(*) total')->groupBy('status')->pluck('total', 'status')->map(fn ($value) => (int) $value)->all() : [];
         $fixedAssetStats = ['total' => array_sum($conditionCounts), 'condition_counts' => $conditionCounts, 'status_counts' => $statusCounts];
+        $assetTagOptions = $canViewAssets
+            ? YatiraFixedAsset::where('division_id', $divisionId)->orderBy('id')->get(['id', 'asset_code', 'asset_name', 'status'])
+            : collect();
 
         $consumableSearch = $request->string('consumable_search')->trim()->toString();
         $consumables = $canViewConsumables
@@ -68,7 +74,45 @@ class YatiraInventoryController extends Controller
         $users = User::where('division_id', $divisionId)->where('status', true)->orderBy('name')->get(['id', 'name', 'lastname', 'department_id']);
         $departments = Department::where('division_id', $divisionId)->orderBy('name')->get(['id', 'name']);
 
-        return view('yatira.inventory.index', compact('fixedAssets', 'fixedAssetStats', 'consumables', 'users', 'departments', 'canViewAssets', 'canCreateAssets', 'canUpdateAssets', 'canDisposeAssets', 'canManageAssets', 'canViewConsumables', 'canManageConsumables'));
+        return view('yatira.inventory.index', compact('fixedAssets', 'fixedAssetStats', 'assetTagOptions', 'consumables', 'users', 'departments', 'canViewAssets', 'canCreateAssets', 'canUpdateAssets', 'canDisposeAssets', 'canManageAssets', 'canViewConsumables', 'canManageConsumables'));
+    }
+
+    public function printAssetTags(Request $request)
+    {
+        $this->authorizePermission('yatira.assets.view');
+        $divisionId = $this->yatiraDivisionId();
+        $data = $request->validate([
+            'from_asset_id' => ['required', 'integer', Rule::exists('yatira_fixed_assets', 'id')->where(fn ($query) => $query->where('division_id', $divisionId)->whereNull('deleted_at'))],
+            'to_asset_id' => ['required', 'integer', Rule::exists('yatira_fixed_assets', 'id')->where(fn ($query) => $query->where('division_id', $divisionId)->whereNull('deleted_at'))],
+            'copies' => 'required|integer|min:1|max:10',
+            'include_disposed' => 'nullable|boolean',
+        ]);
+
+        $fromId = min((int) $data['from_asset_id'], (int) $data['to_asset_id']);
+        $toId = max((int) $data['from_asset_id'], (int) $data['to_asset_id']);
+        $assets = YatiraFixedAsset::where('division_id', $divisionId)
+            ->whereBetween('id', [$fromId, $toId])
+            ->when(! ($data['include_disposed'] ?? false), fn ($query) => $query->where('status', '!=', 'Disposed'))
+            ->orderBy('id')
+            ->get();
+
+        if ($assets->isEmpty()) {
+            throw ValidationException::withMessages(['from_asset_id' => 'No printable assets were found in the selected range.']);
+        }
+
+        $copies = (int) $data['copies'];
+        if ($assets->count() * $copies > 240) {
+            throw ValidationException::withMessages(['copies' => 'The selected range is limited to 240 printed tags at a time.']);
+        }
+
+        $labels = $assets->flatMap(function (YatiraFixedAsset $asset) use ($copies) {
+            return collect(range(1, $copies))->map(fn () => [
+                'asset' => $asset,
+                'qr_code' => $this->qrCodeDataUri(route('yatira.inventory.fixed-assets.show', $asset)),
+            ]);
+        })->values();
+
+        return view('yatira.inventory.bulk-tags', compact('assets', 'labels', 'copies'));
     }
 
     public function storeFixedAsset(Request $request)
@@ -99,7 +143,7 @@ class YatiraInventoryController extends Controller
         $this->authorizePermission('yatira.assets.view');
         $this->ensureYatiraAsset($fixedAsset);
         $fixedAsset->load(['user:id,name,lastname', 'updater:id,name,lastname', 'assignedUser:id,name,lastname', 'assignedDepartment:id,name', 'audits.user:id,name,lastname', 'documents.uploader:id,name,lastname']);
-        $barcodeSvg = $this->barcodeSvgDataUri($fixedAsset->asset_code);
+        $barcodeSvg = $this->qrCodeDataUri(route('yatira.inventory.fixed-assets.show', $fixedAsset));
         $divisionId = $this->yatiraDivisionId();
         $users = User::where('division_id', $divisionId)->where('status', true)->orderBy('name')->get(['id', 'name', 'lastname', 'department_id']);
         $departments = Department::where('division_id', $divisionId)->orderBy('name')->get(['id', 'name']);
@@ -271,6 +315,17 @@ class YatiraInventoryController extends Controller
         }
         $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '.($x + 12).' 92" role="img"><rect width="100%" height="100%" fill="white"/>'.$bars.'<text x="50%" y="86" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#0f172a">'.htmlspecialchars($value, ENT_QUOTES | ENT_XML1).'</text></svg>';
         return 'data:image/svg+xml;base64,'.base64_encode($svg);
+    }
+
+    private function qrCodeDataUri(string $value): string
+    {
+        return (new QrCodeBuilder(
+            writer: new SvgWriter(),
+            data: $value,
+            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
+            size: 320,
+            margin: 12,
+        ))->build()->getDataUri();
     }
     private function currentDocumentFields(array $upload): array { return array_intersect_key($upload, array_flip(['document_path', 'document_original_name'])); }
     private function recordDocumentVersion(YatiraFixedAsset $asset, array $upload): void { if (! isset($upload['document_path'])) return; $asset->documents()->create(['path' => $upload['document_path'], 'original_name' => $upload['document_original_name'], 'mime_type' => $upload['mime_type'] ?? null, 'size_bytes' => $upload['size_bytes'] ?? null, 'uploaded_by' => auth()->id()]); }

@@ -703,6 +703,61 @@ class VesselAccessScopeTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_activity_end_datetime_cannot_be_in_the_future(): void
+    {
+        $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');
+        $status = ActivityStatusVoyage::create(['name' => 'Sailing', 'status' => true]);
+        $activityDefinition = ActivityVoyage::create([
+            'activity_status_voyage_id' => $status->id,
+            'name' => 'Underway Check',
+            'status' => true,
+        ]);
+        $voyage = VoyageLogHeader::create([
+            'vessel_id' => $this->assigned->id,
+            'voyage_no' => 'END-TIME-001',
+            'status' => 'Sailing',
+        ]);
+        $detail = VoyageLogDetail::create([
+            'voyage_id' => $voyage->voyage_id,
+            'vessel_id' => $this->assigned->id,
+            'status' => $status->id,
+            'main_status' => 'ONGOING',
+        ]);
+        $activity = VoyageActivity::create([
+            'voyage_id' => $voyage->voyage_id,
+            'voyage_detail_id' => $detail->dtl_id,
+            'vessel_id' => $this->assigned->id,
+            'status_id' => $status->id,
+            'status_activity_id' => $activityDefinition->id,
+            'start_date_time' => now()->subHours(2),
+            'main_status' => 'ONGOING',
+        ]);
+        $future = now()->addHour();
+
+        $this->actingAs($manager)->post(route('voyage.activity.end', $activity->activity_id), [
+            'end_date' => $future->toDateString(),
+            'end_time' => $future->format('H:i'),
+        ])->assertSessionHasErrors(['end_time']);
+
+        $this->assertDatabaseHas('voyage_activities', [
+            'activity_id' => $activity->activity_id,
+            'end_date_time' => null,
+            'main_status' => 'ONGOING',
+        ]);
+
+        $validEnd = now()->subMinutes(10);
+        $this->actingAs($manager)->post(route('voyage.activity.end', $activity->activity_id), [
+            'end_date' => $validEnd->toDateString(),
+            'end_time' => $validEnd->format('H:i'),
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('voyage_activities', [
+            'activity_id' => $activity->activity_id,
+            'end_date_time' => $validEnd->format('Y-m-d H:i:00'),
+            'main_status' => 'COMPLETED',
+        ]);
+    }
+
     public function test_current_location_can_be_updated_without_starting_an_activity(): void
     {
         $manager = $this->user('Technical Manager', 'technical-manager', 'company-approver');

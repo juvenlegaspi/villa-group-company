@@ -209,6 +209,13 @@ class ShippingCalendarController extends Controller
         $this->authorizeManage($event);
         $request->validate(['attachments' => 'prohibited']);
         $data = $this->validatedEvent($request);
+        if ($event->pms_detail_id) {
+            abort_unless($data['checklist_type'] === 'preventive_maintenance'
+                && (int) $data['vessel_id'] === (int) $event->vessel_id, 422, 'Keep linked PMS schedules as Preventive Maintenance on their original vessel.');
+            $data['recurrence_frequency'] = $event->recurrence_frequency;
+            $data['recurrence_interval'] = $event->recurrence_interval;
+            $data['recurrence_ends_on'] = $event->recurrence_ends_on;
+        }
         if ($event->recurrence_frequency) {
             $requested = $request->validate(['occurrence_starts_at' => 'required|date'])['occurrence_starts_at'];
             $occurrenceStart = $this->resolveOccurrenceStart($event, $requested);
@@ -402,7 +409,7 @@ class ShippingCalendarController extends Controller
             'vessel_id' => 'required|integer|exists:vessels,id',
             'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'recurrence_frequency' => ['nullable', Rule::in(self::RECURRENCES)],
-            'recurrence_interval' => 'nullable|integer|min:1|max:52',
+            'recurrence_interval' => 'nullable|integer|min:1|max:60',
             'recurrence_ends_on' => 'nullable|date',
             'reminder_minutes' => 'required|integer|min:0|max:10080',
         ]);
@@ -477,6 +484,9 @@ class ShippingCalendarController extends Controller
     private function accessibleQuery(User $user): Builder
     {
         $query = ShippingCalendarEvent::query()->where('division_id', $this->shippingDivisionId())->whereNotNull('vessel_id');
+        if (config('pms.development_only') && ! $user->canAccessPms()) {
+            $query->whereNull('pms_detail_id');
+        }
         if ($user->isSystemAdministrator() || $this->isCompanyWideOperationsManager($user)) {
             return $query;
         }
@@ -492,6 +502,7 @@ class ShippingCalendarController extends Controller
 
     private function authorizeManage(ShippingCalendarEvent $event): void
     {
+        $this->authorizeView($event);
         abort_unless($this->canManage($event, auth()->user()), 403, 'Only an Operations Manager, system administrator, or the assigned Captain who created this checklist can change it.');
     }
 
@@ -678,7 +689,7 @@ class ShippingCalendarController extends Controller
         $effectiveEnd = $hasChanges ? $override->ends_at->copy() : $effectiveStart->copy()->addSeconds($duration);
 
         return [
-            ...Arr::only($event->toArray(), ['id', 'all_day', 'vessel_id', 'recurrence_frequency', 'recurrence_interval']),
+            ...Arr::only($event->toArray(), ['id', 'all_day', 'vessel_id', 'recurrence_frequency', 'recurrence_interval', 'pms_detail_id']),
             'title' => $hasChanges ? $override->title : $event->title,
             'checklist_type' => $hasChanges ? $override->checklist_type : $event->checklist_type,
             'description' => $hasChanges ? $override->description : $event->description,

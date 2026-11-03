@@ -386,18 +386,19 @@
                                                             <label>End Date</label>
                                                             <input type="date"
                                                                 name="end_date"
-                                                                class="form-control"
+                                                                class="form-control activity-end-date"
+                                                                max="{{ now()->toDateString() }}"
+                                                                data-current-date="{{ now()->toDateString() }}"
                                                                 required>
                                                         </div>
                                                         <div class="mb-3">
                                                             <label>End Time</label>
-                                                            <input type="text"
+                                                            <input type="time"
                                                                 name="end_time"
-                                                                class="form-control"
-                                                                placeholder="HH:mm"
-                                                                maxlength="5"
+                                                                class="form-control activity-end-time"
+                                                                data-current-time="{{ now()->format('H:i') }}"
                                                                 required>
-                                                            <small class="text-muted">24-hour format only. Example: 14:30</small>
+                                                            <small class="text-muted">Future dates and times are not allowed.</small>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
@@ -1349,6 +1350,28 @@ document.addEventListener('DOMContentLoaded', function () {
     computeFuel();
 });
 
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[id^="endActivityModal"]').forEach((activityModal) => {
+        const dateField = activityModal.querySelector('.activity-end-date');
+        const timeField = activityModal.querySelector('.activity-end-time');
+        if (!dateField || !timeField) return;
+
+        const applyCurrentTimeLimit = () => {
+            if (dateField.value === dateField.dataset.currentDate) {
+                timeField.max = timeField.dataset.currentTime;
+                if (timeField.value && timeField.value > timeField.max) timeField.value = '';
+            } else {
+                timeField.removeAttribute('max');
+            }
+        };
+
+        dateField.addEventListener('change', applyCurrentTimeLimit);
+        activityModal.addEventListener('show.bs.modal', applyCurrentTimeLimit);
+    });
+});
 </script>
 
 @if(session('activityEnded'))

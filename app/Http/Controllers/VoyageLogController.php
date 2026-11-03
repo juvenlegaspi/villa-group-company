@@ -367,6 +367,11 @@ class VoyageLogController extends Controller
                 'end_time' => 'The end date and time must be after the activity start.',
             ]);
         }
+        if ($end->isFuture()) {
+            throw ValidationException::withMessages([
+                'end_time' => 'The end date and time cannot be later than the current date and time.',
+            ]);
+        }
         $totalHours = $start->diffInMinutes($end) / 60;
         $activity->update([
             'end_date_time' => $endDateTime,
@@ -424,6 +429,11 @@ class VoyageLogController extends Controller
         if ($end->lessThanOrEqualTo($start)) {
             throw ValidationException::withMessages([
                 'end_time' => 'The end date and time must be after the activity start.',
+            ]);
+        }
+        if ($end->isFuture()) {
+            throw ValidationException::withMessages([
+                'end_time' => 'The end date and time cannot be later than the current date and time.',
             ]);
         }
 

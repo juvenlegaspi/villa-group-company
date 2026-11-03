@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\ShippingPmsHeader;
 use App\Models\Vessel;
 use App\Services\VesselAccessService;
+use App\Services\PmsCalendarService;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -62,7 +65,7 @@ class ShippingPmsController extends Controller
     {
         $this->authorizeVessel($vessel);
         abort_unless($header->vessel_id === $vessel->id, 404);
-        $details = $header->details()->orderBy('id')->get();
+        $details = $header->details()->with('calendarEvent')->orderBy('id')->get();
         $statuses = self::STATUSES;
         $frequencies = self::FREQUENCIES;
 
@@ -76,13 +79,22 @@ class ShippingPmsController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'activity' => ['nullable', 'string', 'max:255'],
-            'frequency' => ['nullable', Rule::in(self::FREQUENCIES)],
+            'frequency' => ['required', Rule::in(self::FREQUENCIES)],
             'in_charge' => ['nullable', 'string', 'max:255'],
-            'start_date' => ['nullable', 'date_format:Y-m-d'],
-            'status' => ['nullable', Rule::in(self::STATUSES)],
+            'start_date' => ['required', 'date_format:Y-m-d'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'expected_end_at' => ['required', 'date_format:Y-m-d\TH:i'],
+            'reminder_minutes' => ['required', 'integer', Rule::in([0, 10, 30, 60, 1440])],
         ]);
-        $header->details()->create($data);
+        $startsAt = Carbon::parse($data['start_date'].' '.$data['start_time']);
+        if (Carbon::parse($data['expected_end_at'])->lessThanOrEqualTo($startsAt)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['expected_end_at' => 'Expected end must be after the scheduled start.']);
+        }
+        DB::transaction(function () use ($header, $data): void {
+            $detail = $header->details()->create([...$data, 'status' => 'In Queue']);
+            app(PmsCalendarService::class)->createSchedule($header, $detail);
+        });
 
-        return to_route('shipping.pms.headers.show', [$vessel, $header])->with('success', 'Equipment detail added.');
+        return to_route('shipping.pms.headers.show', [$vessel, $header])->with('success', 'Equipment detail added and scheduled in Calendar.');
     }
 }

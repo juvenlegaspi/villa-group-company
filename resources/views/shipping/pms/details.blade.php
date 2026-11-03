@@ -28,7 +28,7 @@
             @csrf
             <div class="modal-header bg-slate-50 px-4 py-3"><div><p class="mb-1 small text-secondary">{{ $vessel->vessel_name }} / {{ $header->name }}</p><h2 id="addPmsDetailTitle" class="modal-title fs-5 fw-bold text-villa-900">Add Equipment Detail</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
             <div class="modal-body p-4">
-            <div class="pms-form-note"><i class="bi bi-info-circle" aria-hidden="true"></i><span>Add an equipment item and its maintenance schedule. Fields marked * are required.</span></div>
+            <div class="pms-form-note"><i class="bi bi-calendar-check" aria-hidden="true"></i><span>Saving creates a Preventive Maintenance schedule in this vessel's Calendar. Fields marked * are required.</span></div>
             @if($errors->any())<div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
             <div class="grid gap-4 sm:grid-cols-2">
                 @foreach(['name' => 'Equipment / Item Name', 'activity' => 'Activity', 'in_charge' => 'In Charge'] as $field => $label)
@@ -36,17 +36,21 @@
                         <input id="detail-{{ $field }}" name="{{ $field }}" value="{{ old($field) }}" maxlength="255" @required($field === 'name') class="form-control mt-2">
                     </label>
                 @endforeach
-                <label for="detail-frequency" class="block text-sm font-bold text-slate-700">Frequency
-                    <select id="detail-frequency" name="frequency" class="form-select mt-2">
+                <label for="detail-frequency" class="block text-sm font-bold text-slate-700">Frequency *
+                    <select id="detail-frequency" name="frequency" required class="form-select mt-2">
                         <option value="">Select frequency</option>
                         @foreach($frequencies as $frequency)
                             <option value="{{ $frequency }}" @selected(old('frequency') === $frequency)>{{ $frequency }}</option>
                         @endforeach
                     </select>
                 </label>
-                <label for="detail-start-date" class="block text-sm font-bold text-slate-700">Start Date<input id="detail-start-date" type="date" name="start_date" value="{{ old('start_date') }}" class="form-control mt-2"></label>
-                <label for="detail-status" class="block text-sm font-bold text-slate-700">Status<select id="detail-status" name="status" class="form-select mt-2"><option value="">Select status</option>@foreach($statuses as $status)<option value="{{ $status }}" @selected(old('status') === $status)>{{ $status }}</option>@endforeach</select></label>
+                <label for="detail-start-date" class="block text-sm font-bold text-slate-700">First Scheduled Date *<input id="detail-start-date" type="date" name="start_date" required value="{{ old('start_date') }}" class="form-control mt-2"></label>
+                <label for="detail-start-time" class="block text-sm font-bold text-slate-700">Start Time *<input id="detail-start-time" type="time" name="start_time" required value="{{ old('start_time', '08:00') }}" class="form-control mt-2"></label>
+                <label for="detail-end" class="block text-sm font-bold text-slate-700">Expected End Date / Time *<input id="detail-end" type="datetime-local" name="expected_end_at" required value="{{ old('expected_end_at') }}" class="form-control mt-2"></label>
+                <label for="detail-reminder" class="block text-sm font-bold text-slate-700">Reminder *<select id="detail-reminder" name="reminder_minutes" required class="form-select mt-2">@foreach([0 => 'At scheduled time', 10 => '10 minutes before', 30 => '30 minutes before', 60 => '1 hour before', 1440 => '1 day before'] as $minutes => $label)<option value="{{ $minutes }}" @selected((string) old('reminder_minutes', 60) === (string) $minutes)>{{ $label }}</option>@endforeach</select></label>
             </div>
+            <p id="pms-drill-note" class="small text-secondary mt-3 mb-0">Repeating dates are calculated from the first scheduled date. For drill-based maintenance, select the actual drill date; it will be scheduled once.</p>
+            @if(config('pms.development_only'))<p class="small text-secondary mt-2 mb-0">Development preview: linked schedules are restricted to the developer account. Notifications, emails and SMS are paused for these schedules.</p>@endif
             </div>
             <div class="modal-footer bg-slate-50"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Save</button></div>
         </form>
@@ -56,8 +60,27 @@
             <div class="pms-detail-register-title"><i class="bi bi-list-check" aria-hidden="true"></i><div><h2>Equipment Details</h2><p>Items and maintenance schedules in this group.</p></div><span class="pms-detail-count">{{ $details->count() }} items</span></div>
             <div class="overflow-x-auto">
             <table class="pms-detail-table table mb-0 align-middle">
-                <thead class="bg-emerald-50"><tr>@foreach(['Equipment / Item Name', 'Activity', 'Frequency', 'In Charge', 'Start Date', 'Status'] as $label)<th class="whitespace-nowrap px-4 py-3 text-sm">{{ $label }}</th>@endforeach</tr></thead>
-                <tbody>@forelse($details as $detail)<tr><td class="px-4 py-3 font-bold">{{ $detail->name }}</td><td>{{ $detail->activity ?: '—' }}</td><td>{{ $detail->frequency ?: '—' }}</td><td>{{ $detail->in_charge ?: '—' }}</td><td class="whitespace-nowrap">{{ $detail->start_date?->format('d-M-Y') ?? '—' }}</td><td>{{ $detail->status ?: '—' }}</td></tr>@empty<tr><td colspan="6" class="p-5 text-center text-slate-500">No details yet. Add an equipment item above.</td></tr>@endforelse</tbody>
+                <thead class="bg-emerald-50"><tr>@foreach(['Equipment / Item Name', 'Activity', 'Frequency', 'In Charge', 'First Schedule', 'Calendar'] as $label)<th class="whitespace-nowrap px-4 py-3 text-sm">{{ $label }}</th>@endforeach</tr></thead>
+                <tbody>
+                @forelse($details as $detail)
+                    <tr>
+                        <td class="px-4 py-3 font-bold">{{ $detail->name }}</td>
+                        <td>{{ $detail->activity ?: '—' }}</td>
+                        <td>{{ $detail->frequency ?: '—' }}</td>
+                        <td>{{ $detail->in_charge ?: '—' }}</td>
+                        <td class="whitespace-nowrap">{{ $detail->start_date?->format('d-M-Y') ?? '—' }} @if($detail->start_time)<span class="d-block small text-secondary">{{ substr($detail->start_time, 0, 5) }}</span>@endif</td>
+                        <td>
+                        @if($detail->calendarEvent)
+                            <a class="btn btn-sm btn-outline-primary whitespace-nowrap" href="{{ route('shipping.calendar', ['vessel' => $vessel->id, 'event' => $detail->calendarEvent->id, 'date' => $detail->calendarEvent->starts_at->toDateString()]) }}"><i class="bi bi-calendar3 me-1"></i> View schedule</a>
+                        @else
+                            <span class="small text-secondary">Not linked</span>
+                        @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="p-5 text-center text-slate-500">No details yet. Click Add Detail to get started.</td></tr>
+                @endforelse
+                </tbody>
             </table>
             </div>
         </div>
@@ -69,6 +92,9 @@
 document.addEventListener('DOMContentLoaded', function () {
     const modal = document.getElementById('addPmsDetail');
     modal.addEventListener('shown.bs.modal', function () { document.getElementById('detail-name').focus(); });
+    modal.querySelector('form').addEventListener('submit', function () {
+        this.querySelector('button[type="submit"]').disabled = true;
+    });
     @if($errors->any())
     bootstrap.Modal.getOrCreateInstance(modal).show();
     @endif
