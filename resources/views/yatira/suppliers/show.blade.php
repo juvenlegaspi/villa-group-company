@@ -3,6 +3,25 @@
 @section('title', $supplier->name.' | Supplier')
 
 @section('content')
+<style>
+    #editSupplierProfileModal .supplier-edit-grid {
+        display: grid !important;
+        grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+        gap: 1rem !important;
+        width: 100% !important;
+    }
+    #editSupplierProfileModal .supplier-edit-grid > * { min-width: 0 !important; width: 100% !important; max-width: 100% !important; }
+    #editSupplierProfileModal .supplier-edit-grid > .col-12 { grid-column: span 12 / span 12 !important; }
+    #editSupplierProfileModal .supplier-edit-grid > .col-md-8 { grid-column: span 8 / span 8 !important; }
+    #editSupplierProfileModal .supplier-edit-grid > .col-md-6 { grid-column: span 6 / span 6 !important; }
+    #editSupplierProfileModal .supplier-edit-grid > .col-md-4 { grid-column: span 4 / span 4 !important; }
+    #editSupplierProfileModal input,
+    #editSupplierProfileModal select,
+    #editSupplierProfileModal textarea { width: 100% !important; max-width: 100% !important; }
+    @media (max-width: 767px) {
+        #editSupplierProfileModal .supplier-edit-grid > * { grid-column: 1 / -1 !important; }
+    }
+</style>
 <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
     <a href="{{ route('suppliers.index') }}" class="mb-4 inline-flex items-center gap-2 text-sm font-bold text-villa-700 no-underline hover:text-villa-900"><i class="bi bi-arrow-left"></i> Back to suppliers</a>
     <header class="mb-5 rounded-3xl bg-gradient-to-r from-villa-900 to-villa-700 px-6 py-6 text-white shadow-xl sm:px-8">
@@ -32,7 +51,7 @@
                 <div class="modal-body">
                     @if($errors->any())<div class="alert alert-danger"><strong>Supplier was not updated.</strong><ul class="mb-0 mt-2">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
                     <h6 class="border-bottom pb-2 mb-3">Supplier Information</h6>
-                    <div class="row g-3">
+                    <div class="supplier-edit-grid">
                         <div class="col-md-8"><label class="form-label">Supplier Name *</label><input class="form-control" name="name" value="{{ old('name', $supplier->name) }}" required maxlength="255"></div>
                         <div class="col-md-4"><label class="form-label">Status *</label><select class="form-select" name="status" required><option value="1" @selected((string)old('status', (int)$supplier->status)==='1')>Active</option><option value="0" @selected((string)old('status', (int)$supplier->status)==='0')>Inactive</option></select></div>
                         <div class="col-md-6"><label class="form-label">Business Type *</label><input class="form-control" name="business_type" value="{{ old('business_type', $supplier->business_type) }}" required maxlength="255"></div>
@@ -45,7 +64,7 @@
                         <div class="col-md-4"><label class="form-label">Advance Limit</label><input type="number" min="0" step="0.01" class="form-control" name="limit_advances" value="{{ old('limit_advances', $supplier->limit_advances) }}"></div>
                     </div>
                     <h6 class="border-bottom pb-2 mt-4 mb-3">Contact Information</h6>
-                    <div class="row g-3">
+                    <div class="supplier-edit-grid">
                         <div class="col-md-6"><label class="form-label">Contact Person *</label><input class="form-control" name="contact_person" value="{{ old('contact_person', $supplier->contact_person) }}" required maxlength="255"></div>
                         <div class="col-md-6"><label class="form-label">Email</label><input type="email" class="form-control" name="email" value="{{ old('email', $supplier->email) }}" maxlength="255"></div>
                         <div class="col-md-6"><label class="form-label">Telephone</label><input class="form-control" name="telephone" value="{{ old('telephone', $supplier->telephone) }}" maxlength="50"></div>

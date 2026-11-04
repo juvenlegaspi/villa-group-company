@@ -323,7 +323,7 @@
                             <textarea name="remarks" class="form-control" rows="2">{{ old('remarks', $fixedAsset->remarks) }}</textarea>
                         </div>
                         <div class="col-md-6 mb-3"><label class="form-label">Disposal Reason</label><textarea name="disposal_reason" class="form-control" rows="2">{{ old('disposal_reason', $fixedAsset->disposal_reason) }}</textarea><small class="text-muted">Required when status is Disposed.</small></div>
-                        <div class="col-12 mb-3"><label class="form-label">Replace Supporting Document</label><input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" class="form-control"><small class="text-muted">PDF, JPG or PNG · Maximum 5 MB</small></div>
+                        <div class="col-12 mb-3" style="grid-column:1 / -1 !important;width:100% !important;max-width:100% !important;display:block !important;"><label class="form-label d-block">Replace Supporting Document</label><input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" class="form-control w-100" style="display:block;width:100% !important;max-width:100% !important;"><small class="text-muted d-block mt-1">PDF, JPG or PNG &bull; Maximum 5 MB. Leave empty to keep the current document.</small></div>
                     </div>
                 </div>
 

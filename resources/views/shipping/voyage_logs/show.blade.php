@@ -393,12 +393,17 @@
                                                         </div>
                                                         <div class="mb-3">
                                                             <label>End Time</label>
-                                                            <input type="time"
+                                                            <input type="text"
                                                                 name="end_time"
                                                                 class="form-control activity-end-time"
+                                                                inputmode="numeric"
+                                                                autocomplete="off"
+                                                                maxlength="5"
+                                                                pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]"
+                                                                placeholder="HH:MM (e.g. 18:30)"
                                                                 data-current-time="{{ now()->format('H:i') }}"
                                                                 required>
-                                                            <small class="text-muted">Future dates and times are not allowed.</small>
+                                                            <small class="text-muted">Use 24-hour format (00:00–23:59). Future dates and times are not allowed.</small>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
@@ -1360,14 +1365,21 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!dateField || !timeField) return;
 
         const applyCurrentTimeLimit = () => {
-            if (dateField.value === dateField.dataset.currentDate) {
-                timeField.max = timeField.dataset.currentTime;
-                if (timeField.value && timeField.value > timeField.max) timeField.value = '';
-            } else {
-                timeField.removeAttribute('max');
+            const isValidTime = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(timeField.value);
+            let message = '';
+            if (timeField.value && !isValidTime) message = 'Enter a valid 24-hour time from 00:00 to 23:59.';
+            if (!message && isValidTime && dateField.value === dateField.dataset.currentDate && timeField.value > timeField.dataset.currentTime) {
+                message = 'The end time cannot be later than the current time.';
             }
+            timeField.setCustomValidity(message);
         };
 
+        timeField.addEventListener('input', () => {
+            let digits = timeField.value.replace(/\D/g, '').slice(0, 4);
+            if (digits.length > 2) digits = digits.slice(0, 2) + ':' + digits.slice(2);
+            timeField.value = digits;
+            applyCurrentTimeLimit();
+        });
         dateField.addEventListener('change', applyCurrentTimeLimit);
         activityModal.addEventListener('show.bs.modal', applyCurrentTimeLimit);
     });
