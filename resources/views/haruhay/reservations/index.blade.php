@@ -1,0 +1,12 @@
+@extends('layouts.app')
+@section('title', 'Online Reservations | Haruhay Space')
+@section('content')
+<section class="min-h-[calc(100svh-74px)] bg-slate-50 px-4 py-5 sm:px-7 lg:px-10"><div class="mx-auto max-w-7xl">
+    <header class="mb-4 rounded-2xl bg-gradient-to-br from-emerald-950 to-teal-800 px-5 py-4 text-white"><p class="mb-1 text-[.65rem] font-bold uppercase tracking-widest text-amber-300">Haruhay Space / Online Reservations</p><h1 class="m-0 text-xl font-black">Monthly reservation requests</h1><p class="mb-0 mt-2 text-xs text-emerald-100">Review requests, approve a 24-hour hold and verify one month advance before confirmation.</p></header><p data-reservation-live-state role="status" class="mb-3 text-xs font-semibold text-teal-700">Connecting to live updates...</p>
+    <div class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">@foreach($stats as $status => $count)<a href="{{ route('haruhay.reservations.index', ['status' => $status]) }}" class="rounded-xl border border-slate-200 bg-white p-4 no-underline shadow-sm"><p class="mb-2 text-xs font-semibold text-slate-500">{{ \Illuminate\Support\Str::headline($status) }}</p><strong data-reservation-stat="{{ $status }}" class="text-2xl text-teal-950">{{ $count }}</strong></a>@endforeach</div>
+    <section class="overflow-hidden rounded-2xl border bg-white shadow-sm"><div class="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><h2 class="mb-1 text-base font-black">Reservation directory</h2><p class="mb-0 text-xs text-slate-500"><span id="haruhay-reservation-total">{{ $reservations->total() }}</span> matching records · payment review appears first</p></div><form class="flex flex-wrap gap-2" method="GET"><input name="search" value="{{ request('search') }}" placeholder="Reference, name or email" maxlength="255" class="form-control w-56 text-xs" aria-label="Search reservations"><select name="status" class="form-control w-44 text-xs" aria-label="Reservation status"><option value="">All statuses</option>@foreach(\App\Models\HaruhayReservation::STATUSES as $status)<option value="{{ $status }}" @selected(request('status') === $status)>{{ \Illuminate\Support\Str::headline($status) }}</option>@endforeach</select><button class="btn bg-teal-800 text-white">Filter</button><a class="btn btn-outline-secondary" href="{{ route('haruhay.reservations.index') }}">Reset</a></form></div>
+<div id="haruhay-live-directory">@include('haruhay.reservations.directory')</div></section>
+</div></section>
+@endsection
+
+

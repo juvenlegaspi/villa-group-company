@@ -21,7 +21,7 @@ class JmvDailyProductionLog extends Model
     protected $fillable = [
         'division_id', 'log_no', 'log_date', 'location', 'shift', 'leadman', 'foreman', 'total_workers',
         'timber_used', 'timber_unit', 'nails_used', 'nails_unit', 'fuel_consumed', 'fuel_unit',
-        'soil_output', 'coal_output', 'excess_deficit', 'remarks', 'status', 'created_by', 'updated_by',
+        'soil_output', 'coal_output', 'daily_target_bagons', 'excess_deficit', 'remarks', 'status', 'created_by', 'updated_by',
         'submitted_by', 'submitted_at', 'reviewed_by', 'reviewed_at', 'review_remarks', 'completed_at',
         'revision_count',
     ];
@@ -31,7 +31,7 @@ class JmvDailyProductionLog extends Model
         return [
             'log_date' => 'date', 'total_workers' => 'integer', 'timber_used' => 'decimal:2',
             'nails_used' => 'decimal:2', 'fuel_consumed' => 'decimal:2', 'soil_output' => 'integer',
-            'coal_output' => 'integer', 'excess_deficit' => 'integer', 'submitted_at' => 'datetime',
+            'coal_output' => 'integer', 'daily_target_bagons' => 'integer', 'excess_deficit' => 'integer', 'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime', 'completed_at' => 'datetime', 'revision_count' => 'integer',
         ];
     }

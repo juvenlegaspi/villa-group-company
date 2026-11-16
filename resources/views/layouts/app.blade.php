@@ -310,6 +310,8 @@
 @php
     $currentUser = auth()->user();
     $isOwner = $currentUser->isExecutiveViewer();
+    $canSeeHaruhayLive = \Illuminate\Support\Facades\Schema::hasTable('notifications') && ($currentUser->canManageAllCompanies() || $isOwner || strcasecmp((string) $currentUser->division?->name, 'Haruhay') === 0);
+    $haruhayReservationUnread = $canSeeHaruhayLive ? $currentUser->unreadNotifications()->where('type', \App\Notifications\HaruhayReservationRequested::class)->count() : 0;
     $isStandaloneDashboard = request()->routeIs('division.dashboard', 'shipping.dashboard');
     $isShippingArea = ! $isStandaloneDashboard && request()->is('shipping/*', 'vessel-certificates*');
     $isShippingApplications = request()->routeIs('shipping.applications', 'shipping.application.placeholder');
@@ -317,10 +319,15 @@
     $isYatiraApplications = request()->routeIs('yatira.applications');
     $isJmvArea = ! $isStandaloneDashboard && request()->is('jmv/*');
     $isJmvApplications = request()->routeIs('jmv.applications');
+    $isHaruhayArea = ! $isStandaloneDashboard && request()->is('haruhay/*');
+    $villaGroupAccess = app(\App\Services\VillaGroupAccessService::class);
+    $isVillaGroupIt = request()->routeIs('villa-group.it') || (request()->is('users*') && $villaGroupAccess->canAccess($currentUser, 'it'));
+    $isVillaGroupArea = request()->is('villa-group/*') || $isVillaGroupIt;
+    $isHaruhayDatabase = request()->routeIs('haruhay.database', 'haruhay.units.*', 'haruhay.tenants.*', 'haruhay.contracts.*', 'haruhay.billing.*', 'haruhay.collections.*', 'haruhay.reports.*', 'haruhay.deposits.*', 'haruhay.transfers.*', 'haruhay.access.*', 'haruhay.reservations.*');
     $isJmvOperationsArea = request()->routeIs('jmv.operations.*');
     $isJmvInventoryArea = request()->routeIs('jmv.inventory.*', 'jmv.stockin.*', 'jmv.stockout.*', 'jmv.requests.*', 'jmv.transactions.*');
     $companiesActive = request()->routeIs('companies')
-        || request()->is('shipping/*', 'vessel-certificates*', 'yatira/*', 'jmv/*', 'hyve/*', 'users*');
+        || request()->is('shipping/*', 'vessel-certificates*', 'yatira/*', 'jmv/*', 'hyve/*', 'haruhay/*', 'villa-group/*', 'users*');
     $vesselAccess = app(\App\Services\VesselAccessService::class);
     $hasVesselScope = $isShippingArea && ($vesselAccess->canAccessAllVessels($currentUser)
         || $vesselAccess->scopeAccessible(\App\Models\Vessel::query(), $currentUser)->exists());
@@ -344,6 +351,16 @@
                 <img src="{{ asset('images/companies/jmv.webp') }}" alt="JMV Mining &amp; Development" width="48" height="42" style="object-fit:contain;border-radius:10px">
                 <span style="font-size:.76rem;letter-spacing:0">JMV MINING</span>
             </a>
+        @elseif ($isVillaGroupArea)
+            <a class="sidebar-brand bg-white rounded-4 mb-3 p-2 text-decoration-none" href="{{ route('villa-group.applications') }}" style="color:#17345f">
+                <img src="{{ asset('images/companies/villa-group.webp') }}" alt="Villa Group" width="48" height="42" style="object-fit:contain;border-radius:10px">
+                <span style="font-size:.84rem;letter-spacing:0">VILLA GROUP</span>
+            </a>
+        @elseif ($isHaruhayArea)
+            <a class="sidebar-brand bg-white rounded-4 mb-3 p-2 text-decoration-none" href="{{ route('haruhay.applications') }}" style="color:#17345f">
+                <img src="{{ asset('images/companies/haruhay-space-white.png') }}" alt="Haruhay Space" width="48" height="42" style="object-fit:contain;border-radius:10px">
+                <span style="font-size:.78rem;letter-spacing:0">HARUHAY DORMITORY</span>
+            </a>
         @else
             <div class="sidebar-brand">
                 <span class="sidebar-brand-mark">VG</span>
@@ -356,11 +373,41 @@
         </div>
 
         <nav class="app-nav">
-            @if ($isShippingApplications)
+            @if ($isVillaGroupIt)
+                <a class="app-nav-link {{ request()->is('users*') ? 'active' : '' }}" href="{{ route('users.index') }}" title="User Management"><i class="bi bi-people" aria-hidden="true"></i><span>User Management</span></a>
+            @elseif (request()->routeIs('villa-group.properties.*'))
+                <a class="app-nav-link active" href="{{ route('villa-group.properties.index') }}" title="Properties"><i class="bi bi-buildings" aria-hidden="true"></i><span>Properties</span></a>
+            @elseif (request()->routeIs('villa-group.hr'))
+                <a class="app-nav-link active" href="{{ route('villa-group.hr') }}" title="HR"><i class="bi bi-people" aria-hidden="true"></i><span>HR</span></a>
+            @elseif ($isVillaGroupArea)
+                <a class="app-nav-link active" href="{{ route('villa-group.applications') }}" title="Applications"><i class="bi bi-grid" aria-hidden="true"></i><span>Applications</span></a>
+            @elseif ($isHaruhayDatabase)
+                @foreach([
+                    'tenants' => ['Tenants', 'people'],
+                    'units' => ['Units', 'house'],
+                    'lease-contracts' => ['Lease Contracts', 'file-earmark-check'],
+                    'billing' => ['Billing', 'file-earmark-text'],
+                    'collections' => ['Collections', 'cart-check'],
+                    'reports' => ['Reports', 'bar-chart-line'],
+                ] as $tab => [$label, $icon])
+                    <a class="app-nav-link {{ (request()->routeIs('haruhay.contracts.*') ? 'lease-contracts' : (request()->routeIs('haruhay.tenants.*', 'haruhay.transfers.*') ? 'tenants' : (request()->routeIs('haruhay.units.*') ? 'units' : (request()->routeIs('haruhay.billing.*') ? 'billing' : (request()->routeIs('haruhay.collections.*', 'haruhay.deposits.*') ? 'collections' : (request()->routeIs('haruhay.reports.*') ? 'reports' : (request()->routeIs('haruhay.access.*') ? 'staff-access' : (request()->routeIs('haruhay.reservations.*') ? 'online-reservations' : (request()->route('section') ?? 'tenants'))))))))) === $tab ? 'active' : '' }}" href="{{ match($tab) { 'lease-contracts' => route('haruhay.contracts.index'), 'tenants' => route('haruhay.tenants.index'), 'units' => route('haruhay.units.index'), 'billing' => route('haruhay.billing.index'), 'collections' => route('haruhay.collections.index'), 'reports' => route('haruhay.reports.index'), default => route('haruhay.database', ['section' => $tab]) } }}" title="{{ $label }}">
+                        <i class="bi bi-{{ $icon }}" aria-hidden="true"></i><span>{{ $label }}</span>
+                    </a>
+                @endforeach
+                <a data-haruhay-reservation-link class="app-nav-link {{ request()->routeIs('haruhay.reservations.*') ? 'active' : '' }} {{ $haruhayReservationUnread ? 'haruhay-has-new' : '' }}" href="{{ route('haruhay.reservations.index') }}" title="Online Reservations"><i class="bi bi-calendar2-check" aria-hidden="true"></i><span>Online Reservations</span><b data-haruhay-reservation-badge class="haruhay-reservation-badge" @if(!$haruhayReservationUnread) hidden @endif>{{ $haruhayReservationUnread > 99 ? '99+' : $haruhayReservationUnread }}</b></a>
+                @if(auth()->user()->isSystemAdministrator())
+                    <a class="app-nav-link {{ request()->routeIs('haruhay.access.*') ? 'active' : '' }}" href="{{ route('haruhay.access.index') }}" title="Staff Access"><i class="bi bi-shield-lock" aria-hidden="true"></i><span>Staff Access</span></a>
+                @endif
+            @elseif ($isHaruhayArea)
+                <a class="app-nav-link active" href="{{ route('haruhay.applications') }}" title="Applications"><i class="bi bi-grid" aria-hidden="true"></i><span>Applications</span></a>
+            @elseif ($isShippingApplications)
                 <a class="app-nav-link active" href="{{ route('shipping.applications') }}" title="Applications">
                     <i class="bi bi-grid" aria-hidden="true"></i>
                     <span>Applications</span>
                 </a>
+            @elseif (request()->routeIs('shipping.inventory.*'))
+                <a class="app-nav-link {{ request()->routeIs('shipping.inventory.home') ? 'active' : '' }}" href="{{ route('shipping.inventory.home') }}"><i class="bi bi-grid"></i><span>Inventory</span></a>
+                @if($currentUser->hasPermission('shipping.assets.view'))<a class="app-nav-link {{ request()->routeIs('shipping.inventory.fixed-assets.*') ? 'active' : '' }}" href="{{ route('shipping.inventory.fixed-assets.index') }}"><i class="bi bi-clipboard-data"></i><span>Fixed Assets</span></a>@endif
             @elseif ($isShippingArea)
                 @if($currentUser->hasPermission('shipping.vessel_management.access'))
                 <a class="app-nav-link {{ request()->routeIs('vessels.*', 'voyages.*', 'voyage.*', 'voyage-logs.*') ? 'active' : '' }}" href="{{ route('vessels.index') }}" title="Vessel Management">
@@ -414,11 +461,14 @@
             @elseif ($isJmvApplications)
                 <a class="app-nav-link active" href="{{ route('jmv.applications') }}" title="Applications"><i class="bi bi-grid"></i><span>Applications</span></a>
             @elseif ($isJmvArea)
+                @if($isJmvInventoryArea && $currentUser->hasPermission('jmv.assets.view'))
+                <a class="app-nav-link {{ request()->routeIs('jmv.inventory.fixed-assets.*') ? 'active' : '' }}" href="{{ route('jmv.inventory.fixed-assets.index') }}"><i class="bi bi-clipboard-data"></i><span>Fixed Assets</span></a>
+                @endif
                 @if($isJmvOperationsArea && $currentUser->hasPermission('jmv.operations.daily_production.view'))
-                <a class="app-nav-link {{ request()->routeIs('jmv.operations.production.*') ? 'active' : '' }}" href="{{ route('jmv.operations.production.index') }}" title="Operations"><i class="bi bi-graph-up-arrow"></i><span>Operations</span></a>
+                <a class="app-nav-link {{ request()->routeIs('jmv.operations.production.*') ? 'active' : '' }}" href="{{ route('jmv.operations.production.index') }}" title="Daily Production Monitoring"><i class="bi bi-graph-up-arrow"></i><span>Daily Production<br>Monitoring</span></a>
                 @endif
                 @if($isJmvInventoryArea && $currentUser->hasPermission('jmv.inventory.view'))
-                <a class="app-nav-link {{ request()->routeIs('jmv.inventory.*') ? 'active' : '' }}" href="{{ route('jmv.inventory.index') }}" title="Inventory"><i class="bi bi-box-seam"></i><span>Inventory</span></a>
+                <a class="app-nav-link {{ request()->routeIs('jmv.inventory.index') ? 'active' : '' }}" href="{{ route('jmv.inventory.index') }}" title="Inventory"><i class="bi bi-box-seam"></i><span>Inventory</span></a>
                 @endif
                 @if($isJmvInventoryArea && ($currentUser->isExecutiveViewer() || $currentUser->hasPermission('jmv.inventory.movements.manage')))
                 <a class="app-nav-link {{ request()->routeIs('jmv.stockin.*') ? 'active' : '' }}" href="{{ route('jmv.stockin.index') }}" title="Stock In"><i class="bi bi-box-arrow-in-down"></i><span>Stock In</span></a>
@@ -579,5 +629,10 @@
     })();
 </script>
 @stack('scripts')
+@if($canSeeHaruhayLive)
+<div data-haruhay-live data-url="{{ route('haruhay.reservations.live') }}" data-user="{{ $currentUser->id }}">
+    <aside id="haruhay-reservation-toast" class="haruhay-reservation-toast" hidden aria-label="New reservation notification"><button type="button" data-dismiss-reservation-toast aria-label="Dismiss notification">&times;</button><p class="haruhay-toast-title">New Haruhay reservation</p><p data-reservation-toast-message role="status" aria-live="polite"></p><a data-reservation-toast-link href="{{ route('haruhay.reservations.index') }}">View reservation &rarr;</a></aside>
+</div>
+@endif
 </body>
 </html>

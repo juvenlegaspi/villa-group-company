@@ -5,9 +5,9 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\YatiraFixedAsset;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -213,6 +213,45 @@ class YatiraProductionHardeningTest extends TestCase
             ->assertDontSee('Outside Selected Range');
     }
 
+    public function test_maintenance_staff_cannot_reactivate_a_disposed_asset_by_direct_request(): void
+    {
+        $this->seed();
+        $admin = $this->admin();
+        $asset = YatiraFixedAsset::create(['division_id' => $admin->division_id, 'asset_code' => 'YC-DISPOSED', 'asset_name' => 'Retired Drill', 'category' => 'TOOLS AND SMALL EQPT', 'asset_condition' => 'Retired', 'status' => 'Disposed', 'disposed_at' => now(), 'disposal_reason' => 'Beyond repair', 'created_by' => $admin->id]);
+        $position = DB::table('positions')->where('division_id', $admin->division_id)->where('code', 'maintenance-manager')->first();
+        $staff = User::create(['name' => 'Maintenance', 'lastname' => 'Tester', 'username' => 'maintenance-audit', 'email' => 'maintenance-audit@example.test', 'password' => 'test-password-123', 'role' => 'manager', 'is_admin' => false, 'must_change_password' => false, 'status' => true, 'division_id' => $admin->division_id, 'department_id' => $position->department_id, 'position_id' => $position->id]);
+        $this->assertTrue($staff->hasPermission('yatira.assets.update'));
+        $this->assertFalse($staff->hasPermission('yatira.assets.dispose'));
+        $payload = ['asset_name' => 'Retired Drill', 'category' => 'TOOLS AND SMALL EQPT', 'asset_condition' => 'Good', 'status' => 'Active'];
+        $this->actingAs($staff)->put(route('yatira.inventory.fixed-assets.update', $asset), $payload)->assertForbidden();
+        $this->assertSame('Disposed', $asset->fresh()->status);
+        $this->actingAs($admin)->put(route('yatira.inventory.fixed-assets.update', $asset), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame('Active', $asset->fresh()->status);
+    }
+
+    public function test_asset_document_versions_remain_private_and_cannot_be_downloaded_through_another_asset(): void
+    {
+        $this->seed();
+        Storage::fake('local');
+        $admin = $this->admin();
+        $this->actingAs($admin);
+        $data = ['asset_entry_type' => 'new', 'asset_name' => 'Audit Laptop', 'category' => 'IT & SYSTEMS INFRASTRUCTURE', 'asset_condition' => 'Good', 'status' => 'Active'];
+        $this->post(route('yatira.inventory.fixed-assets.store'), $data + ['document' => UploadedFile::fake()->image('first-document.png')])->assertSessionHasNoErrors();
+        $first = YatiraFixedAsset::latest('id')->firstOrFail();
+        $this->put(route('yatira.inventory.fixed-assets.update', $first), $data + ['document' => UploadedFile::fake()->image('second-document.png')])->assertSessionHasNoErrors();
+        $this->assertSame(2, $first->documents()->count());
+        foreach ($first->documents as $document) {
+            Storage::disk('local')->assertExists($document->path);
+            $this->get(route('yatira.inventory.fixed-assets.documents.show', [$first, $document]))->assertOk();
+        }
+        $this->post(route('yatira.inventory.fixed-assets.store'), $data)->assertSessionHasNoErrors();
+        $second = YatiraFixedAsset::latest('id')->firstOrFail();
+        $this->get(route('yatira.inventory.fixed-assets.documents.show', [$second, $first->documents->first()]))->assertNotFound();
+        $otherDivision = DB::table('divisions')->insertGetId(['name' => 'Other Asset Company', 'created_at' => now(), 'updated_at' => now()]);
+        $second->update(['division_id' => $otherDivision]);
+        $this->get(route('yatira.inventory.fixed-assets.show', $second))->assertNotFound();
+    }
+
     private function admin(): User
     {
         $divisionId = (int) DB::table('divisions')->where('name', 'Yatira')->value('id');
@@ -225,6 +264,7 @@ class YatiraProductionHardeningTest extends TestCase
                 'updated_at' => now(),
             ]);
         }
+
         return User::create([
             'name' => 'System',
             'lastname' => 'Administrator',

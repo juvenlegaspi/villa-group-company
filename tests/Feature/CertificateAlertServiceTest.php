@@ -40,22 +40,42 @@ class CertificateAlertServiceTest extends TestCase
 
         $service = app(CertificateAlertService::class);
         $summary = $service->sendExpiringCertificateAlerts();
-        $this->assertSame(2, $summary['email_sent']);
-        $this->assertSame(2, $summary['sms_sent']);
-        $this->assertCount(2, $service->getRecipientsForCertificate($certificate->load('vessel.captain')));
-        Mail::assertSent(CertificateExpiryNotification::class, 2);
+        $this->assertSame(1, $summary['email_sent']);
+        $this->assertSame(1, $summary['sms_sent']);
+        $this->assertSame([$liaison->id], $service->getRecipientsForCertificate($certificate->load('vessel.captain'))->pluck('id')->all());
+        Mail::assertSent(CertificateExpiryNotification::class, 1);
+        Mail::assertSent(CertificateExpiryNotification::class, fn ($mail) => $mail->hasTo($liaison->email));
+        Mail::assertNotSent(CertificateExpiryNotification::class, fn ($mail) => $mail->hasTo($manager->email));
         Mail::assertNotSent(CertificateExpiryNotification::class, fn ($mail) => $mail->hasTo($captain->email));
-        Http::assertSentCount(2);
+        Http::assertSentCount(1);
         Http::assertSent(fn ($request) => $request->url() === 'https://api.semaphore.co/api/v4/messages'
             && $request['apikey'] === 'test-api-key'
             && str_starts_with($request['number'], '63')
+            && $request['number'] === '639170000002'
             && ! isset($request['sendername']));
 
         $secondRun = $service->sendExpiringCertificateAlerts();
         $this->assertSame(0, $secondRun['email_sent']);
         $this->assertSame(0, $secondRun['sms_sent']);
-        $this->assertDatabaseCount('certificate_alert_logs', 2);
-        $this->assertDatabaseCount('certificate_sms_alert_logs', 2);
+        $this->assertDatabaseCount('certificate_alert_logs', 1);
+        $this->assertDatabaseCount('certificate_sms_alert_logs', 1);
+    }
+
+    public function test_sub_certificate_reminders_include_parent_and_stop_after_main_is_renewed(): void
+    {
+        Mail::fake();
+        Http::fake();
+        config()->set('services.semaphore.enabled', false);
+        [, $liaison, , $vessel] = $this->organization();
+        $parent = VesselCertificate::create(['vessel_id' => $vessel->id, 'certificate_name' => 'Five year certificate', 'issue_date' => today()->subYear(), 'expiry_date' => today()->addYears(4), 'workflow_status' => 'active']);
+        $child = VesselCertificate::create(['vessel_id' => $vessel->id, 'parent_certificate_id' => $parent->id, 'certificate_name' => 'Annual Audit', 'issue_date' => today()->subYear(), 'expiry_date' => today()->addDays(7), 'workflow_status' => 'active']);
+        $service = app(CertificateAlertService::class);
+        $this->assertSame(1, $service->sendExpiringCertificateAlerts()['email_sent']);
+        Mail::assertSent(CertificateExpiryNotification::class, fn ($mail) => $mail->certificate->id === $child->id && $mail->hasTo($liaison->email) && str_contains($mail->render(), 'Five year certificate'));
+        $parent->update(['workflow_status' => 'superseded']);
+        $this->assertFalse($service->getExpiringCertificates()->contains('id', $child->id));
+        $this->assertSame(0, $service->sendExpiringCertificateAlerts()['email_sent']);
+        Http::assertNothingSent();
     }
 
     public function test_non_threshold_day_does_not_send_and_disabled_sms_does_not_block_email(): void
@@ -76,9 +96,9 @@ class CertificateAlertServiceTest extends TestCase
         VesselCertificate::query()->update(['expiry_date' => today()->addDays(14)]);
         config()->set('services.semaphore.enabled', false);
         $summary = app(CertificateAlertService::class)->sendExpiringCertificateAlerts();
-        $this->assertSame(2, $summary['email_sent']);
+        $this->assertSame(1, $summary['email_sent']);
         $this->assertSame(0, $summary['sms_sent']);
-        $this->assertSame(2, $summary['sms_skipped_unconfigured']);
+        $this->assertSame(1, $summary['sms_skipped_unconfigured']);
     }
 
     private function organization(): array

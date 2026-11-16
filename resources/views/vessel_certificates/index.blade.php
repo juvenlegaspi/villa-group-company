@@ -12,6 +12,7 @@
             <span class="inline-flex w-fit items-center rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">Certificate manager access</span>
         @endif
     </header>
+    @include('vessel_certificates.calendar')
 
     <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         @forelse($vessels as $vessel)

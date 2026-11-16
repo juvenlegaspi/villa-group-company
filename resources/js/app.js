@@ -222,3 +222,8 @@ window.VillaDialog = {
     confirm: (options) => showDialog({ ...options, cancelText: options.cancelText ?? 'Cancel' }),
     alert: (options) => showDialog(options),
 };
+
+import './haruhay-live.js';
+import './certificate-calendar.js';
+import './sub-certificate-modal.js';
+import './jmv-production-variance.js';

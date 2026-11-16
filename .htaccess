@@ -1,0 +1,10 @@
+Options -Indexes
+
+<FilesMatch "^(?:\.env(?:\..*)?|artisan|composer\.(?:json|lock)|phpunit\.xml)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?:app|bootstrap|config|database|resources|routes|storage|tests|vendor|node_modules|\.git|\.agents|\.codex)(?:/|$) - [F,L]
+</IfModule>

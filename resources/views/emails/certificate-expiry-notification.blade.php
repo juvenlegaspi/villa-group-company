@@ -18,6 +18,7 @@
     <p>
         <strong>Vessel:</strong> {{ $vesselName }}<br>
         <strong>Certificate:</strong> {{ $certificateName }}<br>
+        @if($certificate->parent_certificate_id)<strong>Main Certificate:</strong> {{ $certificate->parentCertificate?->certificate_name }}<br>@endif
         <strong>Expiry Date:</strong> {{ $expiryDate }}<br>
         <strong>{{ $isOverdue ? 'Days Overdue' : 'Days Remaining' }}:</strong> {{ abs($daysRemaining) }}
     </p>

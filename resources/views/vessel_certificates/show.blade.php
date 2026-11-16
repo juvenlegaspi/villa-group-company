@@ -14,6 +14,7 @@
             <a href="{{ route('vessel-certificates.add', $vessel) }}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-villa-700 px-4 py-2.5 text-sm font-bold text-white no-underline shadow-md shadow-blue-900/15 hover:bg-villa-800">+ Add certificate</a>
         @endif
     </header>
+    @include('vessel_certificates.calendar')
 
     <section class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         @foreach([['Total', $counts['total'], 'slate'], ['Valid', $counts['valid'], 'emerald'], ['Expiring', $counts['expiring'], 'amber'], ['Expired', $counts['expired'], 'rose']] as [$label,$value,$tone])
@@ -71,6 +72,9 @@
                             @endif
                         </div></td>
                     </tr>
+                    <tr id="certificate-{{ $certificate->id }}"><td colspan="7" class="px-5 pb-4">
+                        @include('vessel_certificates.sub-certificates')
+                    </td></tr>
                 @empty
                     <tr><td colspan="7" class="px-5 py-12 text-center text-slate-500">No certificates match the selected filters.</td></tr>
                 @endforelse
@@ -80,4 +84,7 @@
         @if($certificates->hasPages())<div class="border-t border-slate-100 px-5 py-4">{{ $certificates->links() }}</div>@endif
     </section>
 </main>
+@if($canManage)
+    @include('vessel_certificates.sub-certificate-modal')
+@endif
 @endsection

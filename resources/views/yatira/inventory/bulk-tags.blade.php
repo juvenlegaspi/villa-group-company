@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Bulk Asset Tags | Yatira</title>
+    <title>Bulk Asset Tags | {{ $assetCompanyShort }}</title>
     <style>
         :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; }
         * { box-sizing: border-box; }
@@ -63,8 +63,8 @@
             @php($asset = $label['asset'])
             <article class="asset-label">
                 <div class="label-brand">
-                    <img class="label-logo" src="{{ asset('images/companies/yatira.webp') }}" alt="Yatira logo">
-                    <div class="label-company"><strong>Yatira Construction</strong><small>Fixed Asset</small></div>
+                    <img class="label-logo" src="{{ asset($assetCompanyLogo) }}" alt="{{ $assetCompanyShort }} logo">
+                    <div class="label-company"><strong>{{ $assetCompanyShort }}</strong><small>Fixed Asset</small></div>
                     <span class="label-status">{{ $asset->status }}</span>
                 </div>
                 <div class="label-title"><span class="asset-name">{{ $asset->asset_name }}</span><span>-</span><span class="asset-meta">{{ $asset->category }}</span></div>

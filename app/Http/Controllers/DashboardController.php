@@ -90,6 +90,22 @@ class DashboardController extends Controller
                     'metrics' => $this->buildHyveMetrics(),
                 ]);
 
+            case 'haruhay':
+                $validated = $request->validate([
+                    'from' => 'nullable|date_format:Y-m-d|before_or_equal:today',
+                    'to' => 'nullable|date_format:Y-m-d|before_or_equal:today',
+                    'property_id' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('haruhay_properties', 'id')->where('division_id', $div->id)],
+                ]);
+                $filters = array_filter($validated, fn ($value) => $value !== null && $value !== '') + [
+                    'from' => today()->subMonthsNoOverflow(5)->startOfMonth()->toDateString(),
+                    'to' => today()->toDateString(),
+                ];
+                if ($filters['from'] > $filters['to'] || Carbon::parse($filters['from'])->diffInDays(Carbon::parse($filters['to'])) > 731) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['to' => 'Choose an end date on or after the start date, within a two-year range.']);
+                }
+
+                return view('dashboard.haruhay', app(\App\Services\HaruhayDashboardService::class)->build($div->id, $filters) + ['division' => $div, 'filters' => $filters]);
+
             default:
                 return view('dashboard.coming-soon', ['division' => $div]);
         }

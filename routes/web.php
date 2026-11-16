@@ -223,6 +223,9 @@ Route::middleware(['auth', 'active'])->group(function (): void {
 
             Route::middleware('module.access:shipping.certificates.access')->prefix('vessel-certificates')->group(function (): void {
                 Route::get('/', [VesselCertificateController::class, 'index'])->name('vessel-certificates.index');
+                Route::get('/expiry-calendar', [VesselCertificateController::class, 'calendar'])->name('vessel-certificates.calendar');
+                Route::get('/certificate/{certificate}/sub/create', [VesselCertificateController::class, 'createSub'])->name('vessel-certificates.sub.create');
+                Route::post('/certificate/{certificate}/sub', [VesselCertificateController::class, 'storeSub'])->name('vessel-certificates.sub.store');
                 Route::post('/', [VesselCertificateController::class, 'store'])->name('vessel-certificates.store');
                 Route::get('/add/{vessel}', [VesselCertificateController::class, 'create'])->name('vessel-certificates.add');
                 Route::get('/certificate/{certificate}/renew', [VesselCertificateController::class, 'renew'])->name('vessel-certificates.renew');
@@ -279,6 +282,8 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                 Route::get('/', [JmvDailyProductionController::class, 'index'])->name('index');
                 Route::post('/', [JmvDailyProductionController::class, 'store'])->name('store');
                 Route::get('/export', [JmvDailyProductionController::class, 'export'])->name('export');
+                Route::post('/targets', [JmvDailyProductionController::class, 'storeTarget'])->name('targets.store');
+                Route::put('/targets/{target}', [JmvDailyProductionController::class, 'updateTarget'])->name('targets.update');
                 Route::post('/{productionLog}/submit', [JmvDailyProductionController::class, 'submit'])->name('submit');
                 Route::post('/{productionLog}/approve', [JmvDailyProductionController::class, 'approve'])->name('approve');
                 Route::post('/{productionLog}/return', [JmvDailyProductionController::class, 'returnForCorrection'])->name('return');
@@ -286,6 +291,7 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                 Route::get('/{productionLog}/edit', [JmvDailyProductionController::class, 'edit'])->name('edit');
                 Route::put('/{productionLog}', [JmvDailyProductionController::class, 'update'])->name('update');
                 Route::get('/{productionLog}/attachments/{attachment}', [JmvDailyProductionController::class, 'attachment'])->name('attachments.show');
+                Route::get('/{productionLog}/attachments/{attachment}/preview', [JmvDailyProductionController::class, 'previewAttachment'])->name('attachments.preview');
             });
             Route::get('/inventory', [InventoryController::class, 'index'])->name('jmv.inventory.index');
             Route::post('/inventory', [InventoryController::class, 'store'])->name('jmv.inventory.store');
@@ -304,6 +310,130 @@ Route::middleware(['auth', 'active'])->group(function (): void {
             Route::get('/stock-out', [StockMovementController::class, 'stockOut'])->name('jmv.stockout.index');
             Route::post('/stock-out', [StockMovementController::class, 'storeStockOut'])->name('jmv.stockout.store');
         });
+
+        Route::middleware('division:Villa Group')->prefix('villa-group')->name('villa-group.')->group(function (): void {
+            Route::get('/applications', [\App\Http\Controllers\VillaGroupWorkspaceController::class, 'applications'])->name('applications');
+            Route::get('/it', [\App\Http\Controllers\VillaGroupWorkspaceController::class, 'it'])->middleware('villa-group.access:it')->name('it');
+            Route::get('/hr', [\App\Http\Controllers\VillaGroupWorkspaceController::class, 'hr'])->middleware('villa-group.access:hr')->name('hr');
+            Route::middleware('villa-group.access:properties')->prefix('properties')->name('properties.')->group(function (): void {
+                Route::get('/', [\App\Http\Controllers\HaruhayPropertyController::class, 'index'])->name('index');
+                Route::get('/create', [\App\Http\Controllers\HaruhayPropertyController::class, 'create'])->name('create');
+                Route::post('/', [\App\Http\Controllers\HaruhayPropertyController::class, 'store'])->name('store');
+                Route::get('/{property}/edit', [\App\Http\Controllers\HaruhayPropertyController::class, 'edit'])->name('edit');
+                Route::put('/{property}', [\App\Http\Controllers\HaruhayPropertyController::class, 'update'])->name('update');
+                Route::get('/{property}/attachments/{attachment}', [\App\Http\Controllers\HaruhayPropertyController::class, 'attachment'])->name('attachment');
+                Route::get('/{property}', [\App\Http\Controllers\HaruhayPropertyController::class, 'show'])->name('show');
+            });
+        });
+
+        foreach (['jmv' => 'JMV', 'shipping' => 'Villa shipping Lines'] as $companyKey => $companyName) {
+            Route::middleware('division:'.$companyName)->prefix($companyKey.'/inventory')->name($companyKey.'.inventory.')->group(function () use ($companyKey): void {
+                Route::get('/workspace', [\App\Http\Controllers\CompanyFixedAssetController::class, 'workspace'])->name('home');
+                Route::prefix('fixed-assets')->name('fixed-assets.')->group(function () use ($companyKey): void {
+                    Route::get('/', [\App\Http\Controllers\CompanyFixedAssetController::class, 'index'])->middleware('module.access:'.$companyKey.'.assets.view')->name('index');
+                    Route::post('/', [\App\Http\Controllers\CompanyFixedAssetController::class, 'storeFixedAsset'])->middleware('module.access:'.$companyKey.'.assets.create')->name('store');
+                    Route::get('/print/tags', [\App\Http\Controllers\CompanyFixedAssetController::class, 'printAssetTags'])->middleware('module.access:'.$companyKey.'.assets.view')->name('print-tags');
+                    Route::get('/{fixedAsset}', [\App\Http\Controllers\CompanyFixedAssetController::class, 'showFixedAsset'])->middleware('module.access:'.$companyKey.'.assets.view')->name('show');
+                    Route::put('/{fixedAsset}', [\App\Http\Controllers\CompanyFixedAssetController::class, 'updateFixedAsset'])->middleware('module.access:'.$companyKey.'.assets.update')->name('update');
+                    Route::get('/{fixedAsset}/document', [\App\Http\Controllers\CompanyFixedAssetController::class, 'downloadAssetDocument'])->middleware('module.access:'.$companyKey.'.assets.view')->name('document');
+                    Route::get('/{fixedAsset}/documents/{document}', [\App\Http\Controllers\CompanyFixedAssetController::class, 'downloadAssetDocumentVersion'])->middleware('module.access:'.$companyKey.'.assets.view')->name('documents.show');
+                });
+            });
+        }
+        Route::middleware('division:Haruhay')->prefix('haruhay/reservations')->name('haruhay.reservations.')->group(function (): void {
+            Route::get('/', [\App\Http\Controllers\HaruhayReservationController::class, 'index'])->name('index');
+            Route::get('/live', [\App\Http\Controllers\HaruhayReservationController::class, 'live'])->middleware('throttle:60,1')->name('live');
+            Route::get('/{reservation}', [\App\Http\Controllers\HaruhayReservationController::class, 'show'])->name('show');
+            Route::post('/{reservation}/approve', [\App\Http\Controllers\HaruhayReservationController::class, 'approve'])->name('approve');
+            Route::post('/{reservation}/close', [\App\Http\Controllers\HaruhayReservationController::class, 'close'])->name('close');
+            Route::post('/{reservation}/message', [\App\Http\Controllers\HaruhayReservationController::class, 'updateMessage'])->name('message');
+            Route::post('/{reservation}/reset-access', [\App\Http\Controllers\HaruhayReservationController::class, 'resetAccess'])->name('reset-access');
+            Route::post('/{reservation}/cash', [\App\Http\Controllers\HaruhayReservationController::class, 'cash'])->name('cash');
+            Route::post('/{reservation}/payments/{payment}/review', [\App\Http\Controllers\HaruhayReservationController::class, 'review'])->name('review');
+            Route::get('/{reservation}/payments/{payment}/proof', [\App\Http\Controllers\HaruhayReservationController::class, 'proof'])->name('proof');
+        });
+
+        Route::view('/haruhay/applications', 'haruhay.applications')
+            ->middleware('division:Haruhay')
+            ->name('haruhay.applications');
+
+        Route::middleware('division:Haruhay')->prefix('haruhay/units')->name('haruhay.units.')->group(function (): void {
+            Route::get('/', [\App\Http\Controllers\HaruhayUnitController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\HaruhayUnitController::class, 'store'])->name('store');
+            Route::get('/{unit}/edit', [\App\Http\Controllers\HaruhayUnitController::class, 'edit'])->name('edit');
+            Route::put('/{unit}', [\App\Http\Controllers\HaruhayUnitController::class, 'update'])->name('update');
+            Route::get('/{unit}', [\App\Http\Controllers\HaruhayUnitController::class, 'show'])->name('show');
+        });
+
+        Route::middleware('division:Haruhay')->prefix('haruhay/tenants')->name('haruhay.tenants.')->group(function (): void {
+            Route::get('/', [\App\Http\Controllers\HaruhayTenantController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\HaruhayTenantController::class, 'store'])->name('store');
+            Route::post('/{tenant}/confirm-move-in', [\App\Http\Controllers\HaruhayTenantController::class, 'confirm'])->name('confirm');
+            Route::post('/{tenant}/cancel-reservation', [\App\Http\Controllers\HaruhayTenantController::class, 'cancel'])->name('cancel');
+            Route::get('/{tenant}/edit', [\App\Http\Controllers\HaruhayTenantController::class, 'edit'])->name('edit');
+            Route::put('/{tenant}', [\App\Http\Controllers\HaruhayTenantController::class, 'update'])->name('update');
+            Route::get('/{tenant}', [\App\Http\Controllers\HaruhayTenantController::class, 'show'])->name('show');
+        });
+
+        Route::middleware('division:Haruhay')->prefix('haruhay/lease-contracts')->name('haruhay.contracts.')->group(function (): void {
+            Route::get('/', [\App\Http\Controllers\HaruhayLeaseContractController::class, 'index'])->name('index');
+            Route::get('/tenants/{tenant}', [\App\Http\Controllers\HaruhayLeaseContractController::class, 'tenant'])->name('tenant');
+            Route::post('/tenants/{tenant}', [\App\Http\Controllers\HaruhayLeaseContractController::class, 'store'])->name('store');
+            Route::get('/tenants/{tenant}/{contract}/document', [\App\Http\Controllers\HaruhayLeaseContractController::class, 'document'])->name('document');
+            Route::post('/tenants/{tenant}/{contract}/document', [\App\Http\Controllers\HaruhayLeaseContractController::class, 'upload'])->name('upload');
+            Route::post('/tenants/{tenant}/{contract}/terminate', [\App\Http\Controllers\HaruhayLeaseContractController::class, 'terminate'])->name('terminate');
+        });
+
+        Route::middleware('division:Haruhay')->prefix('haruhay/billing')->name('haruhay.billing.')->group(function (): void {
+            Route::get('/', [\App\Http\Controllers\HaruhayBillingController::class, 'index'])->name('index');
+            Route::get('/tenants/{tenant}', [\App\Http\Controllers\HaruhayBillingController::class, 'tenant'])->name('tenant');
+            Route::post('/', [\App\Http\Controllers\HaruhayBillingController::class, 'store'])->name('store');
+            Route::put('/{billing}', [\App\Http\Controllers\HaruhayBillingController::class, 'update'])->name('update');
+            Route::post('/{billing}/issue', [\App\Http\Controllers\HaruhayBillingController::class, 'issue'])->name('issue');
+            Route::post('/{billing}/retry-notifications', [\App\Http\Controllers\HaruhayBillingController::class, 'retryNotifications'])->name('notifications.retry');
+            Route::get('/{billing}', [\App\Http\Controllers\HaruhayBillingController::class, 'show'])->name('show');
+        });
+
+        Route::middleware('division:Haruhay')->prefix('haruhay/collections')->name('haruhay.collections.')->group(function (): void {
+            Route::get('/', [\App\Http\Controllers\HaruhayCollectionController::class, 'index'])->name('index');
+            Route::get('/transactions', [\App\Http\Controllers\HaruhayCollectionController::class, 'transactions'])->name('transactions');
+            Route::get('/tenants/{tenant}', [\App\Http\Controllers\HaruhayCollectionController::class, 'tenant'])->name('tenant');
+            Route::post('/tenants/{tenant}', [\App\Http\Controllers\HaruhayCollectionController::class, 'store'])->name('store');
+            Route::post('/{collection}/apply', [\App\Http\Controllers\HaruhayCollectionController::class, 'apply'])->name('apply');
+            Route::post('/{collection}/reverse', [\App\Http\Controllers\HaruhayCollectionController::class, 'reverse'])->name('reverse');
+            Route::post('/{collection}/retry-notifications', [\App\Http\Controllers\HaruhayCollectionController::class, 'retryNotifications'])->name('notifications.retry');
+            Route::get('/{collection}/proof', [\App\Http\Controllers\HaruhayCollectionController::class, 'proof'])->name('proof');
+            Route::get('/{collection}', [\App\Http\Controllers\HaruhayCollectionController::class, 'show'])->name('show');
+        });
+
+        Route::middleware('division:Haruhay')->group(function (): void {
+            Route::get('/haruhay/tenants/{tenant}/room-transfer', [\App\Http\Controllers\HaruhayRoomTransferController::class,'create'])->name('haruhay.transfers.create');
+            Route::post('/haruhay/tenants/{tenant}/room-transfer', [\App\Http\Controllers\HaruhayRoomTransferController::class,'store'])->name('haruhay.transfers.store');
+            Route::get('/haruhay/tenants/{tenant}/deposits', [\App\Http\Controllers\HaruhayDepositController::class,'index'])->name('haruhay.deposits.index');
+            Route::post('/haruhay/tenants/{tenant}/deposits', [\App\Http\Controllers\HaruhayDepositController::class,'store'])->name('haruhay.deposits.store');
+            Route::post('/haruhay/tenants/{tenant}/deposits/{entry}/reverse', [\App\Http\Controllers\HaruhayDepositController::class,'reverse'])->name('haruhay.deposits.reverse');
+            Route::get('/haruhay/tenants/{tenant}/deposits/{entry}/proof', [\App\Http\Controllers\HaruhayDepositController::class,'proof'])->name('haruhay.deposits.proof');
+            Route::get('/haruhay/staff-access', [\App\Http\Controllers\HaruhayStaffAccessController::class,'index'])->name('haruhay.access.index');
+            Route::put('/haruhay/staff-access/{user}', [\App\Http\Controllers\HaruhayStaffAccessController::class,'update'])->name('haruhay.access.update');
+        });
+
+        Route::middleware('division:Haruhay')->prefix('haruhay/reports')->name('haruhay.reports.')->group(function (): void {
+            Route::get('/', [\App\Http\Controllers\HaruhayReportController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\HaruhayReportController::class, 'export'])->name('export');
+        });
+
+        Route::get('/haruhay/database-management/{section?}', function (string $section = 'tenants') {
+            if ($section === 'reports') return to_route('haruhay.reports.index');
+            if ($section === 'collections') return to_route('haruhay.collections.index');
+            if ($section === 'billing') return to_route('haruhay.billing.index');
+            if ($section === 'lease-contracts') return to_route('haruhay.contracts.index');
+            if ($section === 'tenants') return to_route('haruhay.tenants.index');
+            if ($section === 'units') return to_route('haruhay.units.index');
+            return view('haruhay.database', compact('section'));
+        })
+            ->whereIn('section', ['tenants', 'units', 'lease-contracts', 'billing', 'collections', 'reports'])
+            ->middleware('division:Haruhay')
+            ->name('haruhay.database');
 
         Route::middleware('division:HYVE')->prefix('hyve')->name('hyve.')->group(function (): void {
             Route::get('/booking', [BookingController::class, 'index'])->name('projects.index');

@@ -26,16 +26,17 @@
                     default => $division->name,
                 };
                 $logo = match(true) {
+                    $key === 'haruhay' => 'haruhay-space-white.png',
                     $isShipping => 'villa-shipping-lines.webp', $isYatira => 'yatira.webp', $isJmv => 'jmv.webp',
                     $isVilla => 'villa-group.webp', $isHyve => 'hyve.webp', default => 'villa-group.webp',
                 };
             @endphp
             <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-villa-500 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-villa-100"
-               href="{{ route('division.dashboard', $division->name) }}">
+               href="{{ $isVilla ? route('villa-group.applications') : route('division.dashboard', $division->name) }}">
                 <img class="h-16 w-16 shrink-0 rounded-xl object-contain" src="{{ asset('images/companies/'.$logo) }}" alt="{{ $name }} logo" width="64" height="64">
                 <span class="min-w-0">
                     <span class="block text-sm font-extrabold uppercase leading-snug text-villa-900">{{ $name }}</span>
-                    <span class="mt-1 block text-xs font-semibold text-slate-400">View analytics dashboard</span>
+                    <span class="mt-1 block text-xs font-semibold text-slate-400">{{ $isVilla ? 'Open company applications' : 'View analytics dashboard' }}</span>
                 </span>
                 <i class="bi bi-chevron-right ml-auto text-slate-400 transition group-hover:translate-x-1 group-hover:text-villa-700"></i>
             </a>

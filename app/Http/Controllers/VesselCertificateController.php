@@ -24,14 +24,63 @@ class VesselCertificateController extends Controller
     public function index()
     {
         $withCounts = fn ($query) => $query->withCount([
-            'certificates as expired_count' => fn ($q) => $q->effective()->expired(),
-            'certificates as expiring_count' => fn ($q) => $q->effective()->expiringWithinDays(),
-            'certificates as certificate_count' => fn ($q) => $q->effective(),
+            'certificates as expired_count' => fn ($q) => $q->whereNull('parent_certificate_id')->effective()->expired(),
+            'certificates as expiring_count' => fn ($q) => $q->whereNull('parent_certificate_id')->effective()->expiringWithinDays(),
+            'certificates as certificate_count' => fn ($q) => $q->whereNull('parent_certificate_id')->effective(),
         ]);
         $vessels = $withCounts($this->vesselAccess->scopeAccessible(Vessel::query(), auth()->user()))
             ->orderBy('vessel_name')->get();
 
-        return view('vessel_certificates.index', ['vessels' => $vessels, 'canManage' => $this->canManageCertificates()]);
+        return view('vessel_certificates.index', ['vessels' => $vessels, 'canManage' => $this->canManageCertificates(), 'certificateCalendar' => app(\App\Services\CertificateExpiryCalendar::class)->month(auth()->user(), today()->format('Y-m'))]);
+    }
+
+    public function calendar(Request $request)
+    {
+        $data = $request->validate(['month' => ['required', 'regex:/^(?:19|20)\d{2}-(?:0[1-9]|1[0-2])$/'], 'vessel_id' => 'nullable|integer|exists:vessels,id']);
+        $vessel = ! empty($data['vessel_id']) ? Vessel::findOrFail($data['vessel_id']) : null;
+        if ($vessel) $this->authorizeVesselAccess($vessel);
+        return response()->json(app(\App\Services\CertificateExpiryCalendar::class)->month($request->user(), $data['month'], $vessel))->header('Cache-Control', 'private, no-store');
+    }
+
+    public function createSub(VesselCertificate $certificate)
+    {
+        $this->authorizeVesselManagement($certificate->vessel);
+        abort_unless($certificate->workflow_status === 'active' && ! $certificate->parent_certificate_id, 422, 'Add sub-certificates to a current main certificate only.');
+        return view('vessel_certificates.create', ['vessel' => $certificate->vessel, 'renewal' => null, 'parentCertificate' => $certificate]);
+    }
+
+    public function storeSub(Request $request, VesselCertificate $certificate)
+    {
+        $this->authorizeVesselManagement($certificate->vessel);
+        $data = $this->validateCertificate($request, true);
+        abort_unless((int) $data['vessel_id'] === (int) $certificate->vessel_id, 422);
+        $upload = $this->storeDocument($request->file('document'));
+        try {
+            DB::transaction(function () use ($certificate, $data, $upload): void {
+                $parent = VesselCertificate::whereKey($certificate->id)->lockForUpdate()->firstOrFail();
+                abort_unless($parent->workflow_status === 'active' && ! $parent->parent_certificate_id, 422, 'Add sub-certificates to a current main certificate only.');
+                $this->ensureNameAvailable($parent->vessel_id, $data['certificate_name'], [], $parent->id);
+                $child = VesselCertificate::create([...$data, ...$upload, 'parent_certificate_id' => $parent->id, 'workflow_status' => 'active', 'created_by' => auth()->id(), 'updated_by' => auth()->id()]);
+                $this->recordDocument($child, $upload);
+                $this->recordAudit($child, 'sub_certificate_added', ['parent_certificate_id' => $parent->id]);
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($upload['document']);
+            throw $exception;
+        }
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', 'Sub-certificate saved.');
+            return response()->json(['message' => 'Sub-certificate saved.'], 201);
+        }
+        return redirect()->to(route('vessel.certificates.show', $certificate->vessel_id).'?expand='.$certificate->id.'#certificate-'.$certificate->id)->with('success', 'Sub-certificate saved.');
+    }
+
+    private function ensureParentActive(VesselCertificate $certificate): void
+    {
+        if ($certificate->parent_certificate_id) {
+            $parent = VesselCertificate::whereKey($certificate->parent_certificate_id)->lockForUpdate()->firstOrFail();
+            abort_unless($parent->workflow_status === 'active', 422, 'Sub-certificates of a historical main certificate are read-only.');
+        }
     }
 
     public function create(Vessel $vessel)
@@ -40,10 +89,11 @@ class VesselCertificateController extends Controller
         return view('vessel_certificates.create', ['vessel' => $vessel, 'renewal' => null]);
     }
 
-    public function renew(VesselCertificate $certificate)
+    public function renew(Request $request, VesselCertificate $certificate)
     {
         $certificate->load('vessel');
         $this->authorizeVesselManagement($certificate->vessel);
+        $this->ensureParentActive($certificate);
         abort_unless($certificate->workflow_status === 'active', 422, 'Only an active certificate can be renewed.');
         $suggestedIssueDate = $certificate->expiry_date
             ? $certificate->expiry_date->copy()->addDay()->max(today())
@@ -54,6 +104,13 @@ class VesselCertificateController extends Controller
         $suggestedExpiryDate = $validityDays
             ? $suggestedIssueDate->copy()->addDays($validityDays)
             : null;
+
+        if ($request->expectsJson() && $certificate->parent_certificate_id) {
+            return response()->json($this->subModalData($certificate) + [
+                'suggested_issue_date' => $suggestedIssueDate?->toDateString(),
+                'suggested_expiry_date' => $suggestedExpiryDate?->toDateString(),
+            ])->header('Cache-Control', 'private, no-store');
+        }
 
         return view('vessel_certificates.create', [
             'vessel' => $certificate->vessel,
@@ -96,10 +153,11 @@ class VesselCertificateController extends Controller
             $renewal = DB::transaction(function () use ($certificate, $data, $upload): VesselCertificate {
                 $locked = VesselCertificate::whereKey($certificate->id)->lockForUpdate()->firstOrFail();
                 Vessel::whereKey($locked->vessel_id)->lockForUpdate()->firstOrFail();
-                abort_if($locked->workflow_status === 'superseded', 422, 'This certificate has already been renewed.');
-                $this->ensureNameAvailable($locked->vessel_id, $data['certificate_name'], [$locked->id]);
+                abort_unless($locked->workflow_status === 'active', 422, 'Only an active certificate can be renewed.');
+                $this->ensureParentActive($locked);
+                $this->ensureNameAvailable($locked->vessel_id, $data['certificate_name'], [$locked->id], $locked->parent_certificate_id);
                 $locked->update(['workflow_status' => 'superseded', 'updated_by' => auth()->id()]);
-                $renewal = VesselCertificate::create([...$data, ...$upload, 'workflow_status' => 'active', 'previous_certificate_id' => $locked->id, 'created_by' => auth()->id(), 'updated_by' => auth()->id()]);
+                $renewal = VesselCertificate::create([...$data, ...$upload, 'parent_certificate_id' => $locked->parent_certificate_id, 'workflow_status' => 'active', 'previous_certificate_id' => $locked->id, 'created_by' => auth()->id(), 'updated_by' => auth()->id()]);
                 $this->recordDocument($renewal, $upload);
                 $this->recordAudit($locked, 'superseded', ['renewed_by_certificate_id' => $renewal->id]);
                 $this->recordAudit($renewal, 'renewed_and_activated', ['previous_certificate_id' => $locked->id]);
@@ -109,6 +167,10 @@ class VesselCertificateController extends Controller
             Storage::disk('local')->delete($upload['document']);
             throw $exception;
         }
+        if ($request->expectsJson() && $renewal->parent_certificate_id) {
+            $request->session()->flash('success', 'Sub-certificate renewed. Previous record preserved in history.');
+            return response()->json(['message' => 'Sub-certificate renewed.'], 201);
+        }
         return redirect()->route('vessel.certificates.show', $renewal->vessel_id)->with('success', 'Certificate renewed and activated. The previous record was preserved as history.');
     }
 
@@ -116,7 +178,7 @@ class VesselCertificateController extends Controller
     {
         $vessel = Vessel::findOrFail($id);
         $this->authorizeVesselAccess($vessel);
-        $base = VesselCertificate::query()->where('vessel_id', $vessel->id);
+        $base = VesselCertificate::query()->where('vessel_id', $vessel->id)->whereNull('parent_certificate_id');
         $current = (clone $base)->effective();
         $counts = [
             'total' => (clone $current)->count(),
@@ -135,17 +197,22 @@ class VesselCertificateController extends Controller
             'pending_approval' => $query->where('workflow_status', 'pending_approval'),
             default => $query->current(),
         };
-        $certificates = $query->with(['creator', 'updater'])->orderBy('expiry_date')->paginate(10)->withQueryString();
+        $certificates = $query->with(['creator', 'updater', 'subCertificates'])->orderBy('expiry_date')->paginate(10)->withQueryString();
         return view('vessel_certificates.show', compact('vessel', 'certificates', 'counts') + [
             'today' => today(), 'canManage' => $this->canManageCertificates(),
+            'certificateCalendar' => app(\App\Services\CertificateExpiryCalendar::class)->month(auth()->user(), today()->format('Y-m'), $vessel),
         ]);
     }
 
-    public function edit($id)
+    public function edit(Request $request, $id)
     {
         $certificate = VesselCertificate::with(['vessel', 'documents.uploader', 'audits.user'])->findOrFail($id);
         $this->authorizeVesselManagement($certificate->vessel);
+        $this->ensureParentActive($certificate);
         abort_unless(in_array($certificate->workflow_status, ['draft', 'active'], true), 422, 'Submitted and historical certificates are read-only.');
+        if ($request->expectsJson() && $certificate->parent_certificate_id) {
+            return response()->json($this->subModalData($certificate))->header('Cache-Control', 'private, no-store');
+        }
         return view('vessel_certificates.edit', compact('certificate'));
     }
 
@@ -161,7 +228,9 @@ class VesselCertificateController extends Controller
             DB::transaction(function () use ($certificate, $data, $upload): void {
                 $locked = VesselCertificate::whereKey($certificate->id)->lockForUpdate()->firstOrFail();
                 Vessel::whereKey($locked->vessel_id)->lockForUpdate()->firstOrFail();
-                $this->ensureNameAvailable($locked->vessel_id, $data['certificate_name'], array_filter([$locked->id, $locked->previous_certificate_id]));
+                abort_unless(in_array($locked->workflow_status, ['draft', 'active'], true), 422, 'Historical certificates are read-only.');
+                $this->ensureParentActive($locked);
+                $this->ensureNameAvailable($locked->vessel_id, $data['certificate_name'], array_filter([$locked->id, $locked->previous_certificate_id]), $locked->parent_certificate_id);
                 $before = $locked->only(['certificate_name', 'certificate_number', 'certificate_type', 'issuing_authority', 'issue_date', 'expiry_date', 'remarks', 'document']);
                 if ($upload) {
                     VesselCertificateDocument::where('vessel_certificate_id', $locked->id)->update(['is_current' => false]);
@@ -175,7 +244,23 @@ class VesselCertificateController extends Controller
             if ($upload) Storage::disk('local')->delete($upload['document']);
             throw $exception;
         }
+        if ($request->expectsJson() && $certificate->parent_certificate_id) {
+            $request->session()->flash('success', 'Sub-certificate updated.');
+            return response()->json(['message' => 'Sub-certificate updated.']);
+        }
         return redirect()->route('vessel-certificates.edit', $certificate)->with('success', 'Certificate updated. Previous documents remain in the document history.');
+    }
+
+    private function subModalData(VesselCertificate $certificate): array
+    {
+        return [
+            'fields' => $certificate->only(['certificate_name', 'certificate_number', 'certificate_type', 'issuing_authority', 'remarks']) + [
+                'issue_date' => $certificate->issue_date?->toDateString(),
+                'expiry_date' => $certificate->expiry_date?->toDateString(),
+            ],
+            'document_url' => $certificate->document ? route('vessel-certificates.document', $certificate) : null,
+            'document_name' => $certificate->document_original_name ?: 'Current document',
+        ];
     }
 
     public function dashboard()
@@ -258,9 +343,10 @@ class VesselCertificateController extends Controller
         ]);
     }
 
-    private function ensureNameAvailable(int $vesselId, string $name, array $ignoreIds = []): void
+    private function ensureNameAvailable(int $vesselId, string $name, array $ignoreIds = [], ?int $parentId = null): void
     {
         $exists = VesselCertificate::current()->where('vessel_id', $vesselId)
+            ->where('parent_certificate_id', $parentId)
             ->whereRaw('LOWER(certificate_name) = ?', [mb_strtolower(trim($name))])
             ->when($ignoreIds, fn ($q) => $q->whereNotIn('id', $ignoreIds))->exists();
         if ($exists) throw ValidationException::withMessages(['certificate_name' => 'An active certificate with this name already exists for the vessel. Use Renew instead.']);

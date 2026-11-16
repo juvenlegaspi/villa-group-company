@@ -173,6 +173,7 @@ class YatiraInventoryAssetEntryTest extends TestCase
         Schema::getConnection()->table('yatira_fixed_assets')->insert([
             ...$existingAsset,
             'asset_code' => 'OLD-TAG-001',
+            'division_id' => $this->divisionId,
             'created_by' => $this->admin->id,
             'created_at' => now(),
             'updated_at' => now(),

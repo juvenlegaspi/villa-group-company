@@ -2,18 +2,21 @@
 
 @section('content')
 @php($isRenewal = filled($renewal))
+@php($isSub = isset($parentCertificate))
 <main class="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:py-8">
     <a href="{{ route('vessel.certificates.show', $vessel) }}" class="mb-4 inline-flex text-sm font-bold text-villa-700 no-underline hover:text-villa-900">← Back to certificate register</a>
     <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
         <header class="border-b border-slate-100 bg-gradient-to-r from-villa-900 to-villa-700 px-6 py-6 text-white sm:px-8">
             <p class="mb-1 text-xs font-bold uppercase tracking-[.2em] text-blue-200">{{ $isRenewal ? 'Certificate renewal' : 'New compliance record' }}</p>
-            <h1 class="mb-1 text-2xl font-extrabold">{{ $isRenewal ? 'Renew certificate' : 'Add vessel certificate' }}</h1>
+            <h1 class="mb-1 text-2xl font-extrabold">{{ $isSub ? 'Add sub-certificate / annual audit' : ($isRenewal ? 'Renew certificate' : 'Add vessel certificate') }}</h1>
+            @if($isSub)<p class="mt-2 text-sm font-bold">Under: {{ $parentCertificate->certificate_name }} · Main expiry: {{ $parentCertificate->expiry_date?->format('M d, Y') }}</p>@endif
             <p class="mb-0 text-sm text-blue-100">{{ $vessel->vessel_name }}@if($isRenewal) · Previous record #{{ $renewal->id }} will be retained @endif</p>
         </header>
 
-        <form action="{{ $isRenewal ? route('vessel-certificates.renew.store', $renewal) : route('vessel-certificates.store') }}" method="POST" enctype="multipart/form-data" class="p-6 sm:p-8">
+        <form action="{{ $isSub ? route('vessel-certificates.sub.store', $parentCertificate) : ($isRenewal ? route('vessel-certificates.renew.store', $renewal) : route('vessel-certificates.store')) }}" method="POST" enctype="multipart/form-data" class="p-6 sm:p-8">
             @csrf
             <input type="hidden" name="vessel_id" value="{{ $vessel->id }}">
+            @if($isSub)<p class="mb-5 rounded-xl bg-blue-50 p-4 text-sm text-blue-800">Enter the audit/issue date and its expiry or next compliance due date. Use a name such as Annual Audit 2027. The main certificate expiry remains unchanged.</p>@endif
             @if($errors->any())<div class="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">Please review the highlighted fields.</div>@endif
             @if($isRenewal)
                 @php($remainingDays = today()->diffInDays($renewal->expiry_date, false))

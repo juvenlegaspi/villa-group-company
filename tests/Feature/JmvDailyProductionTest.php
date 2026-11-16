@@ -182,6 +182,129 @@ class JmvDailyProductionTest extends TestCase
         $this->assertStringNotContainsString($draft->log_no, $export->getContent());
     }
 
+    public function test_mine_shift_targets_are_managed_only_by_jmv_manager_and_supervisor(): void
+    {
+        $manager = $this->positionUser('mine-operations-manager');
+        $supervisor = $this->positionUser('mine-supervisor');
+        $staff = $this->positionUser('admin-staff');
+        $geologist = $this->positionUser('geologist');
+        $payload = ['location' => ' Mine 1 ', 'shift' => ' Day ', 'coal_target' => 50, 'weekly_coal_target' => 300];
+        $this->actingAs($manager)->post(route('jmv.operations.production.targets.store'), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $target = \App\Models\JmvProductionTarget::firstOrFail();
+        $this->assertSame('General', $target->location);
+        $this->assertSame('All shifts', $target->shift);
+        $this->assertSame(50, $target->coal_target);
+        $this->actingAs($supervisor)->put(route('jmv.operations.production.targets.update', $target), ['coal_target' => 65, 'weekly_coal_target' => 400, 'division_id' => 999, 'location' => 'Changed'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(65, $target->fresh()->coal_target);
+        $this->assertSame(400, $target->fresh()->weeklyBagons());
+        $this->assertEqualsWithDelta(174.0, $target->fresh()->weeklyMt(), 0.00001);
+        $this->assertSame('General', $target->fresh()->location);
+        $this->assertSame($supervisor->id, $target->fresh()->updated_by);
+        $this->assertDatabaseCount('jmv_production_target_audits', 2);
+        foreach ([$staff, $geologist] as $user) {
+            $this->actingAs($user)->get(route('jmv.operations.production.index'))->assertOk()->assertSee('General production target')->assertSee('65')->assertDontSee('Save target');
+            $this->post(route('jmv.operations.production.targets.store'), [...$payload, 'location' => 'Mine 2'])->assertForbidden();
+            $this->put(route('jmv.operations.production.targets.update', $target), ['coal_target' => 999, 'weekly_coal_target' => 999])->assertForbidden();
+        }
+        $this->assertSame(65, $target->fresh()->coal_target);
+        $this->assertDatabaseCount('jmv_production_target_audits', 2);
+    }
+
+    public function test_general_target_is_created_once_and_validates_daily_and_weekly_values(): void
+    {
+        $manager = $this->positionUser('mine-operations-manager');
+        $this->actingAs($manager);
+        $payload = ['coal_target' => 9, 'weekly_coal_target' => 63];
+        $this->post(route('jmv.operations.production.targets.store'), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->post(route('jmv.operations.production.targets.store'), [...$payload, 'location' => ' mine 1 ', 'shift' => 'day'])->assertSessionHasErrorsIn('productionTarget', 'coal_target');
+        $this->post(route('jmv.operations.production.targets.store'), [...$payload, 'shift' => 'Night'])->assertSessionHasErrorsIn('productionTarget', 'coal_target');
+        $this->assertDatabaseCount('jmv_production_targets', 1);
+        foreach ([-1, 2.5, 'abc', null] as $invalid) {
+            $this->post(route('jmv.operations.production.targets.store'), [...$payload, 'location' => 'Mine 2', 'coal_target' => $invalid])->assertSessionHasErrorsIn('productionTarget', 'coal_target');
+        }
+        $otherDivision = \App\Models\Division::create(['name' => 'Other Target Company']);
+        $foreign = \App\Models\JmvProductionTarget::create([...$payload, 'division_id' => $otherDivision->id, 'created_by' => $manager->id, 'updated_by' => $manager->id]);
+        $this->put(route('jmv.operations.production.targets.update', $foreign), ['coal_target' => 55])->assertNotFound();
+        $this->get(route('jmv.operations.production.index'))->assertOk()->assertDontSee('Add mine / shift target')->assertSee('DAILY TARGET')->assertSee('WEEKLY TARGET')->assertSee('3.915 MT')->assertSee('63 Bagons')->assertSee('27.405 MT')->assertSee('Edit target');
+    }
+
+    public function test_administrator_can_see_and_edit_daily_and_weekly_targets(): void
+    {
+        $admin = $this->positionUser('admin-staff');
+        $admin->update(['role' => 'admin', 'is_admin' => true]);
+        $this->actingAs($admin)->post(route('jmv.operations.production.targets.store'), ['location' => 'Mine 1', 'shift' => 'Day', 'coal_target' => 9, 'weekly_coal_target' => 63])->assertRedirect()->assertSessionHasNoErrors();
+        $target = \App\Models\JmvProductionTarget::firstOrFail();
+        $this->get(route('jmv.operations.production.index'))->assertOk()->assertSee('Edit target')->assertSee('Save target');
+        $this->put(route('jmv.operations.production.targets.update', $target), ['coal_target' => 10, 'weekly_coal_target' => 60])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(10, $target->fresh()->coal_target);
+        $this->assertSame(60, $target->fresh()->weekly_coal_target);
+    }
+
+    public function test_variance_is_target_minus_coal_and_cannot_be_overridden_by_input(): void
+    {
+        $manager = $this->positionUser('mine-operations-manager');
+        $this->actingAs($manager)->post(route('jmv.operations.production.targets.store'), ['coal_target' => 9, 'weekly_coal_target' => 63])->assertSessionHasNoErrors();
+        $this->post(route('jmv.operations.production.store'), $this->payload(['coal_output' => 7, 'excess_deficit' => 999, 'daily_target_bagons' => 999]))->assertRedirect()->assertSessionHasNoErrors();
+        $log = JmvDailyProductionLog::firstOrFail();
+        $this->assertSame(9, $log->daily_target_bagons);
+        $this->assertSame(2, $log->excess_deficit);
+        $this->get(route('jmv.operations.production.edit', $log))->assertOk()->assertSee('Excess / Deficit (automatic)')->assertDontSee('name="excess_deficit"', false);
+        $target = \App\Models\JmvProductionTarget::firstOrFail();
+        $this->put(route('jmv.operations.production.targets.update', $target), ['coal_target' => 20, 'weekly_coal_target' => 100])->assertSessionHasNoErrors();
+        $this->assertSame(2, $log->fresh()->excess_deficit);
+        $this->put(route('jmv.operations.production.update', $log), $this->payload(['coal_output' => 12, 'excess_deficit' => 'not a manual field']))->assertSessionHasNoErrors();
+        $this->assertSame(9, $log->fresh()->daily_target_bagons);
+        $this->assertSame(-3, $log->fresh()->excess_deficit);
+        $this->put(route('jmv.operations.production.update', $log), $this->payload(['coal_output' => 9]))->assertSessionHasNoErrors();
+        $this->assertSame(0, $log->fresh()->excess_deficit);
+    }
+
+    public function test_missing_target_does_not_invent_a_zero_target_or_accept_manual_variance(): void
+    {
+        $manager = $this->positionUser('mine-operations-manager');
+        $this->actingAs($manager)->post(route('jmv.operations.production.store'), $this->payload(['excess_deficit' => 999]))->assertRedirect()->assertSessionHasNoErrors();
+        $log = JmvDailyProductionLog::firstOrFail();
+        $this->assertNull($log->daily_target_bagons);
+        $this->assertNull($log->excess_deficit);
+    }
+
+    public function test_production_log_numbers_increment_and_reset_for_the_current_year(): void
+    {
+        $manager = $this->positionUser('mine-operations-manager');
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-31 23:00:00', 'Asia/Manila'));
+        $this->actingAs($manager)->post(route('jmv.operations.production.store'), $this->payload())->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('jmv_daily_production_logs', ['log_no' => 'DPM-2026-0000']);
+        $this->post(route('jmv.operations.production.store'), $this->payload(['location' => 'Mine 2']))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('jmv_daily_production_logs', ['log_no' => 'DPM-2026-0001']);
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2027-01-01 01:00:00', 'Asia/Manila'));
+        $this->post(route('jmv.operations.production.store'), $this->payload(['log_date' => '2026-12-30']))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('jmv_daily_production_logs', ['log_no' => 'DPM-2027-0000']);
+        $this->travelBack();
+    }
+
+    public function test_supporting_documents_can_be_previewed_without_forcing_a_download(): void
+    {
+        Storage::fake('local');
+        $manager = $this->positionUser('mine-operations-manager');
+        $this->actingAs($manager)->post(route('jmv.operations.production.store'), $this->payload(['attachments' => [UploadedFile::fake()->create('report.pdf', 10, 'application/pdf')]]))->assertSessionHasNoErrors();
+        $log = JmvDailyProductionLog::firstOrFail();
+        $attachment = $log->attachments()->firstOrFail();
+        Storage::disk('local')->put($attachment->path, "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF");
+        $this->get(route('jmv.operations.production.show', $log))->assertOk()->assertSee('View')->assertSee(route('jmv.operations.production.attachments.preview', [$log, $attachment]), false);
+        $this->get(route('jmv.operations.production.attachments.preview', [$log, $attachment]))->assertOk()->assertViewHas('previewType', 'pdf')->assertSee('<iframe', false)->assertSee('Download');
+        $inline = $this->get(route('jmv.operations.production.attachments.show', [$log, $attachment, 'inline' => 1]))->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->assertStringStartsWith('inline;', $inline->headers->get('Content-Disposition'));
+        $download = $this->get(route('jmv.operations.production.attachments.show', [$log, $attachment]))->assertOk();
+        $this->assertStringStartsWith('attachment;', $download->headers->get('Content-Disposition'));
+        // Detect the actual file type instead of trusting its filename or stored MIME.
+        Storage::disk('local')->put($attachment->path, '<html><script>alert(1)</script></html>');
+        $this->get(route('jmv.operations.production.attachments.preview', [$log, $attachment]))->assertOk()->assertViewHas('previewType', null)->assertDontSee('<iframe', false);
+        $this->get(route('jmv.operations.production.attachments.show', [$log, $attachment, 'inline' => 1]))->assertStatus(415);
+        $geologist = $this->positionUser('geologist');
+        $this->actingAs($geologist)->get(route('jmv.operations.production.attachments.preview', [$log, $attachment]))->assertNotFound();
+        $this->get(route('jmv.operations.production.attachments.show', [$log, $attachment, 'inline' => 1]))->assertNotFound();
+    }
+
     private function payload(array $overrides = []): array
     {
         return array_merge([

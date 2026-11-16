@@ -9,6 +9,7 @@ class VesselCertificate extends Model
 {
     protected $fillable = [
         'vessel_id',
+        'parent_certificate_id',
         'certificate_name',
         'certificate_number',
         'certificate_type',
@@ -45,6 +46,8 @@ class VesselCertificate extends Model
     }
 
     public function previousCertificate() { return $this->belongsTo(self::class, 'previous_certificate_id'); }
+    public function parentCertificate() { return $this->belongsTo(self::class, 'parent_certificate_id'); }
+    public function subCertificates() { return $this->hasMany(self::class, 'parent_certificate_id')->orderBy('expiry_date'); }
     public function renewals() { return $this->hasMany(self::class, 'previous_certificate_id'); }
     public function documents() { return $this->hasMany(VesselCertificateDocument::class)->latest(); }
     public function audits() { return $this->hasMany(VesselCertificateAudit::class)->latest('created_at'); }
@@ -60,7 +63,9 @@ class VesselCertificate extends Model
 
     public function scopeEffective(Builder $query): Builder
     {
-        return $query->where('workflow_status', 'active');
+        return $query->where('workflow_status', 'active')->where(fn (Builder $q) => $q
+            ->whereNull('parent_certificate_id')
+            ->orWhereHas('parentCertificate', fn (Builder $parent) => $parent->where('workflow_status', 'active')));
     }
 
     public function scopeExpired(Builder $query): Builder

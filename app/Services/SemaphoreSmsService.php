@@ -21,7 +21,7 @@ class SemaphoreSmsService
         return preg_match('/^639\d{9}$/', $digits) ? $digits : null;
     }
 
-    public function send(string $number, string $message): array
+    public function send(string $number, string $message, bool $retry = true): array
     {
         if (! $this->isConfigured()) throw new RuntimeException('Semaphore SMS is not configured.');
         $normalized = $this->normalizePhilippineNumber($number);
@@ -30,7 +30,9 @@ class SemaphoreSmsService
         $payload = ['apikey' => config('services.semaphore.api_key'), 'number' => $normalized, 'message' => $message];
         if (filled(config('services.semaphore.sender_name'))) $payload['sendername'] = config('services.semaphore.sender_name');
 
-        $response = Http::asForm()->timeout(15)->retry(2, 300)->post(config('services.semaphore.endpoint'), $payload);
+        $client = Http::asForm()->connectTimeout(5)->timeout(15);
+        if ($retry) $client = $client->retry(2, 300);
+        $response = $client->post(config('services.semaphore.endpoint'), $payload);
         $response->throw();
         $result = $response->json();
         $messageResult = is_array($result) && array_is_list($result) ? ($result[0] ?? null) : $result;

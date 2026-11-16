@@ -5,6 +5,7 @@
     <a href="{{ route('vessel.certificates.show', $certificate->vessel) }}" class="mb-4 inline-flex text-sm font-bold text-villa-700 no-underline hover:text-villa-900">← Back to certificate register</a>
     @if(session('success'))<div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{{ session('success') }}</div>@endif
     <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        @if($certificate->parent_certificate_id)<div class="rounded-xl bg-blue-50 p-4 text-sm font-bold text-blue-800 lg:col-span-2">Sub-certificate under {{ $certificate->parentCertificate?->certificate_name }}. Updating this record does not change the main certificate expiry.</div>@endif
         <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <header class="border-b border-slate-100 px-6 py-5"><p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-villa-600">Current record</p><h1 class="mb-1 text-2xl font-extrabold text-slate-950">Edit certificate</h1><p class="mb-0 text-sm text-slate-500">{{ $certificate->vessel->vessel_name }}</p></header>
             <form action="{{ route('vessel-certificates.update', $certificate) }}" method="POST" enctype="multipart/form-data" class="p-6">

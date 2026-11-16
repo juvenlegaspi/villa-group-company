@@ -2,7 +2,7 @@
 
 @section('content')
 @php
-    $activeTab = request('tab') === 'consumables' || ! $canViewAssets ? 'consumables' : 'assets';
+    $activeTab = ($canViewConsumables && request('tab') === 'consumables') || ! $canViewAssets ? 'consumables' : 'assets';
     $fixedAssetCategories = [
         'HEAVY EQPT/MACHINERY',
         'TRANSPORTATION EQUIPMENT',
@@ -358,8 +358,8 @@
     <div class="mx-auto max-w-7xl">
         <header class="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-villa-900 via-villa-800 to-amber-700 p-6 text-white shadow-xl sm:p-8">
             <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                <div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-amber-200">Yatira Construction, Inc.</p><h1 class="mb-1 text-2xl font-black sm:text-3xl">Inventory Control Center</h1><p class="mb-0 max-w-2xl text-sm text-blue-100">Monitor fixed-asset condition and status, document custody, and consumable stock movements.</p></div>
-                <div class="flex flex-wrap gap-2"><a href="{{ route('yatira.applications') }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white no-underline hover:bg-white/20"><i class="bi bi-grid"></i>Applications</a>@if($canCreateAssets)<button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-white px-4 text-sm font-black text-villa-900 shadow-lg" data-bs-toggle="modal" data-bs-target="#addFixedAssetModal"><i class="bi bi-plus-lg"></i>Add Asset</button>@endif</div>
+                <div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-amber-200">{{ $assetCompanyLabel }}</p><h1 class="mb-1 text-2xl font-black sm:text-3xl">Inventory Control Center</h1><p class="mb-0 max-w-2xl text-sm text-blue-100">Monitor fixed-asset condition, custody, documents and printable asset tags.</p></div>
+                <div class="flex flex-wrap gap-2"><a href="{{ route($assetApplicationsRoute) }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white no-underline hover:bg-white/20"><i class="bi bi-grid"></i>Applications</a>@if($canCreateAssets)<button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-white px-4 text-sm font-black text-villa-900 shadow-lg" data-bs-toggle="modal" data-bs-target="#addFixedAssetModal"><i class="bi bi-plus-lg"></i>Add Asset</button>@endif</div>
             </div>
         </header>
     <div class="yatira-inventory-shell">
@@ -465,7 +465,7 @@
                         <div class="yatira-section-head">
                             <div>
                                 <h5>Fixed Asset Table</h5>
-                                <p>Starter layout for long-term company assets under Yatira.</p>
+                                <p>Long-term company assets under {{ $assetCompanyShort }}.</p>
                             </div>
                             @if($assetTagOptions->isNotEmpty())
                                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#printAssetTagsModal">
@@ -474,7 +474,7 @@
                             @endif
                         </div>
 
-                        <form method="GET" action="{{ route('yatira.inventory.index') }}" class="yatira-filter-bar">
+                        <form method="GET" action="{{ route($assetIndexRoute) }}" class="yatira-filter-bar">
                             <div>
                                 <label class="form-label">Search</label>
                                 <input
@@ -511,7 +511,7 @@
                             </div>
 
                             <div>
-                                <a href="{{ route('yatira.inventory.index') }}" class="btn btn-outline-secondary w-100">Reset</a>
+                                <a href="{{ route($assetIndexRoute) }}" class="btn btn-outline-secondary w-100">Reset</a>
                             </div>
                         </form>
 
@@ -542,7 +542,7 @@
                                             <td>{{ $asset->status }}</td>
                                             <td>{{ optional($asset->date_acquired)->format('M d, Y') ?: 'N/A' }}</td>
                                             <td>
-                                                <a href="{{ route('yatira.inventory.fixed-assets.show', $asset->id) }}" class="btn btn-sm btn-outline-secondary">
+                                                <a href="{{ route($assetRoutePrefix.'.show', $asset->id) }}" class="btn btn-sm btn-outline-secondary">
                                                     View
                                                 </a>
                                             </td>
@@ -567,7 +567,7 @@
                     @if($canViewConsumables)
                     <div class="tab-pane fade {{ $activeTab === 'consumables' ? 'show active' : '' }}" id="consumables-pane" role="tabpanel" aria-labelledby="consumables-tab" tabindex="0">
                         <div class="yatira-section-head"><div><h5>Consumables Inventory</h5><p>Monitor stock balances, reorder thresholds and controlled movements.</p></div>@if($canManageConsumables)<button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addConsumableModal">+ Add Item</button>@endif</div>
-                        <form method="GET" action="{{ route('yatira.inventory.index') }}" class="yatira-filter-bar"><input type="hidden" name="tab" value="consumables"><div style="grid-column:span 3"><label class="form-label">Search</label><input name="consumable_search" value="{{ request('consumable_search') }}" class="form-control" placeholder="Item code or name"></div><div><button class="btn btn-primary w-100">Search</button></div><div><a href="{{ route('yatira.inventory.index', ['tab'=>'consumables']) }}" class="btn btn-outline-secondary w-100">Reset</a></div></form>
+                        <form method="GET" action="{{ route($assetIndexRoute) }}" class="yatira-filter-bar"><input type="hidden" name="tab" value="consumables"><div style="grid-column:span 3"><label class="form-label">Search</label><input name="consumable_search" value="{{ request('consumable_search') }}" class="form-control" placeholder="Item code or name"></div><div><button class="btn btn-primary w-100">Search</button></div><div><a href="{{ route($assetIndexRoute, ['tab'=>'consumables']) }}" class="btn btn-outline-secondary w-100">Reset</a></div></form>
                         <div class="table-responsive yatira-table-wrap"><table class="table table-hover align-middle yatira-table mb-0"><thead><tr><th>Code</th><th>Item</th><th>Unit</th><th>Available</th><th>Reorder</th><th>Status</th><th>Actions</th></tr></thead><tbody>@forelse($consumables as $item)<tr><td class="fw-bold">{{ $item->item_code }}</td><td>{{ $item->item_name }}</td><td>{{ $item->unit }}</td><td>{{ number_format($item->stock_on_hand) }}</td><td>{{ number_format($item->reorder_level) }}</td><td><span class="badge {{ ! $item->status ? 'bg-secondary' : ($item->stock_on_hand <= $item->reorder_level ? 'bg-warning text-dark' : 'bg-success') }}">{{ ! $item->status ? 'Inactive' : ($item->stock_on_hand <= $item->reorder_level ? 'Reorder' : 'Sufficient') }}</span></td><td><div class="d-flex gap-2"><a href="{{ route('yatira.inventory.consumables.show', $item) }}" class="btn btn-sm btn-outline-secondary">History</a>@if($canManageConsumables && $item->status)<button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#movementModal{{ $item->id }}">Stock In / Out</button>@endif</div></td></tr>@empty<tr><td colspan="7" class="yatira-empty">No consumable items recorded yet.</td></tr>@endforelse</tbody></table></div>
                         <div class="mt-3">{{ $consumables->links() }}</div>
                     </div>
@@ -590,7 +590,7 @@
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="GET" action="{{ route('yatira.inventory.fixed-assets.print-tags') }}" target="_blank">
+            <form method="GET" action="{{ route($assetRoutePrefix.'.print-tags') }}" target="_blank">
                 <div class="modal-body">
                     <div class="alert alert-primary d-flex gap-2 align-items-start" role="alert">
                         <i class="bi bi-info-circle mt-1"></i>
@@ -652,7 +652,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <form method="POST" action="{{ route('yatira.inventory.fixed-assets.store') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ route($assetRoutePrefix.'.store') }}" enctype="multipart/form-data">
                 @csrf
                 <input type="hidden" name="_form_context" value="create_asset">
 
@@ -808,10 +808,10 @@ document.addEventListener('DOMContentLoaded', function () {
         assetCode.required = isExisting;
         assetCode.placeholder = isExisting
             ? 'Enter the existing asset tag/code'
-            : 'Auto-generated on save (Example: YC-A1B2C3)';
+            : 'Auto-generated on save (Example: {{ $assetCodePrefix }}-A1B2C3)';
         assetCodeHelp.textContent = isExisting
             ? 'Enter the code already printed or attached to this asset.'
-            : 'The system will generate a unique Yatira asset code automatically.';
+            : 'The system will generate a unique {{ $assetCompanyShort }} asset code automatically.';
 
         if (!isExisting) {
             assetCode.value = '';

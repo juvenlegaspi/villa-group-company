@@ -1,0 +1,2 @@
+@php($colors = match($status) { 'Issued' => 'border-teal-200 bg-teal-50 text-teal-700', 'Draft / Pending Computation' => 'border-amber-200 bg-amber-50 text-amber-800', 'Paid' => 'border-emerald-200 bg-emerald-50 text-emerald-700', 'Overdue' => 'border-rose-200 bg-rose-50 text-rose-700', 'Partially Paid' => 'border-amber-200 bg-amber-50 text-amber-800', default => 'border-slate-200 bg-slate-50 text-slate-600' })
+<span class="inline-flex whitespace-nowrap rounded-full border px-2 py-1 text-[.65rem] font-bold {{ $colors }}">{{ $status }}</span>

@@ -6,6 +6,7 @@ use App\Models\Division;
 use App\Models\JmvDailyProductionAttachment;
 use App\Models\JmvDailyProductionAudit;
 use App\Models\JmvDailyProductionLog;
+use App\Models\JmvProductionTarget;
 use App\Models\User;
 use App\Notifications\JmvDailyProductionNotification;
 use App\Services\SimpleXlsxWriter;
@@ -41,7 +42,63 @@ class JmvDailyProductionController extends Controller
             'canExport' => $this->can('jmv.operations.daily_production.reports.view'),
             'canApprove' => $this->can('jmv.operations.daily_production.approve'),
             'statuses' => JmvDailyProductionLog::STATUSES,
+            'productionTarget' => JmvProductionTarget::where('division_id', $divisionId)->where('is_general', true)->first(),
+            'canManageTargets' => $this->canManageTargets(),
         ]);
+    }
+
+    private function canManageTargets(): bool
+    {
+        $user = auth()->user();
+        if ($user->status && $user->isSystemAdministrator()) return true;
+        $user->loadMissing('position');
+        return (bool) $user->status
+            && (int) $user->division_id === $this->jmvDivisionId()
+            && (int) $user->position?->division_id === $this->jmvDivisionId()
+            && in_array($user->position?->code, ['mine-operations-manager', 'mine-supervisor'], true)
+            && $this->can('jmv.operations.daily_production.view');
+    }
+
+    public function storeTarget(Request $request)
+    {
+        abort_unless($this->canManageTargets(), 403, 'Only an administrator, JMV Mine Operations Manager or Mine Supervisor can manage targets.');
+        $data = $this->validatedTarget($request);
+        $divisionId = $this->jmvDivisionId();
+        DB::transaction(function () use ($data, $divisionId): void {
+            Division::whereKey($divisionId)->lockForUpdate()->firstOrFail();
+            $exists = JmvProductionTarget::where('division_id', $divisionId)->where('is_general', true)->exists();
+            if ($exists) throw ValidationException::withMessages(['coal_target' => 'The general target is already set. Use Edit target to change it.'])->errorBag('productionTarget');
+            $target = JmvProductionTarget::create([...$data, 'division_id' => $divisionId, 'created_by' => auth()->id(), 'updated_by' => auth()->id()]);
+            $this->auditTarget($target, null);
+        });
+        return back()->with('success', 'General production target saved.');
+    }
+
+    public function updateTarget(Request $request, JmvProductionTarget $target)
+    {
+        abort_unless($this->canManageTargets(), 403, 'Only an administrator, JMV Mine Operations Manager or Mine Supervisor can manage targets.');
+        abort_unless((int) $target->division_id === $this->jmvDivisionId() && $target->is_general, 404);
+        $data = $this->validatedTarget($request);
+        DB::transaction(function () use ($target, $data): void {
+            $locked = JmvProductionTarget::whereKey($target->id)->lockForUpdate()->firstOrFail();
+            $before = $locked->only(['coal_target', 'weekly_coal_target']);
+            $locked->update([...$data, 'updated_by' => auth()->id()]);
+            $this->auditTarget($locked, $before);
+        });
+        return back()->with('success', 'General production target updated.');
+    }
+
+    private function validatedTarget(Request $request): array
+    {
+        return $request->validateWithBag('productionTarget', [
+            'coal_target' => 'required|integer|min:0|max:999999999',
+            'weekly_coal_target' => 'required|integer|min:0|max:6999999993',
+        ]);
+    }
+
+    private function auditTarget(JmvProductionTarget $target, ?array $before): void
+    {
+        DB::table('jmv_production_target_audits')->insert(['target_id' => $target->id, 'user_id' => auth()->id(), 'changes' => json_encode(['before' => $before, 'after' => $target->only(['location', 'shift', 'coal_target', 'weekly_coal_target'])], JSON_THROW_ON_ERROR), 'created_at' => now()]);
     }
 
     public function store(Request $request)
@@ -85,7 +142,7 @@ class JmvDailyProductionController extends Controller
         $this->ensureJmvLog($productionLog);
         $this->ensureVisibleLog($productionLog);
         abort_unless($this->canEditLog($productionLog), 422, 'Only your own Draft or For Correction log can be edited.');
-        return view('jmv.operations.production.edit', ['log' => $productionLog]);
+        return view('jmv.operations.production.edit', ['log' => $productionLog, 'productionTarget' => JmvProductionTarget::where('division_id', $this->jmvDivisionId())->where('is_general', true)->first()]);
     }
 
     public function update(Request $request, JmvDailyProductionLog $productionLog)
@@ -189,14 +246,35 @@ class JmvDailyProductionController extends Controller
         return back()->with('success', 'Daily production log returned to the Admin Staff for correction.');
     }
 
-    public function attachment(JmvDailyProductionLog $productionLog, JmvDailyProductionAttachment $attachment)
+    private function attachmentPath(JmvDailyProductionLog $productionLog, JmvDailyProductionAttachment $attachment): string
     {
         $this->authorizePermission('jmv.operations.daily_production.view');
         $this->ensureJmvLog($productionLog);
         $this->ensureVisibleLog($productionLog);
         abort_unless((int) $attachment->jmv_daily_production_log_id === (int) $productionLog->id, 404);
         abort_unless(Storage::disk('local')->exists($attachment->path), 404);
-        return response()->download(Storage::disk('local')->path($attachment->path), $attachment->original_name);
+        return Storage::disk('local')->path($attachment->path);
+    }
+
+    public function previewAttachment(JmvDailyProductionLog $productionLog, JmvDailyProductionAttachment $attachment)
+    {
+        $path = $this->attachmentPath($productionLog, $attachment);
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+        return response()->view('jmv.operations.production.attachment-preview', [
+            'log' => $productionLog, 'attachment' => $attachment,
+            'previewType' => match ($mime) { 'application/pdf' => 'pdf', 'image/jpeg', 'image/png' => 'image', default => null },
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function attachment(Request $request, JmvDailyProductionLog $productionLog, JmvDailyProductionAttachment $attachment)
+    {
+        $path = $this->attachmentPath($productionLog, $attachment);
+        if ($request->boolean('inline')) {
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+            abort_unless(in_array($mime, ['application/pdf', 'image/jpeg', 'image/png'], true), 415, 'This file type is available for download only.');
+            return response()->file($path, ['Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store', 'Content-Security-Policy' => "frame-ancestors 'self'"])->setContentDisposition('inline', $attachment->original_name);
+        }
+        return response()->download($path, $attachment->original_name);
     }
 
     public function export(Request $request, SimpleXlsxWriter $xlsx)
@@ -276,7 +354,7 @@ class JmvDailyProductionController extends Controller
             'nails_used' => 'required|numeric|min:0|max:9999999999', 'nails_unit' => ['required', Rule::in(['PCS','KG'])],
             'fuel_consumed' => 'required|numeric|min:0|max:9999999999', 'fuel_unit' => ['required', Rule::in(['LTRS'])],
             'soil_output' => 'required|integer|min:0|max:999999999', 'coal_output' => 'required|integer|min:0|max:999999999',
-            'excess_deficit' => 'nullable|integer|min:-999999999|max:999999999', 'remarks' => 'nullable|string|max:3000',
+            'remarks' => 'nullable|string|max:3000',
             'attachments' => 'nullable|array|max:5', 'attachments.*' => 'file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx|max:10240',
         ]);
 
@@ -298,6 +376,9 @@ class JmvDailyProductionController extends Controller
             throw ValidationException::withMessages(['soil_output' => 'Record at least one soil or coal production output.']);
         }
         unset($data['attachments']);
+        $dailyTarget = $log?->daily_target_bagons ?? JmvProductionTarget::where('division_id', $divisionId)->where('is_general', true)->value('coal_target');
+        $data['daily_target_bagons'] = $dailyTarget === null ? null : (int) $dailyTarget;
+        $data['excess_deficit'] = $dailyTarget === null ? null : (int) $dailyTarget - (int) $data['coal_output'];
         return $data;
     }
 
@@ -317,8 +398,16 @@ class JmvDailyProductionController extends Controller
 
     private function generateLogNo(): string
     {
-        do { $number = 'JMV-DPM-'.now()->format('Ymd').'-'.strtoupper(bin2hex(random_bytes(2))); }
-        while (JmvDailyProductionLog::where('log_no', $number)->exists());
+        // Called inside the log creation transaction: serialize allocation per calendar year.
+        $year = (int) now('Asia/Manila')->format('Y');
+        DB::table('jmv_production_sequences')->insertOrIgnore(['year' => $year, 'next_number' => 0]);
+        $sequence = DB::table('jmv_production_sequences')->where('year', $year)->lockForUpdate()->first();
+        $next = (int) $sequence->next_number;
+        do {
+            if ($next > 9999) throw ValidationException::withMessages(['log_date' => 'The four-digit production log sequence is full for this year.']);
+            $number = sprintf('DPM-%d-%04d', $year, $next++);
+        } while (JmvDailyProductionLog::where('log_no', $number)->exists());
+        DB::table('jmv_production_sequences')->where('year', $year)->update(['next_number' => $next]);
         return $number;
     }
 

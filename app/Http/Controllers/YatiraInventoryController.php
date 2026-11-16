@@ -74,7 +74,7 @@ class YatiraInventoryController extends Controller
         $users = User::where('division_id', $divisionId)->where('status', true)->orderBy('name')->get(['id', 'name', 'lastname', 'department_id']);
         $departments = Department::where('division_id', $divisionId)->orderBy('name')->get(['id', 'name']);
 
-        return view('yatira.inventory.index', compact('fixedAssets', 'fixedAssetStats', 'assetTagOptions', 'consumables', 'users', 'departments', 'canViewAssets', 'canCreateAssets', 'canUpdateAssets', 'canDisposeAssets', 'canManageAssets', 'canViewConsumables', 'canManageConsumables'));
+        return view('yatira.inventory.index', compact('fixedAssets', 'fixedAssetStats', 'assetTagOptions', 'consumables', 'users', 'departments', 'canViewAssets', 'canCreateAssets', 'canUpdateAssets', 'canDisposeAssets', 'canManageAssets', 'canViewConsumables', 'canManageConsumables') + $this->assetContext());
     }
 
     public function printAssetTags(Request $request)
@@ -108,11 +108,11 @@ class YatiraInventoryController extends Controller
         $labels = $assets->flatMap(function (YatiraFixedAsset $asset) use ($copies) {
             return collect(range(1, $copies))->map(fn () => [
                 'asset' => $asset,
-                'qr_code' => $this->qrCodeDataUri(route('yatira.inventory.fixed-assets.show', $asset)),
+                'qr_code' => $this->qrCodeDataUri(route($this->assetContext()['assetRoutePrefix'].'.show', $asset)),
             ]);
         })->values();
 
-        return view('yatira.inventory.bulk-tags', compact('assets', 'labels', 'copies'));
+        return view('yatira.inventory.bulk-tags', compact('assets', 'labels', 'copies') + $this->assetContext());
     }
 
     public function storeFixedAsset(Request $request)
@@ -135,7 +135,7 @@ class YatiraInventoryController extends Controller
             if (isset($upload['document_path'])) Storage::disk('local')->delete($upload['document_path']);
             throw $exception;
         }
-        return redirect()->route('yatira.inventory.fixed-assets.show', $asset)->with('success', 'Fixed asset added successfully.');
+        return redirect()->route($this->assetContext()['assetRoutePrefix'].'.show', $asset)->with('success', 'Fixed asset added successfully.');
     }
 
     public function showFixedAsset(YatiraFixedAsset $fixedAsset)
@@ -143,20 +143,23 @@ class YatiraInventoryController extends Controller
         $this->authorizePermission('yatira.assets.view');
         $this->ensureYatiraAsset($fixedAsset);
         $fixedAsset->load(['user:id,name,lastname', 'updater:id,name,lastname', 'assignedUser:id,name,lastname', 'assignedDepartment:id,name', 'audits.user:id,name,lastname', 'documents.uploader:id,name,lastname']);
-        $barcodeSvg = $this->qrCodeDataUri(route('yatira.inventory.fixed-assets.show', $fixedAsset));
+        $barcodeSvg = $this->qrCodeDataUri(route($this->assetContext()['assetRoutePrefix'].'.show', $fixedAsset));
         $divisionId = $this->yatiraDivisionId();
         $users = User::where('division_id', $divisionId)->where('status', true)->orderBy('name')->get(['id', 'name', 'lastname', 'department_id']);
         $departments = Department::where('division_id', $divisionId)->orderBy('name')->get(['id', 'name']);
         $canUpdateAssets = $this->can('yatira.assets.update');
         $canDisposeAssets = $this->can('yatira.assets.dispose');
         $canManageAssets = $canUpdateAssets;
-        return view('yatira.inventory.show', compact('fixedAsset', 'barcodeSvg', 'users', 'departments', 'canManageAssets', 'canUpdateAssets', 'canDisposeAssets'));
+        return view('yatira.inventory.show', compact('fixedAsset', 'barcodeSvg', 'users', 'departments', 'canManageAssets', 'canUpdateAssets', 'canDisposeAssets') + $this->assetContext());
     }
 
     public function updateFixedAsset(Request $request, YatiraFixedAsset $fixedAsset)
     {
         $this->authorizePermission('yatira.assets.update');
         $this->ensureYatiraAsset($fixedAsset);
+        if ($fixedAsset->status === 'Disposed') {
+            $this->authorizePermission('yatira.assets.dispose');
+        }
         $data = $this->validateAsset($request, false);
         unset($data['asset_entry_type'], $data['asset_code'], $data['document']);
         $data = $this->applyStructuredAssignment($data);
@@ -178,7 +181,7 @@ class YatiraInventoryController extends Controller
             if (isset($upload['document_path'])) Storage::disk('local')->delete($upload['document_path']);
             throw $exception;
         }
-        return redirect()->route('yatira.inventory.fixed-assets.show', $fixedAsset)->with('success', 'Fixed asset updated successfully.');
+        return redirect()->route($this->assetContext()['assetRoutePrefix'].'.show', $fixedAsset)->with('success', 'Fixed asset updated successfully.');
     }
 
     public function downloadAssetDocument(YatiraFixedAsset $fixedAsset): BinaryFileResponse
@@ -262,7 +265,7 @@ class YatiraInventoryController extends Controller
         $divisionId = $this->yatiraDivisionId();
         return $request->validate([
             'asset_entry_type' => $creating ? ['required', Rule::in(['new', 'existing'])] : ['nullable'],
-            'asset_code' => $creating ? ['exclude_unless:asset_entry_type,existing', 'required', 'string', 'max:255', Rule::unique('yatira_fixed_assets', 'asset_code')] : ['nullable'],
+            'asset_code' => $creating ? ['exclude_unless:asset_entry_type,existing', 'required', 'string', 'max:255', Rule::unique('yatira_fixed_assets', 'asset_code')->where(fn ($q) => $q->where('division_id', $divisionId))] : ['nullable'],
             'asset_name' => 'required|string|max:255', 'serial_number' => 'nullable|string|max:255', 'category' => ['required', Rule::in(self::CATEGORIES)],
             'assigned_user_id' => ['nullable', Rule::exists('users', 'id')->where(fn ($query) => $query->where('division_id', $divisionId)->where('status', true))],
             'assigned_department_id' => ['nullable', Rule::exists('departments', 'id')->where(fn ($query) => $query->where('division_id', $divisionId))],
@@ -275,18 +278,35 @@ class YatiraInventoryController extends Controller
     private function storeDocument(Request $request): array
     {
         $file = $request->file('document');
-        return ['document_path' => $file->store('yatira/assets', 'local'), 'document_original_name' => $file->getClientOriginalName(), 'mime_type' => $file->getMimeType(), 'size_bytes' => $file->getSize()];
+        return ['document_path' => $file->store($this->assetCompanyKey().'/assets', 'local'), 'document_original_name' => $file->getClientOriginalName(), 'mime_type' => $file->getMimeType(), 'size_bytes' => $file->getSize()];
     }
 
-    private function generateAssetCode(): string { do { $code = 'YC-'.strtoupper(bin2hex(random_bytes(3))); } while (YatiraFixedAsset::withTrashed()->where('asset_code', $code)->exists()); return $code; }
+    private function generateAssetCode(): string { do { $code = $this->assetContext()['assetCodePrefix'].'-'.strtoupper(bin2hex(random_bytes(3))); } while (YatiraFixedAsset::withTrashed()->where('division_id', $this->yatiraDivisionId())->where('asset_code', $code)->exists()); return $code; }
     private function generateConsumableCode(): string { do { $code = 'YCI-'.strtoupper(bin2hex(random_bytes(3))); } while (YatiraConsumable::withTrashed()->where('item_code', $code)->exists()); return $code; }
     private function recordAudit(YatiraFixedAsset $asset, string $action, array $changes = []): void { YatiraFixedAssetAudit::create(['yatira_fixed_asset_id' => $asset->id, 'user_id' => auth()->id(), 'action' => $action, 'changes' => $changes ?: null, 'ip_address' => request()->ip(), 'user_agent' => request()->userAgent() ? mb_substr(request()->userAgent(), 0, 1000) : null, 'created_at' => now()]); }
-    private function can(string $permission): bool { return auth()->user()->isSystemAdministrator() || auth()->user()->hasPermission($permission); }
-    private function authorizePermission(string $permission): void { abort_unless($this->can($permission), 403, 'Your department or position is not authorized for this Yatira action.'); }
+    private function can(string $permission): bool {
+        if ($this->assetCompanyKey() !== 'yatira' && str_starts_with($permission, 'yatira.consumables.')) return false;
+        $permission = str_replace('yatira.assets.', $this->assetCompanyKey().'.assets.', $permission);
+        return auth()->user()->isSystemAdministrator() || auth()->user()->hasPermission($permission);
+    }
+    private function authorizePermission(string $permission): void { abort_unless($this->can($permission), 403, 'Your department or position is not authorized for this company action.'); }
     private function authorizeAnyInventoryView(): void { abort_unless($this->can('yatira.assets.view') || $this->can('yatira.consumables.view'), 403, 'Inventory access is not assigned to your position.'); }
     private function ensureYatiraAsset(YatiraFixedAsset $asset): void { abort_unless((int) $asset->division_id === $this->yatiraDivisionId(), 404); }
     private function ensureYatiraConsumable(YatiraConsumable $consumable): void { abort_unless((int) $consumable->division_id === $this->yatiraDivisionId(), 404); }
-    private function yatiraDivisionId(): int { return (int) Division::whereRaw('LOWER(name) = ?', ['yatira'])->value('id'); }
+    private function yatiraDivisionId(): int {
+        $name = match ($this->assetCompanyKey()) { 'jmv' => 'jmv', 'shipping' => 'villa shipping lines', default => 'yatira' };
+        return (int) Division::whereRaw('LOWER(name) = ?', [$name])->firstOrFail()->id;
+    }
+    protected function assetCompanyKey(): string { return 'yatira'; }
+    protected function assetContext(): array {
+        $key = $this->assetCompanyKey();
+        [$label, $short, $prefix, $logo] = match ($key) {
+            'jmv' => ['JMV Mining & Development', 'JMV Mining', 'JMV', 'jmv.webp'],
+            'shipping' => ['Villa Shipping Lines', 'Villa Shipping Lines', 'VSL', 'villa-shipping-lines.webp'],
+            default => ['Yatira Construction, Inc.', 'Yatira Construction', 'YC', 'yatira.webp'],
+        };
+        return ['assetCompanyKey' => $key, 'assetCompanyLabel' => $label, 'assetCompanyShort' => $short, 'assetCodePrefix' => $prefix, 'assetCompanyLogo' => 'images/companies/'.$logo, 'assetRoutePrefix' => $key.'.inventory.fixed-assets', 'assetIndexRoute' => $key === 'yatira' ? 'yatira.inventory.index' : $key.'.inventory.fixed-assets.index', 'assetApplicationsRoute' => $key.'.applications'];
+    }
     private function emptyPaginator(string $pageName): LengthAwarePaginator { return new LengthAwarePaginator([], 0, 10, 1, ['path' => request()->url(), 'query' => request()->query(), 'pageName' => $pageName]); }
     private function normalizeItemName(string $name): string { return (string) preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($name))); }
     private function barcodeSvgDataUri(string $value): string

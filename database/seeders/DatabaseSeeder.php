@@ -16,7 +16,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        foreach (['Yatira', 'Villa shipping Lines', 'JMV', 'Villa Group', 'HYVE'] as $division) {
+        foreach (['Yatira', 'Villa shipping Lines', 'JMV', 'Villa Group', 'HYVE', 'Haruhay'] as $division) {
             DB::table('divisions')->updateOrInsert(
                 ['name' => $division],
                 ['updated_at' => now(), 'created_at' => now()]

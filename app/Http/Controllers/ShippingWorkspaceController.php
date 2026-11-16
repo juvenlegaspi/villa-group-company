@@ -31,8 +31,11 @@ class ShippingWorkspaceController extends Controller
         return view('shipping.pms.index', compact('vessels'));
     }
 
-    public function comingSoon(string $application): View
+    public function comingSoon(string $application): View|RedirectResponse
     {
+        if ($application === 'inventory') {
+            return to_route('shipping.inventory.home');
+        }
         $applications = [
             'procurement' => [
                 'name' => 'Procurement',

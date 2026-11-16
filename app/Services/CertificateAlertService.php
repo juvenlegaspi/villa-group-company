@@ -34,9 +34,7 @@ class CertificateAlertService
         return User::query()->where('status', true)
             ->whereHas('division', fn ($query) => $query->whereRaw('LOWER(name) = ?', ['villa shipping lines']))
             ->whereHas('department', fn ($query) => $query->whereRaw('LOWER(name) = ?', ['marine operations']))
-            ->whereHas('position', fn ($query) => $query->whereIn('code', [
-                'operations-manager', 'operation-manager', 'marine-operations-manager', 'liaison-officer',
-            ]))
+            ->whereHas('position', fn ($query) => $query->where('code', 'liaison-officer'))
             ->with(['division', 'department', 'position.permissions', 'accessRole.permissions'])->get()
             ->filter(fn (User $user): bool => $user->hasPermission('certificates.manage')
                 && $this->vesselAccess->canAccess($user, $vessel))
@@ -116,7 +114,7 @@ class CertificateAlertService
     private function smsMessage(VesselCertificate $certificate, int $daysRemaining): string
     {
         $timing = $daysRemaining < 0 ? abs($daysRemaining).' day(s) overdue' : ($daysRemaining === 0 ? 'expires today' : 'expires in '.$daysRemaining.' day(s)');
-        return Str::limit('Villa Shipping certificate alert: '.$certificate->certificate_name.' for '.$certificate->vessel->vessel_name.' '.$timing.' ('.$certificate->expiry_date->format('M d, Y').'). Please process renewal.', 160, '');
+        return Str::limit('Villa Shipping '.($certificate->parent_certificate_id ? 'sub-certificate' : 'certificate').' alert: '.$certificate->certificate_name.' for '.$certificate->vessel->vessel_name.' '.$timing.' ('.$certificate->expiry_date->format('M d, Y').'). Please process renewal.', 160, '');
     }
 
     private function shouldSendAt(int $daysRemaining): bool

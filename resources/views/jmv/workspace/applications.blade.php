@@ -27,7 +27,7 @@
     @php
         $canViewOperations = auth()->user()->hasPermission('jmv.operations.daily_production.view');
         $isExecutiveViewer = auth()->user()->isExecutiveViewer();
-        $canViewInventory = auth()->user()->hasPermission('jmv.inventory.view')
+        $canViewInventory = auth()->user()->hasPermission('jmv.assets.view') || auth()->user()->hasPermission('jmv.inventory.view')
             || auth()->user()->hasPermission('jmv.inventory.movements.manage')
             || auth()->user()->hasPermission('jmv.inventory.reports.view')
             || auth()->user()->hasPermission('jmv.inventory.requests.create')
@@ -43,7 +43,7 @@
         @endif
 
         @if($canViewInventory)
-        <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-amber-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-100" href="{{ route('jmv.inventory.index') }}">
+        <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-amber-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-100" href="{{ route('jmv.inventory.home') }}">
             <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-amber-50 text-2xl text-amber-700"><i class="bi bi-box-seam"></i></span>
             <span><span class="block text-sm font-extrabold uppercase text-villa-900">Inventory</span><span class="mt-1 block text-xs leading-5 text-slate-500">Open inventory, stock movement, request, and reporting applications.</span></span>
         </a>
@@ -61,3 +61,4 @@
     </div>
 </section>
 @endsection
+

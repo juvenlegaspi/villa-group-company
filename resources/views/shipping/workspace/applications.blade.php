@@ -28,9 +28,9 @@
         </a>
         @endif
         @if(auth()->user()->hasPermission('shipping.inventory.access'))
-        <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-100" href="{{ route('shipping.application.placeholder', 'inventory') }}">
+        <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-100" href="{{ route('shipping.inventory.home') }}">
             <span class="grid h-13 w-13 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-2xl text-emerald-700"><i class="bi bi-clipboard-data"></i></span>
-            <span><span class="block text-sm font-extrabold uppercase text-villa-900">Inventory</span><span class="mt-1 block text-xs leading-5 text-slate-500">Stock movements and warehouse management.</span><small class="mt-1 block text-[.65rem] font-extrabold uppercase tracking-wider text-amber-700">Coming soon</small></span>
+            <span><span class="block text-sm font-extrabold uppercase text-villa-900">Inventory</span><span class="mt-1 block text-xs leading-5 text-slate-500">Company fixed assets, custody, documents and QR tag printing.</span></span>
         </a>
         @endif
         @if(auth()->user()->canManageUsers())
@@ -45,3 +45,4 @@
     </div>
 </section>
 @endsection
+

@@ -34,20 +34,22 @@
                         $isHyve => 'HYVE', default => $division->name,
                     };
                     $logoFile = match (true) {
+                        $key === 'haruhay' => 'haruhay-space-white.png',
                         $isShipping => 'villa-shipping-lines.webp', $isYatira => 'yatira.webp', $isJmv => 'jmv.webp',
                         $isVillaGroup => 'villa-group.webp', $isHyve => 'hyve.webp', default => 'villa-group.webp',
                     };
                     $description = match (true) {
                         $isShipping => 'Maritime Operations', $isYatira => 'Construction Operations',
                         $isJmv => 'Mining & Development', $isVillaGroup => 'Admin, IT & R&D',
-                        $isHyve => 'Hospitality & Venue', default => 'Company Workspace',
+                        $isHyve => 'Hospitality & Venue', $key === 'haruhay' => 'Dormitory Rentals', default => 'Company Workspace',
                     };
                     $target = match (true) {
                         $isShipping => route('shipping.applications'),
                         $isYatira => route('yatira.applications'),
                         $isJmv => route('jmv.applications'),
                         $isHyve => route('hyve.projects.index'),
-                        $isVillaGroup && auth()->user()->canManageUsers() => route('users.index'),
+                        $key === 'haruhay' => route('haruhay.applications'),
+                        $isVillaGroup => route('villa-group.applications'),
                         default => route('profile'),
                     };
                 @endphp

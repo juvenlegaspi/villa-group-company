@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -23,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'user.manager' => \App\Http\Middleware\UserManagementMiddleware::class,
             'owner.dashboard-only' => \App\Http\Middleware\OwnerDashboardOnly::class,
             'module.access' => \App\Http\Middleware\EnsureModuleAccess::class,
+            'villa-group.access' => \App\Http\Middleware\EnsureVillaGroupAccess::class,
+            'villa-group.access' => \App\Http\Middleware\EnsureVillaGroupAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

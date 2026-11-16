@@ -46,6 +46,7 @@ class OrganizationAccessSeeder extends Seeder
                 'Human Resources' => [['HR Manager', 'manager'], ['HR Officer', 'hr']],
             ],
             'Villa Group' => [
+                'Property Management' => [['Property Specialist', 'staff']],
                 'Executive Office' => [['President', 'owner'], ['Executive Assistant', 'staff']],
                 'Corporate Finance' => [['Corporate Finance Manager', 'manager'], ['Corporate Accountant', 'staff']],
                 'Human Resources' => [['HR Manager', 'manager'], ['HR Officer', 'hr']],
@@ -108,6 +109,7 @@ class OrganizationAccessSeeder extends Seeder
             }
         }
         $this->ensureJmvInventoryDefaults();
+        app(\App\Services\CompanyFixedAssetPermissions::class)->sync();
     }
 
     private function ensureJmvDailyProductionPermissions(): void

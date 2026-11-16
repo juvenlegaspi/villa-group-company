@@ -22,3 +22,9 @@ Schedule::command('shipping-calendar:reminders')
     ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('haruhay:expire-reservations')->everyMinute()->withoutOverlapping();
+Schedule::command('haruhay:send-billing-notifications')->everyMinute()->withoutOverlapping();
+Schedule::command('haruhay:send-collection-notifications')->everyMinute()->withoutOverlapping();
+Schedule::command('haruhay:due-reminders')->dailyAt('09:00')->timezone('Asia/Manila')->withoutOverlapping();
+Schedule::command('haruhay:send-tracking-codes')->everyMinute()->withoutOverlapping();
