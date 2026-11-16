@@ -22,6 +22,17 @@ class CompanyFixedAssetTest extends TestCase
         Storage::fake('local');
     }
 
+    public function test_company_asset_migration_supports_imported_schema_without_legacy_unique_index(): void
+    {
+        \Illuminate\Support\Facades\Schema::table('yatira_fixed_assets', fn ($table) => $table->dropUnique('company_fixed_asset_code_unique'));
+        $migration = require database_path('migrations/2026_11_13_094924_enable_company_fixed_assets.php');
+        $before = DB::table('yatira_fixed_assets')->count();
+        $migration->up();
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasIndex('yatira_fixed_assets', 'company_fixed_asset_code_unique'));
+        $migration->up();
+        $this->assertSame($before, DB::table('yatira_fixed_assets')->count());
+    }
+
     private function user(string $company, string $position = 'inventory-manager', bool $admin = false): User
     {
         $division = Division::whereRaw('LOWER(name) = ?', [strtolower($company)])->firstOrFail();

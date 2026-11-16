@@ -7,4 +7,9 @@ Options -Indexes
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^(?:app|bootstrap|config|database|resources|routes|storage|tests|vendor|node_modules|\.git|\.agents|\.codex)(?:/|$) - [F,L]
+
+    # Serve Laravel from public/ when the repository itself is the document root.
+    # Relative paths also support Laragon installations under /villa/.
+    RewriteRule ^public(?:/|$) - [L]
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
