@@ -11,6 +11,5 @@
         @include('jmv.operations.production.partials.form',['log'=>$log])
         <div class="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end"><a href="{{ route('jmv.operations.production.show',$log) }}" class="grid min-h-11 place-items-center rounded-xl border border-slate-300 px-5 text-sm font-bold text-slate-700 no-underline">Cancel</a><button class="min-h-11 rounded-xl border-0 bg-villa-800 px-6 text-sm font-black text-white">{{ $log->status === \App\Models\JmvDailyProductionLog::STATUS_FOR_CORRECTION ? 'Save Corrections' : 'Save Draft' }}</button></div>
     </form>
-    <datalist id="productionLocations"><option value="Mine 1"><option value="Mine 2"></datalist><datalist id="productionShifts"><option value="8:00 AM - 5:00 PM"><option value="5:00 PM - 2:00 AM"></datalist>
 </div></section>
 @endsection
