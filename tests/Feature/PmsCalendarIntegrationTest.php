@@ -19,6 +19,21 @@ class PmsCalendarIntegrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_pms_link_migration_can_resume_after_columns_were_already_added(): void
+    {
+        \Illuminate\Support\Facades\Schema::table('shipping_calendar_events', function ($table): void {
+            $table->dropForeign(['pms_detail_id']);
+            $table->dropUnique(['pms_detail_id']);
+        });
+        $migration = require database_path('migrations/2026_10_28_000001_link_pms_details_to_calendar.php');
+        $migration->up();
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('shipping_pms_details', 'start_time'));
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasIndex('shipping_calendar_events', 'shipping_calendar_events_pms_detail_id_unique'));
+        $this->assertTrue(collect(\Illuminate\Support\Facades\Schema::getForeignKeys('shipping_calendar_events'))->contains(fn ($key) => $key['columns'] === ['pms_detail_id'] && $key['foreign_table'] === 'shipping_pms_details'));
+        $migration->up();
+        $this->assertDatabaseCount('shipping_calendar_events', 0);
+    }
+
     private function setupPms(): array
     {
         $division = Division::create(['name' => 'Villa shipping Lines']);
