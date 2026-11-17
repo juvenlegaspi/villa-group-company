@@ -25,6 +25,32 @@ class VillaGroupWorkspaceTest extends TestCase
         return User::create(['name' => 'Workspace Tester', 'lastname' => 'Test', 'username' => 'test-'.str()->uuid(), 'email' => str()->uuid().'@example.com', 'password' => 'test-password-123', 'department_id' => $department->id, 'position_id' => $position?->id, 'division_id' => $division->id, 'role' => $role, 'is_admin' => $role === 'admin', 'status' => true, 'must_change_password' => false]);
     }
 
+    public function test_corporate_property_can_be_connected_to_haruhay_from_create_or_update(): void
+    {
+        $haruhay = Division::firstOrCreate(['name' => 'Haruhay']);
+        $admin = $this->actor('admin');
+        $this->actingAs($admin)->post(route('villa-group.properties.store'), $this->data())->assertSessionHasNoErrors();
+        $property = HaruhayProperty::sole();
+        $this->assertSame($admin->division_id, $property->division_id);
+        $this->get(route('haruhay.units.index'))->assertOk()->assertViewHas('properties', fn ($properties) => ! $properties->contains('id', $property->id));
+        $this->put(route('villa-group.properties.update', $property), $this->data() + ['use_in_haruhay' => 1])->assertSessionHasNoErrors();
+        $this->assertSame($haruhay->id, $property->fresh()->division_id);
+        $this->get(route('haruhay.units.index'))->assertOk()->assertViewHas('properties', fn ($properties) => $properties->contains('id', $property->id));
+        $this->get(route('villa-group.properties.index'))->assertOk()->assertSee($property->code);
+        $this->post(route('villa-group.properties.store'), array_replace($this->data(), ['name' => 'New Haruhay Property', 'use_in_haruhay' => 1]))->assertSessionHasNoErrors();
+        $this->assertSame($haruhay->id, HaruhayProperty::where('name', 'New Haruhay Property')->sole()->division_id);
+    }
+
+    public function test_haruhay_connection_cannot_be_removed_when_property_has_rooms(): void
+    {
+        $haruhay = Division::firstOrCreate(['name' => 'Haruhay']);
+        $admin = $this->actor('admin');
+        $property = HaruhayProperty::create($this->data() + ['division_id' => $haruhay->id, 'code' => 'PROP-0001']);
+        HaruhayUnit::create(['property_id' => $property->id, 'floor' => 1, 'unit_type' => 'Single bed']);
+        $this->actingAs($admin)->put(route('villa-group.properties.update', $property), $this->data() + ['use_in_haruhay' => 0])->assertSessionHasErrors('use_in_haruhay');
+        $this->assertSame($haruhay->id, $property->fresh()->division_id);
+    }
+
     private function data(): array
     {
         return ['name' => 'Haruhay Space', 'owner' => 'Registered Owner', 'type' => 'Dormitory', 'street_barangay' => 'T. Padilla', 'city' => 'Cebu City', 'province' => 'Cebu', 'status' => 'Under Construction'];

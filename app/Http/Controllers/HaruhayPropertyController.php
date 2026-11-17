@@ -102,6 +102,7 @@ class HaruhayPropertyController extends Controller
         }
         $data = $request->validateWithBag($property->exists ? 'default' : 'propertyCreate', [
             'name' => 'required|string|max:255', 'owner' => 'sometimes|nullable|string|max:255',
+            'use_in_haruhay' => $this->isCorporate() ? 'sometimes|boolean' : 'prohibited',
             'location' => 'required|string|max:2000',
             'type' => ['required', Rule::in(self::TYPES)],
             'street_barangay' => 'sometimes|nullable|string|max:255', 'city' => 'sometimes|nullable|string|max:255', 'province' => 'sometimes|nullable|string|max:255',
@@ -114,14 +115,15 @@ class HaruhayPropertyController extends Controller
             'attachments' => 'nullable|array|max:10',
             'attachments.*' => 'required|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx|max:10240',
         ]);
-        unset($data['attachments']);
+        $useInHaruhay = array_key_exists('use_in_haruhay', $data) ? (bool) $data['use_in_haruhay'] : null;
+        unset($data['attachments'], $data['use_in_haruhay']);
         foreach (['owner', 'street_barangay', 'city', 'province'] as $legacyField) {
             if (array_key_exists($legacyField, $data)) $data[$legacyField] ??= '';
             elseif (! $property->exists) $data[$legacyField] = '';
         }
         $paths = [];
         try {
-            return DB::transaction(function () use ($request, $property, $data, &$paths) {
+            return DB::transaction(function () use ($request, $property, $data, $useInHaruhay, &$paths) {
                 $creating = ! $property->exists;
                 if (!$creating) {
                     $property = HaruhayProperty::whereKey($property->id)->lockForUpdate()->firstOrFail();
@@ -131,6 +133,14 @@ class HaruhayPropertyController extends Controller
                 }
                 $property->fill($data);
                 if ($creating) $property->division_id = $this->divisionId();
+                if ($this->isCorporate() && $useInHaruhay !== null) {
+                    $haruhayId = (int) Division::whereRaw('LOWER(name) = ?', ['haruhay'])->sole()->id;
+                    $nextDivisionId = $useInHaruhay ? $haruhayId : ((int) $property->division_id === $haruhayId ? $this->divisionId() : (int) $property->division_id);
+                    if (! $creating && $nextDivisionId !== (int) $property->division_id && $property->units()->exists()) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['use_in_haruhay' => 'This property already has rooms. Keep its Haruhay connection to preserve room and tenant history.']);
+                    }
+                    $property->division_id = $nextDivisionId;
+                }
                 $property->updated_by = auth()->id();
                 if ($creating) $property->created_by = auth()->id();
                 $property->save();
@@ -165,6 +175,8 @@ class HaruhayPropertyController extends Controller
     private function formData(): array
     {
         return ['types' => self::TYPES, 'statuses' => self::STATUSES, 'canManage' => $this->canManage(),
-            'propertyRoutes' => $this->routePrefix(), 'propertyCompany' => $this->isCorporate() ? 'Villa Group' : 'Haruhay Space'];
+            'propertyRoutes' => $this->routePrefix(), 'propertyCompany' => $this->isCorporate() ? 'Villa Group' : 'Haruhay Space',
+            'isCorporateProperty' => $this->isCorporate(),
+            'haruhayDivisionId' => Division::whereRaw('LOWER(name) = ?', ['haruhay'])->value('id')];
     }
 }

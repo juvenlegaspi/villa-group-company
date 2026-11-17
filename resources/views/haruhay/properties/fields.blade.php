@@ -2,6 +2,14 @@
     <h2 class="mb-1 text-base font-black text-slate-900">Property Details</h2>
     <p class="mb-5 text-xs text-slate-500">Property ID, date added and occupancy figures are generated automatically.</p>
     <div class="grid gap-4 sm:grid-cols-2">
+        @if($isCorporateProperty ?? false)
+            <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 sm:col-span-2">
+                <input type="hidden" name="use_in_haruhay" value="0">
+                <label class="flex items-center gap-2 text-sm font-bold text-teal-900"><input type="checkbox" name="use_in_haruhay" value="1" @checked(old('use_in_haruhay', $property->exists && (int) $property->division_id === (int) $haruhayDivisionId))>Use this property in Haruhay</label>
+                <p class="mt-2 text-xs text-teal-800">Enable this to select the property when adding rooms in Haruhay. The property remains listed in Villa Group Properties.</p>
+                @error('use_in_haruhay')<p class="mt-2 text-xs font-bold text-rose-700">{{ $message }}</p>@enderror
+            </div>
+        @endif
         <label for="name" class="text-sm font-bold text-slate-700 sm:col-span-2">Property Name *<input id="name" name="name" value="{{ old('name', $property->name) }}" required maxlength="255" placeholder="e.g. Haruhay Space T. Padilla" class="form-control mt-2"></label>
         <label for="location" class="text-sm font-bold text-slate-700 sm:col-span-2">Location *<textarea id="location" name="location" required rows="2" maxlength="2000" placeholder="Full address / location" class="form-control mt-2">{{ old('location', $property->location) }}</textarea></label>
         <label for="type" class="text-sm font-bold text-slate-700">Property Type *<select id="type" name="type" required class="form-control mt-2"><option value="">Select property type</option>@foreach($types as $type)<option @selected(old('type', $property->type) === $type)>{{ $type }}</option>@endforeach</select></label>
