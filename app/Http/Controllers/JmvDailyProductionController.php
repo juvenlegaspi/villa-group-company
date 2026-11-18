@@ -378,7 +378,7 @@ class JmvDailyProductionController extends Controller
         unset($data['attachments']);
         $dailyTarget = $log?->daily_target_bagons ?? JmvProductionTarget::where('division_id', $divisionId)->where('is_general', true)->value('coal_target');
         $data['daily_target_bagons'] = $dailyTarget === null ? null : (int) $dailyTarget;
-        $data['excess_deficit'] = $dailyTarget === null ? null : (int) $dailyTarget - (int) $data['coal_output'];
+        $data['excess_deficit'] = $dailyTarget === null ? null : (int) $data['coal_output'] - (int) $dailyTarget;
         return $data;
     }
 

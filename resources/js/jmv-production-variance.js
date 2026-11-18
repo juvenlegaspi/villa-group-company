@@ -6,7 +6,7 @@ document.querySelectorAll('[data-production-variance]').forEach((output) => {
         if (coal.value.trim() === '') { output.textContent = 'Enter coal output'; return; }
         const actual = Number(coal.value);
         if (!Number.isInteger(actual) || actual < 0) { output.textContent = 'Enter a valid coal output'; return; }
-        const variance = Number(output.dataset.dailyTarget) - actual;
+        const variance = actual - Number(output.dataset.dailyTarget);
         output.textContent = `${variance > 0 ? '+' : ''}${variance.toLocaleString('en-US')} Bagon`;
     };
     coal.addEventListener('input', render);

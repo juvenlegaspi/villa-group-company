@@ -240,21 +240,27 @@ class JmvDailyProductionTest extends TestCase
         $this->assertSame(60, $target->fresh()->weekly_coal_target);
     }
 
-    public function test_variance_is_target_minus_coal_and_cannot_be_overridden_by_input(): void
+    public function test_variance_is_coal_minus_target_and_cannot_be_overridden_by_input(): void
     {
         $manager = $this->positionUser('mine-operations-manager');
         $this->actingAs($manager)->post(route('jmv.operations.production.targets.store'), ['coal_target' => 9, 'weekly_coal_target' => 63])->assertSessionHasNoErrors();
         $this->post(route('jmv.operations.production.store'), $this->payload(['coal_output' => 7, 'excess_deficit' => 999, 'daily_target_bagons' => 999]))->assertRedirect()->assertSessionHasNoErrors();
         $log = JmvDailyProductionLog::firstOrFail();
         $this->assertSame(9, $log->daily_target_bagons);
-        $this->assertSame(2, $log->excess_deficit);
+        $this->assertSame(-2, $log->excess_deficit);
         $this->get(route('jmv.operations.production.edit', $log))->assertOk()->assertSee('Excess / Deficit (automatic)')->assertDontSee('name="excess_deficit"', false);
         $target = \App\Models\JmvProductionTarget::firstOrFail();
         $this->put(route('jmv.operations.production.targets.update', $target), ['coal_target' => 20, 'weekly_coal_target' => 100])->assertSessionHasNoErrors();
-        $this->assertSame(2, $log->fresh()->excess_deficit);
+        $this->assertSame(-2, $log->fresh()->excess_deficit);
         $this->put(route('jmv.operations.production.update', $log), $this->payload(['coal_output' => 12, 'excess_deficit' => 'not a manual field']))->assertSessionHasNoErrors();
         $this->assertSame(9, $log->fresh()->daily_target_bagons);
-        $this->assertSame(-3, $log->fresh()->excess_deficit);
+        $this->assertSame(3, $log->fresh()->excess_deficit);
+        $log->fresh()->update(['excess_deficit' => -3]);
+        $migration = require database_path('migrations/2026_11_18_000001_reverse_jmv_production_variance.php');
+        $migration->up();
+        $this->assertSame(3, $log->fresh()->excess_deficit);
+        $migration->up();
+        $this->assertSame(3, $log->fresh()->excess_deficit);
         $this->put(route('jmv.operations.production.update', $log), $this->payload(['coal_output' => 9]))->assertSessionHasNoErrors();
         $this->assertSame(0, $log->fresh()->excess_deficit);
     }

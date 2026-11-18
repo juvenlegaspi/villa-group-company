@@ -75,9 +75,22 @@ class DashboardController extends Controller
                 ]);
 
             case 'jmv':
+                $filters = $request->validate([
+                    'from' => 'nullable|date_format:Y-m-d|before_or_equal:today',
+                    'to' => 'nullable|date_format:Y-m-d|before_or_equal:today',
+                ]);
+                $filters = array_filter($filters, fn ($value) => filled($value)) + [
+                    'from' => today()->startOfMonth()->toDateString(),
+                    'to' => today()->toDateString(),
+                ];
+                if ($filters['from'] > $filters['to'] || Carbon::parse($filters['from'])->diffInDays(Carbon::parse($filters['to'])) > 366) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['to' => 'Choose an end date on or after the start date, within a one-year range.']);
+                }
                 return view('dashboard.jmv', [
                     'division' => $div,
-                    'metrics' => $this->buildJmvMetrics(),
+                    'metrics' => $this->buildJmvMetrics($div->id),
+                    'filters' => $filters,
+                    'production' => app(\App\Services\JmvProductionDashboardService::class)->build($div->id, $filters),
                 ]);
 
             case 'corporate':
@@ -678,18 +691,20 @@ class DashboardController extends Controller
         ];
     }
 
-    protected function buildJmvMetrics(): array
+    protected function buildJmvMetrics(int $divisionId): array
     {
         if (! Schema::hasTable('item_inventory_header')) {
             return ['totalItems' => 0, 'stockOnHand' => 0, 'lowStock' => 0, 'outOfStock' => 0];
         }
 
+        $items = ItemInventoryHeader::where('division_id', $divisionId)->where('status', 1);
+
         return [
-            'totalItems' => ItemInventoryHeader::where('status', 1)->count(),
-            'stockOnHand' => (int) ItemInventoryHeader::where('status', 1)->sum('stock_on_hand'),
-            'lowStock' => ItemInventoryHeader::where('status', 1)
+            'totalItems' => (clone $items)->count(),
+            'stockOnHand' => (int) (clone $items)->sum('stock_on_hand'),
+            'lowStock' => (clone $items)
                 ->whereColumn('stock_on_hand', '<=', 'minimum_quantity')->where('stock_on_hand', '>', 0)->count(),
-            'outOfStock' => ItemInventoryHeader::where('status', 1)->where('stock_on_hand', '<=', 0)->count(),
+            'outOfStock' => (clone $items)->where('stock_on_hand', '<=', 0)->count(),
         ];
     }
 
