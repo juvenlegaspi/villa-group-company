@@ -56,8 +56,13 @@
                             default => $days < 0 ? ['Expired','bg-rose-50 text-rose-700'] : ($days <= 30 ? ['Expiring','bg-amber-50 text-amber-700'] : ['Valid','bg-emerald-50 text-emerald-700']),
                         };
                     @endphp
-                    <tr class="hover:bg-slate-50/70">
-                        <td class="px-5 py-4"><p class="mb-0 font-extrabold text-slate-900">{{ $certificate->certificate_name }}</p><p class="mb-0 mt-1 text-xs text-slate-500">Updated {{ optional($certificate->updated_at)->format('M d, Y') }}</p></td>
+                    <tr id="certificate-{{ $certificate->id }}" class="hover:bg-slate-50/70">
+                        <td class="px-5 py-4"><div class="flex items-start gap-2">
+                            @if($certificate->subCertificates->isNotEmpty())
+                                <button type="button" data-sub-list-toggle aria-controls="sub-list-{{ $certificate->id }}" aria-expanded="{{ (string)request('expand') === (string)$certificate->id ? 'true' : 'false' }}" aria-label="Toggle {{ $certificate->subCertificates->count() }} sub-certificates for {{ $certificate->certificate_name }}" class="shrink-0 rounded px-1 text-slate-700"><span data-sub-list-arrow aria-hidden="true">{{ (string)request('expand') === (string)$certificate->id ? '▼' : '▶' }}</span></button>
+                            @endif
+                            <div><p class="mb-0 font-extrabold text-slate-900">{{ $certificate->certificate_name }}</p><p class="mb-0 mt-1 text-xs text-slate-500">Updated {{ optional($certificate->updated_at)->format('M d, Y') }}</p></div>
+                        </div></td>
                         <td class="px-4 py-4 text-slate-700">{{ optional($certificate->issue_date)->format('M d, Y') ?: '—' }}</td>
                         <td class="px-4 py-4 font-semibold text-slate-800">{{ optional($certificate->expiry_date)->format('M d, Y') ?: '—' }}</td>
                         <td class="px-4 py-4 text-slate-600">{{ is_null($days) ? '—' : ($days < 0 ? abs($days).' days overdue' : $days.' days') }}</td>
@@ -69,12 +74,15 @@
                             @endif
                             @if($canManage && $certificate->workflow_status === 'active')
                                 <a href="{{ route('vessel-certificates.renew', $certificate) }}" class="rounded-lg bg-villa-700 px-3 py-2 text-xs font-bold text-white no-underline hover:bg-villa-800">Renew</a>
+                                <button type="button" class="shrink-0 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700" data-sub-certificate-open data-parent-id="{{ $certificate->id }}" data-parent-name="{{ $certificate->certificate_name }}" data-store-url="{{ route('vessel-certificates.sub.store', $certificate) }}">+ Add Sub Cert</button>
                             @endif
                         </div></td>
                     </tr>
-                    <tr id="certificate-{{ $certificate->id }}"><td colspan="7" class="px-5 pb-4">
+                    @if($certificate->subCertificates->isNotEmpty())
+                    <tr id="sub-list-{{ $certificate->id }}" @if((string)request('expand') !== (string)$certificate->id) hidden @endif><td colspan="7" class="px-5 pb-4">
                         @include('vessel_certificates.sub-certificates')
                     </td></tr>
+                    @endif
                 @empty
                     <tr><td colspan="7" class="px-5 py-12 text-center text-slate-500">No certificates match the selected filters.</td></tr>
                 @endforelse
@@ -88,3 +96,16 @@
     @include('vessel_certificates.sub-certificate-modal')
 @endif
 @endsection
+@push('scripts')
+<script>
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-sub-list-toggle]');
+    if (!button) return;
+    const row = document.getElementById(button.getAttribute('aria-controls'));
+    if (!row) return;
+    row.hidden = !row.hidden;
+    button.setAttribute('aria-expanded', String(!row.hidden));
+    button.querySelector('[data-sub-list-arrow]').textContent = row.hidden ? '▶' : '▼';
+});
+</script>
+@endpush

@@ -23,6 +23,10 @@ if (dialog) {
         parentId = button.dataset.parentId;
         dialog.querySelector('[data-sub-certificate-parent]').textContent = button.dataset.parentName;
         const mode = button.dataset.mode ?? 'add';
+        dialog.querySelectorAll('[data-sub-certificate-extra]').forEach((field) => {
+            field.hidden = mode === 'add';
+            field.querySelector('input').disabled = mode === 'add';
+        });
         saveLabel = mode === 'edit' ? 'Save changes' : (mode === 'renew' ? 'Renew sub-certificate' : 'Save sub-certificate');
         save.textContent = saveLabel;
         dialog.querySelector('#sub-certificate-modal-title').textContent = mode === 'edit' ? 'Edit sub-certificate' : (mode === 'renew' ? 'Renew sub-certificate' : 'Add sub-certificate / Annual audit');

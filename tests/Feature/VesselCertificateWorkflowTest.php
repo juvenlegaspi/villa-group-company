@@ -173,6 +173,8 @@ class VesselCertificateWorkflowTest extends TestCase
         $manager = $this->user('Operations Manager', 'operations-manager', ['shipping.certificates.access', 'certificates.manage']);
         $parent = VesselCertificate::create(['vessel_id' => $this->vessel->id, 'certificate_name' => 'Five Year Safety', 'issue_date' => today()->subYear(), 'expiry_date' => today()->addYears(4), 'workflow_status' => 'active']);
         $expiry = $parent->expiry_date->toDateString();
+        $this->actingAs($manager)->get(route('vessel.certificates.show', $this->vessel->id))
+            ->assertOk()->assertSee('+ Add Sub Cert')->assertDontSee('aria-controls="sub-list-'.$parent->id.'"', false);
         $this->actingAs($manager)->get(route('vessel-certificates.sub.create', $parent))->assertOk()->assertSee('Five Year Safety');
         $payload = ['vessel_id' => $this->vessel->id, 'certificate_name' => 'Annual Audit 2026', 'issue_date' => today()->subYear()->toDateString(), 'expiry_date' => today()->subDay()->toDateString(), 'document' => UploadedFile::fake()->create('audit.pdf', 50, 'application/pdf')];
         $this->post(route('vessel-certificates.sub.store', $parent), $payload, ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('message', 'Sub-certificate saved.');
@@ -180,7 +182,7 @@ class VesselCertificateWorkflowTest extends TestCase
         $this->assertSame($expiry, $parent->fresh()->expiry_date->toDateString());
         Storage::disk('local')->assertExists($child->document);
         $this->assertDatabaseHas('vessel_certificate_audits', ['vessel_certificate_id' => $child->id, 'action' => 'sub_certificate_added']);
-        $this->get(route('vessel.certificates.show', ['id' => $this->vessel->id, 'expand' => $parent->id]))->assertOk()->assertSee('Annual Audit 2026')->assertSee('1 overdue')->assertSee('id="sub-certificate-modal"', false)->assertSee('data-sub-certificate-open', false);
+        $this->get(route('vessel.certificates.show', ['id' => $this->vessel->id, 'expand' => $parent->id]))->assertOk()->assertSee('Annual Audit 2026')->assertSee('days overdue')->assertSee('data-sub-list-toggle')->assertSee('Sub certificate')->assertSee('id="sub-certificate-modal"', false)->assertSee('data-sub-certificate-open', false);
         $this->getJson(route('vessel-certificates.calendar', ['month' => today()->subDay()->format('Y-m')]))->assertOk()->assertJsonPath('events.0.name', 'Annual Audit 2026 (under Five Year Safety)');
         $this->get(route('vessel-certificates.document', $child))->assertOk();
         $this->post(route('vessel-certificates.sub.store', $parent), $payload)->assertSessionHasErrors('certificate_name');
