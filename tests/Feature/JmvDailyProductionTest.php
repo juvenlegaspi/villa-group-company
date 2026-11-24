@@ -60,14 +60,20 @@ class JmvDailyProductionTest extends TestCase
         $this->assertStringStartsWith("PK\x03\x04", $export->getContent());
     }
 
-    public function test_log_requires_output_and_is_unique_by_date_location_and_shift(): void
+    public function test_log_accepts_zero_output_and_is_unique_by_date_location_and_shift(): void
     {
         $manager = $this->positionUser('mine-supervisor');
         $this->actingAs($manager)->from(route('jmv.operations.production.index'))
             ->post(route('jmv.operations.production.store'), $this->payload(['soil_output' => 0, 'coal_output' => 0]))
-            ->assertSessionHasErrors('soil_output');
+            ->assertSessionHasNoErrors();
 
-        $this->actingAs($manager)->post(route('jmv.operations.production.store'), $this->payload())->assertSessionHasNoErrors();
+        $log = JmvDailyProductionLog::firstOrFail();
+        $this->assertSame(0, $log->soil_output);
+        $this->assertSame(0, $log->coal_output);
+        $this->put(route('jmv.operations.production.update', $log), $this->payload(['soil_output' => 0, 'coal_output' => 0]))->assertSessionHasNoErrors();
+        $this->assertSame(0, $log->fresh()->soil_output);
+        $this->assertSame(0, $log->fresh()->coal_output);
+        $this->post(route('jmv.operations.production.store'), $this->payload(['soil_output' => -1, 'coal_output' => 0]))->assertSessionHasErrors('soil_output');
         $this->actingAs($manager)->from(route('jmv.operations.production.index'))
             ->post(route('jmv.operations.production.store'), $this->payload())
             ->assertSessionHasErrors('log_date');

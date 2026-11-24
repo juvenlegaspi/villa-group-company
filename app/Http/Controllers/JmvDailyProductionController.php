@@ -380,9 +380,6 @@ class JmvDailyProductionController extends Controller
             ]);
         }
 
-        if ((int) $data['soil_output'] === 0 && (int) $data['coal_output'] === 0) {
-            throw ValidationException::withMessages(['soil_output' => 'Record at least one soil or coal production output.']);
-        }
         unset($data['attachments']);
         $dailyTarget = $log?->daily_target_bagons ?? JmvProductionTarget::where('division_id', $divisionId)->where('is_general', true)->value('coal_target');
         $data['daily_target_bagons'] = $dailyTarget === null ? null : (int) $dailyTarget;
