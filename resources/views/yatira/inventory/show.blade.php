@@ -219,7 +219,7 @@
         <div class="sticker-barcode">
             <img src="{{ $barcodeSvg }}" alt="QR code for {{ $fixedAsset->asset_code }}">
         </div>
-        <div class="sticker-footer">{{ $fixedAsset->location ?: ($fixedAsset->category ?: $assetCompanyShort) }}</div>
+        <div class="sticker-footer">{{ $fixedAsset->asset_location ?: ($fixedAsset->category ?: $assetCompanyShort) }}</div>
     </div>
 
     <header class="tag-hero no-print"><div class="tag-hero-inner"><div><p class="tag-eyebrow"><i class="bi bi-upc-scan me-1"></i> Asset Tagging Record</p><h1>{{ $fixedAsset->asset_name }}</h1><div class="tag-subtitle"><i class="bi bi-tag me-1"></i>{{ $fixedAsset->asset_code }} &bull; {{ $fixedAsset->category }}</div></div><div class="tag-actions"><a href="{{ route($assetIndexRoute) }}" class="tag-action"><i class="bi bi-arrow-left"></i>Back</a>@if($canUpdateAssets && ($fixedAsset->status !== 'Disposed' || $canDisposeAssets))<button type="button" class="tag-action" data-bs-toggle="modal" data-bs-target="#editFixedAssetModal"><i class="bi bi-pencil-square"></i>Edit Asset</button>@endif<a class="tag-action primary" target="_blank" rel="noopener" href="{{ route($assetRoutePrefix.'.print-tags', ['from_asset_id' => $fixedAsset->id, 'to_asset_id' => $fixedAsset->id, 'copies' => 1, 'include_disposed' => 1]) }}"><i class="bi bi-printer"></i>Print Asset Tag</a></div></div></header>
@@ -230,7 +230,7 @@
             <div class="tag-info"><div class="tag-label"><i class="bi bi-hash me-1"></i>Serial Number</div><div class="tag-value">{{ $fixedAsset->serial_number ?: 'Not recorded' }}</div></div>
             <div class="tag-info"><div class="tag-label"><i class="bi bi-person-check me-1"></i>Assigned To</div><div class="tag-value">{{ $fixedAsset->assignedUser ? trim($fixedAsset->assignedUser->name.' '.$fixedAsset->assignedUser->lastname) : ($fixedAsset->assigned_to ?: 'Unassigned') }}</div></div>
             <div class="tag-info"><div class="tag-label"><i class="bi bi-diagram-3 me-1"></i>Department</div><div class="tag-value">{{ $fixedAsset->assignedDepartment?->name ?: 'Not assigned' }}</div></div>
-            <div class="tag-info"><div class="tag-label"><i class="bi bi-geo-alt me-1"></i>Current Location</div><div class="tag-value">{{ $fixedAsset->location ?: 'Not recorded' }}</div></div>
+            <div class="tag-info"><div class="tag-label"><i class="bi bi-geo-alt me-1"></i>Current Location</div><div class="tag-value">{{ $fixedAsset->asset_location ?: 'Not recorded' }}</div></div>
             <div class="tag-info"><div class="tag-label"><i class="bi bi-calendar3 me-1"></i>Date Acquired</div><div class="tag-value">{{ optional($fixedAsset->date_acquired)->format('M d, Y') ?: 'Not recorded' }}</div></div>
             <div class="tag-info"><div class="tag-label"><i class="bi bi-cash-stack me-1"></i>Acquisition Cost</div><div class="tag-value money">{{ is_null($fixedAsset->acquisition_cost) ? 'Not recorded' : 'PHP '.number_format((float)$fixedAsset->acquisition_cost, 2) }}</div></div>
             <div class="tag-info"><div class="tag-label"><i class="bi bi-person me-1"></i>Encoded By</div><div class="tag-value">{{ $fixedAsset->user ? trim($fixedAsset->user->name.' '.$fixedAsset->user->lastname) : 'System' }}</div></div>
@@ -238,7 +238,7 @@
             @if($fixedAsset->status === 'Disposed')<div class="tag-info wide"><div class="tag-label"><i class="bi bi-exclamation-triangle me-1"></i>Disposal Reason</div><div class="tag-value">{{ $fixedAsset->disposal_reason ?: 'No reason recorded.' }}</div></div>@endif
         </div></div></section>
 
-        <aside class="tag-preview" aria-label="Printable asset tag preview"><div class="tag-preview-head"><small>{{ $assetCompanyLabel }}</small><h2>Fixed Asset Tag</h2></div><div class="tag-preview-body"><h3 class="tag-name">{{ $fixedAsset->asset_name }}</h3><div class="tag-code">{{ $fixedAsset->asset_code }}</div><div class="tag-barcode"><img src="{{ $barcodeSvg }}" alt="QR code for {{ $fixedAsset->asset_code }}"></div><p class="tag-location"><i class="bi bi-geo-alt me-1"></i>{{ $fixedAsset->location ?: ($fixedAsset->category ?: $assetCompanyShort) }}</p></div><p class="tag-note"><i class="bi bi-shield-check me-1"></i>Locally generated. No asset information is sent externally.</p></aside>
+        <aside class="tag-preview" aria-label="Printable asset tag preview"><div class="tag-preview-head"><small>{{ $assetCompanyLabel }}</small><h2>Fixed Asset Tag</h2></div><div class="tag-preview-body"><h3 class="tag-name">{{ $fixedAsset->asset_name }}</h3><div class="tag-code">{{ $fixedAsset->asset_code }}</div><div class="tag-barcode"><img src="{{ $barcodeSvg }}" alt="QR code for {{ $fixedAsset->asset_code }}"></div><p class="tag-location"><i class="bi bi-geo-alt me-1"></i>{{ $fixedAsset->asset_location ?: ($fixedAsset->category ?: $assetCompanyShort) }}</p></div><p class="tag-note"><i class="bi bi-shield-check me-1"></i>Locally generated. No asset information is sent externally.</p></aside>
     </div>
 
     <div class="tag-support no-print">
@@ -291,8 +291,12 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Location</label>
-                            <input type="text" name="location" class="form-control" value="{{ old('location', $fixedAsset->location) }}">
+                            @if($assetCompanyKey === 'shipping')
+                                @include('fixed-assets.shipping-location', ['locationAsset' => $fixedAsset])
+                            @else
+                                <label class="form-label">Location</label>
+                                <input type="text" name="location" class="form-control" value="{{ old('location', $fixedAsset->location) }}">
+                            @endif
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Condition</label>

@@ -70,7 +70,7 @@
                 <div class="label-title"><span class="asset-name">{{ $asset->asset_name }}</span><span>-</span><span class="asset-meta">{{ $asset->category }}</span></div>
                 <div class="label-qr"><img src="{{ $label['qr_code'] }}" alt="QR code for {{ $asset->asset_code }}"></div>
                 <div class="asset-code">{{ $asset->asset_code }}</div>
-                <div class="label-footer">SCAN FOR DETAILS &amp; ATTACHED FILES</div>
+                <div class="label-footer">{{ $assetCompanyKey === 'shipping' ? ($asset->asset_location ?: 'Location not recorded') : 'SCAN FOR DETAILS & ATTACHED FILES' }}</div>
             </article>
         @endforeach
     </main>

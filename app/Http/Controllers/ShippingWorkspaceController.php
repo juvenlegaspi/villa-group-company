@@ -33,8 +33,8 @@ class ShippingWorkspaceController extends Controller
 
     public function comingSoon(string $application): View|RedirectResponse
     {
-        if ($application === 'inventory') {
-            return to_route('shipping.inventory.home');
+        if ($application === 'procurement' && (auth()->user()->isSystemAdministrator() || auth()->user()->hasPermission('shipping.assets.view'))) {
+            return to_route('shipping.inventory.fixed-assets.index');
         }
         $applications = [
             'procurement' => [

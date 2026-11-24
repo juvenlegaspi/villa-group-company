@@ -406,7 +406,7 @@
                     <span>Applications</span>
                 </a>
             @elseif (request()->routeIs('shipping.inventory.*'))
-                <a class="app-nav-link {{ request()->routeIs('shipping.inventory.home') ? 'active' : '' }}" href="{{ route('shipping.inventory.home') }}"><i class="bi bi-grid"></i><span>Inventory</span></a>
+                <a class="app-nav-link {{ request()->routeIs('shipping.inventory.home') ? 'active' : '' }}" href="{{ route('shipping.application.placeholder', 'procurement') }}"><i class="bi bi-cart-check"></i><span>Procurement</span></a>
                 @if($currentUser->hasPermission('shipping.assets.view'))<a class="app-nav-link {{ request()->routeIs('shipping.inventory.fixed-assets.*') ? 'active' : '' }}" href="{{ route('shipping.inventory.fixed-assets.index') }}"><i class="bi bi-clipboard-data"></i><span>Fixed Assets</span></a>@endif
             @elseif ($isShippingArea)
                 @if($currentUser->hasPermission('shipping.vessel_management.access'))

@@ -24,6 +24,10 @@ class CompanyFixedAssetPermissions
                     'procurement-manager', 'purchaser', 'finance-manager', 'accountant' => ['view'],
                     default => [],
                 };
+                if ($key === 'shipping' && in_array($position->code, ['procurement-manager', 'purchaser'], true)
+                    && DB::table('departments')->where('id', $position->department_id)->whereRaw('LOWER(name) = ?', ['procurement'])->exists()) {
+                    $actions[] = 'create';
+                }
                 $slugs = array_map(fn ($action) => $key.'.assets.'.$action, $actions);
                 if ($key === 'shipping' && $actions) {
                     $slugs[] = 'shipping.inventory.access';

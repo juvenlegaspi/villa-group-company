@@ -21,16 +21,16 @@
             <span><span class="block text-sm font-extrabold uppercase text-villa-900">Operations</span><span class="mt-1 block text-xs leading-5 text-slate-500">Vessel management, defects, certificates and dry docking.</span></span>
         </a>
         @endif
-        @if(auth()->user()->hasPermission('shipping.procurement.access'))
+        @if(auth()->user()->hasPermission('shipping.procurement.access') || auth()->user()->hasPermission('shipping.assets.view'))
         <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-amber-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-100" href="{{ route('shipping.application.placeholder', 'procurement') }}">
             <span class="grid h-13 w-13 shrink-0 place-items-center rounded-2xl bg-amber-50 text-2xl text-amber-700"><i class="bi bi-cart-check"></i></span>
-            <span><span class="block text-sm font-extrabold uppercase text-villa-900">Procurement</span><span class="mt-1 block text-xs leading-5 text-slate-500">Purchase orders, suppliers and material sourcing.</span><small class="mt-1 block text-[.65rem] font-extrabold uppercase tracking-wider text-amber-700">Coming soon</small></span>
+            <span><span class="block text-sm font-extrabold uppercase text-villa-900">Procurement</span><span class="mt-1 block text-xs leading-5 text-slate-500">Fixed assets, custody, documents and QR tag printing.</span></span>
         </a>
         @endif
         @if(auth()->user()->hasPermission('shipping.inventory.access'))
-        <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-100" href="{{ route('shipping.inventory.home') }}">
+        <a class="group flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 no-underline shadow-sm transition hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-100" href="{{ route('shipping.application.placeholder', 'inventory') }}">
             <span class="grid h-13 w-13 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-2xl text-emerald-700"><i class="bi bi-clipboard-data"></i></span>
-            <span><span class="block text-sm font-extrabold uppercase text-villa-900">Inventory</span><span class="mt-1 block text-xs leading-5 text-slate-500">Company fixed assets, custody, documents and QR tag printing.</span></span>
+            <span><span class="block text-sm font-extrabold uppercase text-villa-900">Inventory</span><span class="mt-1 block text-xs leading-5 text-slate-500">Stock levels, item movements and warehouse management.</span><small class="mt-1 block text-[.65rem] font-extrabold uppercase tracking-wider text-emerald-700">Coming soon</small></span>
         </a>
         @endif
         @if(auth()->user()->canManageUsers())
@@ -39,7 +39,7 @@
                 <span><span class="block text-sm font-extrabold uppercase text-villa-900">User Management</span><span class="mt-1 block text-xs leading-5 text-slate-500">Manage organization assignments, positions, access profiles, and approvers.</span></span>
             </a>
         @endif
-        @unless(auth()->user()->hasPermission('shipping.operations.access') || auth()->user()->hasPermission('shipping.procurement.access') || auth()->user()->hasPermission('shipping.inventory.access') || auth()->user()->canManageUsers())
+        @unless(auth()->user()->hasPermission('shipping.operations.access') || auth()->user()->hasPermission('shipping.procurement.access') || auth()->user()->hasPermission('shipping.assets.view') || auth()->user()->hasPermission('shipping.inventory.access') || auth()->user()->canManageUsers())
             <div class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center"><i class="bi bi-shield-lock mb-3 block text-3xl text-slate-400"></i><h2 class="text-lg font-extrabold text-slate-800">No application assigned</h2><p class="mt-1 text-sm text-slate-500">Contact your company administrator if your department requires application access.</p></div>
         @endunless
     </div>

@@ -43,7 +43,7 @@ class CompanyFixedAssetTest extends TestCase
 
     private function data(array $override = []): array
     {
-        return $override + ['asset_entry_type' => 'new', 'asset_name' => 'Company Test Laptop', 'serial_number' => 'TEST-SERIAL', 'category' => 'IT & SYSTEMS INFRASTRUCTURE', 'asset_condition' => 'Good', 'status' => 'Active', 'location' => 'Test Office', 'date_acquired' => today()->toDateString(), 'acquisition_cost' => '45000.50', 'remarks' => 'Test asset'];
+        return $override + ['asset_entry_type' => 'new', 'asset_name' => 'Company Test Laptop', 'serial_number' => 'TEST-SERIAL', 'category' => 'IT & SYSTEMS INFRASTRUCTURE', 'asset_condition' => 'Good', 'status' => 'Active', 'asset_location' => 'office', 'location' => 'Test Office', 'date_acquired' => today()->toDateString(), 'acquisition_cost' => '45000.50', 'remarks' => 'Test asset'];
     }
 
     private function createAsset(string $key, array $override = []): YatiraFixedAsset
@@ -58,7 +58,11 @@ class CompanyFixedAssetTest extends TestCase
         foreach (['jmv' => ['JMV', 'JMV-', 'jmv.webp'], 'shipping' => ['Villa shipping Lines', 'VSL-', 'villa-shipping-lines.webp']] as $key => [$company,$prefix,$logo]) {
             $actor = $this->user($company);
             $this->actingAs($actor);
-            $this->get(route($key.'.inventory.home'))->assertOk()->assertSee('Fixed Assets');
+            if ($key === 'shipping') {
+                $this->get(route($key.'.inventory.home'))->assertRedirect(route('shipping.application.placeholder', 'procurement'));
+            } else {
+                $this->get(route($key.'.inventory.home'))->assertOk()->assertSee('Fixed Assets');
+            }
             $this->get(route($key.'.inventory.fixed-assets.index'))->assertOk()->assertSee('Fixed Asset Table')->assertSee('Add Fixed Asset');
             $asset = $this->createAsset($key, ['document' => UploadedFile::fake()->image('asset-first.png'), 'assigned_user_id' => $actor->id]);
             $this->assertStringStartsWith($prefix, $asset->asset_code);
@@ -141,13 +145,60 @@ class CompanyFixedAssetTest extends TestCase
         $this->get(route('jmv.inventory.fixed-assets.print-tags', ['from_asset_id' => $last->id, 'to_asset_id' => $last->id, 'copies' => 1, 'include_disposed' => 1]))->assertOk()->assertSee('1 total tags');
     }
 
-    public function test_existing_jmv_stock_inventory_and_shipping_inventory_links_remain_available(): void
+    public function test_shipping_fixed_assets_open_from_procurement_and_jmv_inventory_remains_available(): void
     {
         $this->actingAs($this->user('JMV'));
         $this->get(route('jmv.inventory.index'))->assertOk()->assertSee('Inventory Control');
         $this->get(route('jmv.applications'))->assertOk()->assertSee(route('jmv.inventory.home'), false);
         $this->actingAs($this->user('Villa shipping Lines'));
-        $this->get(route('shipping.applications'))->assertOk()->assertSee(route('shipping.inventory.home'), false);
-        $this->get(route('shipping.application.placeholder', 'inventory'))->assertRedirect(route('shipping.inventory.home'));
+        $this->get(route('shipping.applications'))->assertOk()->assertSee(route('shipping.application.placeholder', 'procurement'), false);
+        $this->get(route('shipping.application.placeholder', 'procurement'))->assertRedirect(route('shipping.inventory.fixed-assets.index'));
+        $this->get(route('shipping.inventory.fixed-assets.index'))->assertOk()->assertSee('Procurement · Fixed Assets');
+        $this->get(route('shipping.inventory.home'))->assertRedirect(route('shipping.application.placeholder', 'procurement'));
+        $this->get(route('shipping.application.placeholder', 'inventory'))->assertOk()->assertSee('Coming soon');
+    }
+
+    public function test_shipping_assets_use_live_vessel_locations_and_can_transfer_to_office(): void
+    {
+        $actor = $this->user('Villa shipping Lines');
+        $this->actingAs($actor);
+        $vessel = \App\Models\Vessel::create(['vessel_name' => 'MV JV Tres Vessel']);
+        $this->get(route('shipping.inventory.fixed-assets.index'))->assertOk()->assertSee('Villa Shipping Office')->assertSee('MV JV Tres Vessel');
+        $asset = $this->createAsset('shipping', ['asset_location' => 'vessel:'.$vessel->id, 'location' => 'Untrusted location']);
+        $this->assertSame($vessel->id, $asset->vessel_id);
+        $this->assertSame('MV JV Tres Vessel', $asset->location);
+        $vessel->update(['vessel_name' => 'MV JV Tres Renamed']);
+        $this->get(route('shipping.inventory.fixed-assets.show', $asset))->assertOk()->assertSee('MV JV Tres Renamed')->assertSee('name="asset_location"', false);
+        $this->get(route('shipping.inventory.fixed-assets.index', ['search' => 'Tres Renamed']))->assertOk()->assertViewHas('fixedAssets', fn ($items) => $items->total() === 1);
+        $this->get(route('shipping.inventory.fixed-assets.print-tags', ['from_asset_id' => $asset->id, 'to_asset_id' => $asset->id, 'copies' => 1]))->assertOk()->assertSee('MV JV Tres Renamed');
+        $this->put(route('shipping.inventory.fixed-assets.update', $asset), $this->data(['asset_location' => 'office']))->assertSessionHasNoErrors();
+        $this->assertNull($asset->fresh()->vessel_id);
+        $this->assertSame('Villa Shipping Office', $asset->fresh()->location);
+        $this->post(route('shipping.inventory.fixed-assets.store'), $this->data(['asset_location' => 'vessel:999999']))->assertSessionHasErrors('asset_location');
+        $this->post(route('shipping.inventory.fixed-assets.store'), $this->data(['asset_location' => 'current']))->assertSessionHasErrors('asset_location');
+    }
+
+    public function test_shipping_legacy_location_can_be_kept_without_rewriting_old_assets(): void
+    {
+        $this->actingAs($this->user('Villa shipping Lines'));
+        $asset = $this->createAsset('shipping');
+        $asset->update(['location' => 'Legacy warehouse']);
+        $this->get(route('shipping.inventory.fixed-assets.show', $asset))->assertOk()->assertSee('Legacy warehouse (current location)');
+        $this->put(route('shipping.inventory.fixed-assets.update', $asset), $this->data(['asset_location' => 'current']))->assertSessionHasNoErrors();
+        $this->assertSame('Legacy warehouse', $asset->fresh()->location);
+        $this->assertNull($asset->fresh()->vessel_id);
+    }
+
+    public function test_shipping_procurement_positions_can_add_but_not_edit_or_dispose_assets(): void
+    {
+        foreach (['purchaser', 'procurement-manager'] as $position) {
+            $this->actingAs($this->user('Villa shipping Lines', $position));
+            $this->get(route('shipping.inventory.fixed-assets.index'))->assertOk()->assertSee('id="addFixedAssetModal"', false);
+            $asset = $this->createAsset('shipping');
+            $this->put(route('shipping.inventory.fixed-assets.update', $asset), $this->data())->assertForbidden();
+            $this->put(route('shipping.inventory.fixed-assets.update', $asset), $this->data(['status' => 'Disposed', 'disposal_reason' => 'Test']))->assertForbidden();
+            $this->actingAs($this->user('JMV', $position));
+            $this->post(route('jmv.inventory.fixed-assets.store'), $this->data())->assertForbidden();
+        }
     }
 }

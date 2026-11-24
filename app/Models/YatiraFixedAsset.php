@@ -20,6 +20,7 @@ class YatiraFixedAsset extends Model
         'assigned_user_id',
         'assigned_department_id',
         'location',
+        'vessel_id',
         'asset_condition',
         'status',
         'date_acquired',
@@ -34,6 +35,7 @@ class YatiraFixedAsset extends Model
     ];
 
     protected $casts = [
+        'vessel_id' => 'integer',
         'date_acquired' => 'date',
         'acquisition_cost' => 'decimal:2',
         'disposed_at' => 'datetime',
@@ -45,6 +47,8 @@ class YatiraFixedAsset extends Model
     }
 
     public function updater() { return $this->belongsTo(User::class, 'updated_by'); }
+    public function assetVessel() { return $this->belongsTo(Vessel::class, 'vessel_id'); }
+    public function getAssetLocationAttribute(): ?string { return $this->assetVessel?->vessel_name ?? $this->location; }
     public function assignedUser() { return $this->belongsTo(User::class, 'assigned_user_id'); }
     public function assignedDepartment() { return $this->belongsTo(Department::class, 'assigned_department_id'); }
     public function audits() { return $this->hasMany(YatiraFixedAssetAudit::class)->latest('created_at'); }

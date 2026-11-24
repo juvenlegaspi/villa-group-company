@@ -45,13 +45,14 @@ class YatiraInventoryController extends Controller
         $status = $request->string('status')->toString();
 
         $fixedAssets = $canViewAssets
-            ? YatiraFixedAsset::with(['user:id,name,lastname', 'assignedUser:id,name,lastname', 'assignedDepartment:id,name'])
+            ? YatiraFixedAsset::with(['assetVessel:id,vessel_name', 'user:id,name,lastname', 'assignedUser:id,name,lastname', 'assignedDepartment:id,name'])
                 ->where('division_id', $divisionId)
                 ->when($search !== '', function (Builder $query) use ($search): void {
                     $query->where(fn (Builder $nested) => $nested->where('asset_code', 'like', "%{$search}%")
                         ->orWhere('asset_name', 'like', "%{$search}%")->orWhere('serial_number', 'like', "%{$search}%")
                         ->orWhere('category', 'like', "%{$search}%")->orWhere('assigned_to', 'like', "%{$search}%")
-                        ->orWhere('location', 'like', "%{$search}%"));
+                        ->orWhere('location', 'like', "%{$search}%")
+                        ->orWhereHas('assetVessel', fn ($vessel) => $vessel->where('vessel_name', 'like', "%{$search}%")));
                 })->when($category !== '', fn (Builder $query) => $query->where('category', $category))
                 ->when($status !== '', fn (Builder $query) => $query->where('status', $status))
                 ->latest()->paginate(10, ['*'], 'assets_page')->withQueryString()
@@ -90,7 +91,7 @@ class YatiraInventoryController extends Controller
 
         $fromId = min((int) $data['from_asset_id'], (int) $data['to_asset_id']);
         $toId = max((int) $data['from_asset_id'], (int) $data['to_asset_id']);
-        $assets = YatiraFixedAsset::where('division_id', $divisionId)
+        $assets = YatiraFixedAsset::with('assetVessel:id,vessel_name')->where('division_id', $divisionId)
             ->whereBetween('id', [$fromId, $toId])
             ->when(! ($data['include_disposed'] ?? false), fn ($query) => $query->where('status', '!=', 'Disposed'))
             ->orderBy('id')
@@ -142,7 +143,7 @@ class YatiraInventoryController extends Controller
     {
         $this->authorizePermission('yatira.assets.view');
         $this->ensureYatiraAsset($fixedAsset);
-        $fixedAsset->load(['user:id,name,lastname', 'updater:id,name,lastname', 'assignedUser:id,name,lastname', 'assignedDepartment:id,name', 'audits.user:id,name,lastname', 'documents.uploader:id,name,lastname']);
+        $fixedAsset->load(['assetVessel:id,vessel_name', 'user:id,name,lastname', 'updater:id,name,lastname', 'assignedUser:id,name,lastname', 'assignedDepartment:id,name', 'audits.user:id,name,lastname', 'documents.uploader:id,name,lastname']);
         $barcodeSvg = $this->qrCodeDataUri(route($this->assetContext()['assetRoutePrefix'].'.show', $fixedAsset));
         $divisionId = $this->yatiraDivisionId();
         $users = User::where('division_id', $divisionId)->where('status', true)->orderBy('name')->get(['id', 'name', 'lastname', 'department_id']);
@@ -160,7 +161,7 @@ class YatiraInventoryController extends Controller
         if ($fixedAsset->status === 'Disposed') {
             $this->authorizePermission('yatira.assets.dispose');
         }
-        $data = $this->validateAsset($request, false);
+        $data = $this->validateAsset($request, false, $fixedAsset);
         unset($data['asset_entry_type'], $data['asset_code'], $data['document']);
         $data = $this->applyStructuredAssignment($data);
         if (($data['status'] ?? null) === 'Disposed') {
@@ -168,7 +169,7 @@ class YatiraInventoryController extends Controller
             if (blank($data['disposal_reason'] ?? null)) throw ValidationException::withMessages(['disposal_reason' => 'Provide the disposal reason before marking an asset as disposed.']);
         }
         $upload = $request->hasFile('document') ? $this->storeDocument($request) : [];
-        $before = $fixedAsset->only(['asset_name', 'serial_number', 'category', 'assigned_to', 'assigned_user_id', 'assigned_department_id', 'location', 'asset_condition', 'status', 'date_acquired', 'acquisition_cost', 'remarks', 'document_path', 'disposal_reason']);
+        $before = $fixedAsset->only(['asset_name', 'serial_number', 'category', 'assigned_to', 'assigned_user_id', 'assigned_department_id', 'location', 'vessel_id', 'asset_condition', 'status', 'date_acquired', 'acquisition_cost', 'remarks', 'document_path', 'disposal_reason']);
         if (($data['status'] ?? null) === 'Disposed' && ! $fixedAsset->disposed_at) $data['disposed_at'] = now();
         if (($data['status'] ?? null) !== 'Disposed') $data['disposed_at'] = null;
         try {
@@ -260,7 +261,7 @@ class YatiraInventoryController extends Controller
         return back()->with('success', 'Consumable item updated successfully.');
     }
 
-    private function validateAsset(Request $request, bool $creating): array
+    protected function validateAsset(Request $request, bool $creating, ?YatiraFixedAsset $asset = null): array
     {
         $divisionId = $this->yatiraDivisionId();
         return $request->validate([

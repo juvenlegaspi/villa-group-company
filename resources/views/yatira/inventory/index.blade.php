@@ -358,7 +358,7 @@
     <div class="mx-auto max-w-7xl">
         <header class="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-villa-900 via-villa-800 to-amber-700 p-6 text-white shadow-xl sm:p-8">
             <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                <div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-amber-200">{{ $assetCompanyLabel }}</p><h1 class="mb-1 text-2xl font-black sm:text-3xl">Inventory Control Center</h1><p class="mb-0 max-w-2xl text-sm text-blue-100">Monitor fixed-asset condition, custody, documents and printable asset tags.</p></div>
+                <div><p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-amber-200">{{ $assetCompanyLabel }}</p><h1 class="mb-1 text-2xl font-black sm:text-3xl">{{ $assetCompanyKey === 'shipping' ? 'Procurement · Fixed Assets' : 'Inventory Control Center' }}</h1><p class="mb-0 max-w-2xl text-sm text-blue-100">Monitor fixed-asset condition, custody, documents and printable asset tags.</p></div>
                 <div class="flex flex-wrap gap-2"><a href="{{ route($assetApplicationsRoute) }}" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white no-underline hover:bg-white/20"><i class="bi bi-grid"></i>Applications</a>@if($canCreateAssets)<button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl border-0 bg-white px-4 text-sm font-black text-villa-900 shadow-lg" data-bs-toggle="modal" data-bs-target="#addFixedAssetModal"><i class="bi bi-plus-lg"></i>Add Asset</button>@endif</div>
             </div>
         </header>
@@ -537,7 +537,7 @@
                                             <td>{{ $asset->asset_name }}</td>
                                             <td>{{ $asset->category }}</td>
                                             <td>{{ $asset->assigned_to ?: 'N/A' }}</td>
-                                            <td>{{ $asset->location ?: 'N/A' }}</td>
+                                            <td>{{ $asset->asset_location ?: 'N/A' }}</td>
                                             <td>{{ $asset->asset_condition }}</td>
                                             <td>{{ $asset->status }}</td>
                                             <td>{{ optional($asset->date_acquired)->format('M d, Y') ?: 'N/A' }}</td>
@@ -731,8 +731,12 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Location</label>
-                            <input type="text" name="location" class="form-control" value="{{ old('location') }}">
+                            @if($assetCompanyKey === 'shipping')
+                                @include('fixed-assets.shipping-location', ['locationAsset' => null])
+                            @else
+                                <label class="form-label">Location</label>
+                                <input type="text" name="location" class="form-control" value="{{ old('location') }}">
+                            @endif
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Condition</label>
