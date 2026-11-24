@@ -5,6 +5,13 @@
     $selectedLocation = old('location', $current?->location);
     $selectedShift = old('shift', $current?->shift);
 @endphp
+@if($errors->any())
+<div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+    <strong>Draft not saved. Please check:</strong>
+    <ul class="mb-0 mt-2">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+</div>
+@endif
+@include('jmv.operations.production.partials.save-feedback')
 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
     <label class="block"><span class="mb-1 block text-sm font-extrabold text-slate-700">Date <b class="text-rose-600">*</b></span><input type="date" name="log_date" max="{{ now()->format('Y-m-d') }}" value="{{ old('log_date', $current?->log_date?->format('Y-m-d') ?? '') }}" required class="min-h-11 w-full rounded-xl border border-slate-300 px-3"></label>
     <label class="block"><span class="mb-1 block text-sm font-extrabold text-slate-700">Location <b class="text-rose-600">*</b></span><select name="location" required class="min-h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-3"><option value="">Select mine</option>@if($current?->exists && filled($selectedLocation) && !in_array($selectedLocation, $locationOptions, true))<option selected value="{{ $selectedLocation }}">{{ $selectedLocation }} (current)</option>@endif @foreach($locationOptions as $locationOption)<option value="{{ $locationOption }}" @selected($selectedLocation === $locationOption)>{{ $locationOption }}</option>@endforeach</select></label>
@@ -50,5 +57,5 @@
 <label for="productionAttachments" class="mt-4 block cursor-pointer rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50 p-5 transition hover:border-blue-600 hover:bg-blue-100 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-200">
     <span class="mb-4 flex items-center gap-3"><span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-700 text-white"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m-4 4 4-4 4 4M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></span><span><span class="block text-sm font-extrabold text-blue-950">Upload Daily Accomplishment Report</span><span class="mt-1 block text-xs text-blue-800">Click here or choose files below to attach your supporting documents.</span></span></span>
     <input id="productionAttachments" type="file" name="attachments[]" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" aria-describedby="productionAttachmentsHelp" class="block w-full cursor-pointer rounded-xl border border-blue-200 bg-white p-2 text-sm text-slate-700 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-blue-700 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-blue-800">
-    <small id="productionAttachmentsHelp" class="mt-3 block text-xs leading-5 text-slate-600">PDF, JPG, PNG, Word or Excel. Up to 5 files per save, maximum 10 MB each. At least one supporting document is required before submission.</small>
+    <small id="productionAttachmentsHelp" class="mt-3 block text-xs leading-5 text-slate-600">PDF, JPG, PNG, Word or Excel. Up to 5 files per save; follow the server upload limits shown above. At least one supporting document is required before submission.</small>
 </label>

@@ -311,6 +311,40 @@ class JmvDailyProductionTest extends TestCase
         $this->get(route('jmv.operations.production.attachments.show', [$log, $attachment, 'inline' => 1]))->assertNotFound();
     }
 
+    public function test_mobile_json_save_confirms_record_and_reports_validation_errors_without_duplicates(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->positionUser('mine-operations-manager'));
+        $response = $this->post(route('jmv.operations.production.store'), $this->payload([
+            'attachments' => [UploadedFile::fake()->create('mobile-report.pdf', 50, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertCreated();
+        $log = JmvDailyProductionLog::firstOrFail();
+        $response->assertJsonPath('redirect_url', route('jmv.operations.production.show', $log));
+        $this->assertSame(1, $log->attachments()->count());
+        $this->post(route('jmv.operations.production.store'), $this->payload(), ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->assertSame(1, JmvDailyProductionLog::count());
+        $this->post(route('jmv.operations.production.update', $log), $this->payload(['_method' => 'PUT', 'coal_output' => 20]), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('redirect_url', route('jmv.operations.production.show', $log));
+        $this->assertSame(20, $log->fresh()->coal_output);
+    }
+
+    public function test_add_modal_does_not_inherit_the_last_listed_log_or_its_legacy_shift(): void
+    {
+        $this->actingAs($this->positionUser('mine-operations-manager'));
+        $this->post(route('jmv.operations.production.targets.store'), ['coal_target' => 9, 'weekly_coal_target' => 63])->assertSessionHasNoErrors();
+        $this->post(route('jmv.operations.production.store'), $this->payload(['shift' => '5:00 PM - 2:00 AM', 'leadman' => 'Old record leadman']))->assertSessionHasNoErrors();
+        JmvDailyProductionLog::firstOrFail()->update(['daily_target_bagons' => 99]);
+        $response = $this->get(route('jmv.operations.production.index'))->assertOk();
+        preg_match('/<form id="addProductionLogForm".*?<\/form>/s', $response->getContent(), $matches);
+        $this->assertNotEmpty($matches);
+        $this->assertStringNotContainsString('5:00 PM - 2:00 AM', $matches[0]);
+        $this->assertStringNotContainsString('value="Old record leadman"', $matches[0]);
+        $this->assertStringContainsString('data-daily-target="9"', $matches[0]);
+        $this->assertStringContainsString('8AM - 5PM', $matches[0]);
+        $this->assertStringContainsString('4PM - 1AM', $matches[0]);
+        $this->assertStringContainsString('12AM - 8AM', $matches[0]);
+    }
+
     private function payload(array $overrides = []): array
     {
         return array_merge([

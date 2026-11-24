@@ -119,6 +119,10 @@ class JmvDailyProductionController extends Controller
             throw $exception;
         }
 
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', 'Daily production log saved as a draft. Review it, then submit it for approval.');
+            return response()->json(['redirect_url' => route('jmv.operations.production.show', $log)], 201);
+        }
         return redirect()->route('jmv.operations.production.show', $log)->with('success', 'Daily production log saved as a draft. Review it, then submit it for approval.');
     }
 
@@ -163,6 +167,10 @@ class JmvDailyProductionController extends Controller
         } catch (\Throwable $exception) {
             foreach ($storedPaths as $path) Storage::disk('local')->delete($path);
             throw $exception;
+        }
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', 'Daily production draft updated successfully.');
+            return response()->json(['redirect_url' => route('jmv.operations.production.show', $productionLog)]);
         }
         return redirect()->route('jmv.operations.production.show', $productionLog)->with('success', 'Daily production draft updated successfully.');
     }

@@ -55,7 +55,7 @@
 </div></section>
 
 
-@if($canCreate)<div class="modal fade" id="addProductionLog" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><form id="addProductionLogForm" method="POST" enctype="multipart/form-data" autocomplete="off" action="{{ route('jmv.operations.production.store') }}" class="modal-content overflow-hidden rounded-4 border-0 shadow-2xl">@csrf<div class="modal-header border-bottom px-4 py-3"><div><p class="mb-1 text-xs font-black uppercase tracking-wider text-amber-700">JMV Operations</p><h2 class="modal-title fs-4 fw-black">New Daily Production Log</h2><p class="mb-0 mt-1 text-xs text-slate-500">The record will be saved as Draft before submission.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body bg-slate-50 px-4 py-4 sm:px-5">@include('jmv.operations.production.partials.form')</div><div class="modal-footer border-top bg-white"><button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary rounded-3 px-4"><i class="bi bi-save me-2"></i>Save Draft</button></div></form></div></div></div>@endif
+@if($canCreate)<div class="modal fade" id="addProductionLog" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><form id="addProductionLogForm" method="POST" enctype="multipart/form-data" autocomplete="off" action="{{ route('jmv.operations.production.store') }}" class="modal-content overflow-hidden rounded-4 border-0 shadow-2xl">@csrf<div class="modal-header border-bottom px-4 py-3"><div><p class="mb-1 text-xs font-black uppercase tracking-wider text-amber-700">JMV Operations</p><h2 class="modal-title fs-4 fw-black">New Daily Production Log</h2><p class="mb-0 mt-1 text-xs text-slate-500">The record will be saved as Draft before submission.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body bg-slate-50 px-4 py-4 sm:px-5">@include('jmv.operations.production.partials.form', ['log' => null])</div><div class="modal-footer border-top bg-white"><button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary rounded-3 px-4"><i class="bi bi-save me-2"></i>Save Draft</button></div></form></div></div></div>@endif
 @endsection
 @push('scripts')
 @if($canCreate)
@@ -64,11 +64,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalElement = document.getElementById('addProductionLog');
     const form = document.getElementById('addProductionLogForm');
     if (!modalElement || !form) return;
-    const clearNewLogForm = () => form.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(field => {
+    const clearNewLogForm = () => {
+        if (form.dataset.productionBusy === 'true') return;
+        form.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(field => {
         if (field.type === 'file') field.value = '';
         else if (field.tagName === 'SELECT') field.selectedIndex = 0;
         else field.value = '';
-    });
+        });
+    };
     let openingFreshLog = false;
     document.querySelectorAll('[data-new-production-log]').forEach(button => button.addEventListener('click', () => { openingFreshLog = true; clearNewLogForm(); }));
     modalElement.addEventListener('shown.bs.modal', () => { if (openingFreshLog) { clearNewLogForm(); openingFreshLog = false; } });
