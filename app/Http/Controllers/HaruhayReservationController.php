@@ -38,11 +38,11 @@ class HaruhayReservationController extends Controller
     {
         $request->validate(['since' => 'nullable|integer|min:0', 'directory' => 'nullable|boolean', 'version' => 'nullable|string|max:64']);
         $user = $request->user();
-        $unread = $user->unreadNotifications()->where('type', \App\Notifications\HaruhayReservationRequested::class);
+        $unread = $user->visibleUnreadNotifications()->where('type', \App\Notifications\HaruhayReservationRequested::class);
         $latest = (int) $this->visible()->max('id');
         $response = [
             'unread_count' => (clone $unread)->count(),
-            'notification_count' => $user->unreadNotifications()->count(),
+            'notification_count' => $user->visibleUnreadNotifications()->count(),
             'latest_id' => $latest,
             'items' => (clone $unread)->where('data->reservation_id', '>', $request->integer('since'))->latest()->limit(5)->get()->map(fn ($n) => [
                 'reference' => $n->data['reference'], 'name' => $n->data['applicant'], 'room' => $n->data['room'], 'url' => $n->data['url'],
@@ -50,7 +50,7 @@ class HaruhayReservationController extends Controller
         ];
         if ($request->boolean('directory')) {
             $revision = \Illuminate\Support\Facades\Cache::rememberForever('haruhay.reservations.directory-revision', fn () => (string) str()->uuid());
-            $version = hash('sha256', json_encode([$revision, $user->id, $request->input('search', ''), $request->input('status', ''), $request->integer('page', 1)]));
+            $version = hash('sha256', json_encode([$revision, $user->id, $user->position_id, $user->department_id, $user->access_role_id, $request->input('search', ''), $request->input('status', ''), $request->integer('page', 1)]));
             $response['version'] = $version;
             if ($request->input('version') !== $version) {
                 $data = $this->directoryData($request);
@@ -64,7 +64,7 @@ class HaruhayReservationController extends Controller
     public function show(HaruhayReservation $reservation)
     {
         $this->authorizeRecord($reservation);
-        auth()->user()->unreadNotifications()->where('type', \App\Notifications\HaruhayReservationRequested::class)->where('data->reservation_id', $reservation->id)->update(['read_at' => now()]);
+        auth()->user()->visibleUnreadNotifications()->where('type', \App\Notifications\HaruhayReservationRequested::class)->where('data->reservation_id', $reservation->id)->update(['read_at' => now()]);
         $reservation->load(['unit.property', 'tenant', 'contract', 'payments.collection', 'events', 'trackingSms']);
 
         return response()->view('haruhay.reservations.show', compact('reservation') + ['canManage' => $this->allows('reservations.manage'), 'canVerify' => $this->allows('reservations.verify')])->header('Cache-Control', 'private, no-store');

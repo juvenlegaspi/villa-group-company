@@ -8,7 +8,11 @@ trait InvalidatesHaruhayReservationDirectory
 {
     public static function bootInvalidatesHaruhayReservationDirectory(): void
     {
-        static::saved(fn () => Cache::forget('haruhay.reservations.directory-revision'));
-        static::deleted(fn () => Cache::forget('haruhay.reservations.directory-revision'));
+        static::saved(function (): void {
+            Cache::forget('haruhay.reservations.directory-revision');
+        });
+        static::deleted(function (): void {
+            Cache::forget('haruhay.reservations.directory-revision');
+        });
     }
 }

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayDepositEntry extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     protected $guarded = ['id'];
 
     protected static function booted(): void

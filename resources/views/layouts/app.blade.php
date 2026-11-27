@@ -311,7 +311,7 @@
     $currentUser = auth()->user();
     $isOwner = $currentUser->isExecutiveViewer();
     $canSeeHaruhayLive = \Illuminate\Support\Facades\Schema::hasTable('notifications') && ($currentUser->canManageAllCompanies() || $isOwner || strcasecmp((string) $currentUser->division?->name, 'Haruhay') === 0);
-    $haruhayReservationUnread = $canSeeHaruhayLive ? $currentUser->unreadNotifications()->where('type', \App\Notifications\HaruhayReservationRequested::class)->count() : 0;
+    $haruhayReservationUnread = $canSeeHaruhayLive ? $currentUser->visibleUnreadNotifications()->where('type', \App\Notifications\HaruhayReservationRequested::class)->count() : 0;
     $isStandaloneDashboard = request()->routeIs('division.dashboard', 'shipping.dashboard');
     $isShippingArea = ! $isStandaloneDashboard && request()->is('shipping/*', 'vessel-certificates*');
     $isShippingApplications = request()->routeIs('shipping.applications', 'shipping.application.placeholder');
@@ -515,7 +515,7 @@
                 </a>
                 <a class="icon-action notification-action" href="{{ route('notifications.index') }}" aria-label="Notifications">
                     <i class="bi bi-bell" aria-hidden="true"></i>
-                    @php($unreadNotificationCount = \Illuminate\Support\Facades\Schema::hasTable('notifications') ? $currentUser->unreadNotifications()->count() : 0)
+                    @php($unreadNotificationCount = \Illuminate\Support\Facades\Schema::hasTable('notifications') ? $currentUser->visibleUnreadNotifications()->count() : 0)
                     @if($unreadNotificationCount)<span class="notification-count">{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>@endif
                 </a>
                 <div class="profile-menu-wrap" id="profileMenuWrap">

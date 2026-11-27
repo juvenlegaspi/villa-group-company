@@ -222,7 +222,9 @@ class VesselCertificateController extends Controller
         $this->authorizeVesselManagement($certificate->vessel);
         abort_unless(in_array($certificate->workflow_status, ['draft', 'active'], true), 422, 'Submitted and historical certificates are read-only.');
         $data = $this->validateCertificate($request, false);
-        unset($data['vessel_id']);
+        // An empty optional file input is submitted as null by the popup.
+        // Only replace the stored document when an actual upload was received.
+        unset($data['vessel_id'], $data['document']);
         $upload = $request->hasFile('document') ? $this->storeDocument($request->file('document')) : null;
         try {
             DB::transaction(function () use ($certificate, $data, $upload): void {

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayTrackingSms extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     protected $table = 'haruhay_tracking_sms';
 
     protected $guarded = ['id'];

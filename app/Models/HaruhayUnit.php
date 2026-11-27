@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayUnit extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     use \App\Models\Concerns\InvalidatesHaruhayReservationDirectory;
     protected $guarded = ['id'];
     protected $attributes = ['status' => 'Vacant', 'room_condition' => 'Ready'];

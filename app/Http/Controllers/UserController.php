@@ -6,6 +6,7 @@ use App\Models\AccessRole;
 use App\Models\ApprovalAuthority;
 use App\Models\Department;
 use App\Models\Division;
+use App\Models\HaruhayProperty;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\Vessel;
@@ -75,6 +76,9 @@ class UserController extends Controller
             'access_role_id' => ['required', Rule::exists('access_roles', 'id')->where(fn ($query) => $query->where('is_active', true))],
             'approval_modules' => 'nullable|array',
             'approval_modules.*' => ['string', Rule::in(array_keys(ApprovalAuthority::MODULES))],
+            'property_assignment_present' => 'nullable|boolean',
+            'property_ids' => 'nullable|array',
+            'property_ids.*' => 'integer|distinct',
             'vessel_assignment_present' => 'nullable|boolean',
             'vessel_ids' => 'nullable|array',
             'vessel_ids.*' => 'integer|distinct|exists:vessels,id',
@@ -85,16 +89,21 @@ class UserController extends Controller
 
         $temporaryPassword = 'villa@2026';
 
-        $user = User::create([
-            ...$data,
-            'password' => Hash::make($temporaryPassword),
-            'created_by' => auth()->id(),
-            'role' => $access['legacy_role'],
-            'is_admin' => $access['is_admin'],
-            'must_change_password' => 1,
-        ]);
-        $this->syncOrganizationAccess($user, $data);
-        $this->syncVesselAssignments($user, $data, true);
+        $user = DB::transaction(function () use ($data, $temporaryPassword, $access) {
+            $user = User::create([
+                ...$data,
+                'password' => Hash::make($temporaryPassword),
+                'created_by' => auth()->id(),
+                'role' => $access['legacy_role'],
+                'is_admin' => $access['is_admin'],
+                'must_change_password' => 1,
+            ]);
+            $this->syncOrganizationAccess($user, $data);
+            $this->syncVesselAssignments($user, $data, true);
+            $this->syncHaruhayProperties($user, $data, true);
+
+            return $user;
+        });
 
         return redirect('/users')
             ->with('success', 'User created successfully.')
@@ -106,7 +115,7 @@ class UserController extends Controller
         $user = User::findOrFail($id);
         abort_unless(auth()->user()->canManageUsers(), 403);
 
-        $user->load(['approvalAuthorities', 'position', 'accessRole', 'vesselAssignments']);
+        $user->load(['approvalAuthorities', 'position', 'accessRole', 'vesselAssignments', 'haruhayProperties']);
 
         return view('users.edit', ['user' => $user, ...$this->formData()]);
     }
@@ -140,6 +149,9 @@ class UserController extends Controller
             'access_role_id' => ['required', Rule::exists('access_roles', 'id')->where(fn ($query) => $query->where('is_active', true))],
             'approval_modules' => 'nullable|array',
             'approval_modules.*' => ['string', Rule::in(array_keys(ApprovalAuthority::MODULES))],
+            'property_assignment_present' => 'nullable|boolean',
+            'property_ids' => 'nullable|array',
+            'property_ids.*' => 'integer|distinct',
             'vessel_assignment_present' => 'nullable|boolean',
             'vessel_ids' => 'nullable|array',
             'vessel_ids.*' => 'integer|distinct|exists:vessels,id',
@@ -179,9 +191,12 @@ class UserController extends Controller
             'is_admin' => $newIsAdmin,
         ]);
 
-        $user->save();
-        $this->syncOrganizationAccess($user, $data);
-        $this->syncVesselAssignments($user, $data, $request->boolean('vessel_assignment_present'));
+        DB::transaction(function () use ($user, $data, $request): void {
+            $user->save();
+            $this->syncOrganizationAccess($user, $data);
+            $this->syncVesselAssignments($user, $data, $request->boolean('vessel_assignment_present'));
+            $this->syncHaruhayProperties($user, $data, $request->boolean('property_assignment_present'));
+        });
 
         if (! $user->status) {
             $this->invalidateSessions($user);
@@ -213,6 +228,7 @@ class UserController extends Controller
         ])->save();
         $user->companyAssignments()->update(['is_active' => false]);
         $user->approvalAuthorities()->update(['is_active' => false]);
+        DB::table('haruhay_property_user')->where('user_id', $user->id)->update(['is_active' => false, 'updated_at' => now()]);
         $user->vesselAssignments()->update(['is_active' => false, 'is_primary' => false, 'effective_until' => today()]);
         $this->invalidateSessions($user);
 
@@ -288,12 +304,13 @@ class UserController extends Controller
         $positions = Position::whereIn('division_id', $divisionIds)->where('is_active', true)->orderBy('name')->get();
         $roles = AccessRole::where('is_active', true)->when(! $actor->canManageAllCompanies(), fn ($query) => $query->where('rank', '<', $actor->accessRole?->rank ?? 80)->where('slug', '!=', 'executive-viewer'))->orderByDesc('rank')->get();
         $vessels = Vessel::orderBy('vessel_name')->get();
+        $haruhayProperties = HaruhayProperty::whereIn('division_id', Division::whereRaw('LOWER(name) = ?', ['haruhay'])->select('id'))->orderBy('name')->get(['id', 'name', 'location']);
         $approvalModulesByDivision = $divisions->mapWithKeys(
             fn (Division $division): array => [(string) $division->id => ApprovalAuthority::modulesForCompany($division->name)]
         )->all();
         $approvalModules = collect($approvalModulesByDivision)->flatMap(fn (array $modules): array => $modules)->all();
 
-        return compact('departments', 'divisions', 'positions', 'roles', 'vessels', 'approvalModules', 'approvalModulesByDivision');
+        return compact('departments', 'divisions', 'positions', 'roles', 'vessels', 'haruhayProperties', 'approvalModules', 'approvalModulesByDivision');
     }
 
     private function authorizeCompanyAndAccessRole(array $data): void
@@ -305,6 +322,11 @@ class UserController extends Controller
             abort_unless($selected->rank < ($actor->accessRole?->rank ?? 80) && $selected->slug !== 'executive-viewer', 403, 'You cannot grant this access profile.');
         }
         $companyName = Division::whereKey($data['division_id'])->value('name');
+        $propertyIds = array_map('intval', $data['property_ids'] ?? []);
+        if ($propertyIds && (strcasecmp((string) $companyName, 'Haruhay') !== 0 || HaruhayProperty::whereIn('id', $propertyIds)
+            ->whereIn('division_id', Division::whereRaw('LOWER(name) = ?', ['haruhay'])->select('id'))->count() !== count($propertyIds))) {
+            throw ValidationException::withMessages(['property_ids' => 'Select only Haruhay properties you are authorized to assign.']);
+        }
         $allowedModules = array_keys(ApprovalAuthority::modulesForCompany($companyName));
         $selectedModules = array_values(array_unique($data['approval_modules'] ?? []));
 
@@ -341,6 +363,22 @@ class UserController extends Controller
         foreach ($modules as $module) {
             $user->approvalAuthorities()->updateOrCreate(['division_id' => $data['division_id'], 'module' => $module, 'action' => 'approve'], ['department_id' => $data['department_id'], 'approval_level' => 1, 'is_active' => true, 'effective_from' => today(), 'effective_until' => null]);
         }
+    }
+
+    private function syncHaruhayProperties(User $user, array $data, bool $sync): void
+    {
+        $isHaruhay = strcasecmp((string) Division::whereKey($data['division_id'])->value('name'), 'Haruhay') === 0;
+        if (! $sync && $isHaruhay) {
+            return;
+        }
+        $selected = $isHaruhay ? array_map('intval', $data['property_ids'] ?? []) : [];
+        DB::transaction(function () use ($user, $selected): void {
+            DB::table('haruhay_property_user')->where('user_id', $user->id)->update(['is_active' => false, 'updated_at' => now()]);
+            foreach ($selected as $propertyId) {
+                $user->haruhayProperties()->syncWithoutDetaching([$propertyId => ['is_active' => true, 'assigned_by' => auth()->id()]]);
+            }
+            \Illuminate\Support\Facades\Cache::forget('haruhay.reservations.directory-revision');
+        });
     }
 
     private function syncVesselAssignments(User $user, array $data, bool $sync): void

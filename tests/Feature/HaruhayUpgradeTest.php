@@ -240,6 +240,7 @@ class HaruhayUpgradeTest extends TestCase
         $this->assertSame($cashier->id,$staff->companyAssignments()->where('division_id',$staff->division_id)->sole()->position_id);
         $tenant = $this->tenant($admin);
         $bill = $this->issued($tenant);
+        $staff->haruhayProperties()->syncWithoutDetaching([$tenant->unit->property_id => ['is_active' => true, 'assigned_by' => $admin->id]]);
         $this->actingAs($staff->fresh());
         $this->post(route('haruhay.collections.store', $tenant), $this->payment($bill))->assertSessionHasNoErrors();
         $receipt = HaruhayCollection::sole();
@@ -284,6 +285,7 @@ class HaruhayUpgradeTest extends TestCase
         $tenant = $this->tenant($admin);
         $room = $tenant->unit;
         $room->update(['created_at' => today()->subYear()]);
+        $staff->haruhayProperties()->syncWithoutDetaching([$tenant->unit->property_id => ['is_active' => true, 'assigned_by' => $admin->id]]);
         $this->actingAs($staff->fresh())->post(route('haruhay.collections.store', $tenant), $this->payment())->assertForbidden();
         $this->actingAs($admin)->get(route('haruhay.reports.index', ['occupancy_on' => today()->subMonth()->toDateString()]))->assertOk()->assertSee('Not recorded')->assertViewHas('report', fn ($r) => $r['unknownUnits'] === 1 && $r['totalUnits'] === 0);
     }

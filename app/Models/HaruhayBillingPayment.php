@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayBillingPayment extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     protected $guarded = ['id'];
     protected function casts(): array { return ['amount' => 'decimal:2', 'paid_on' => 'date', 'voided_at' => 'datetime']; }
     public function scopeActive($query) { return $query->whereNull('voided_at'); }

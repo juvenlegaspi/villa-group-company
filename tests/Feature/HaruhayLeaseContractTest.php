@@ -253,7 +253,9 @@ class HaruhayLeaseContractTest extends TestCase
         $this->actingAs($foreign)->get(route('haruhay.contracts.index'))->assertForbidden();
         $this->get(route('haruhay.contracts.tenant', $tenant))->assertForbidden();
         foreach (['staff', 'owner'] as $role) {
-            $this->actingAs($this->actor($role))->get(route('haruhay.contracts.tenant', $tenant))->assertOk()->assertDontSee('Add Contract');
+            $viewer = $this->actor($role);
+            $viewer->haruhayProperties()->syncWithoutDetaching([$tenant->unit->property_id => ['is_active' => true]]);
+            $this->actingAs($viewer)->get(route('haruhay.contracts.tenant', $tenant))->assertOk()->assertDontSee('Add Contract');
             $this->post(route('haruhay.contracts.store', $tenant), $this->data())->assertForbidden();
             $this->post(route('haruhay.contracts.terminate', [$tenant, $contract]), ['terminated_on' => today()->toDateString(), 'termination_reason' => 'Not authorized'])->assertForbidden();
         }

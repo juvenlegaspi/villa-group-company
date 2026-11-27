@@ -23,8 +23,9 @@ class HaruhayBillingController extends Controller
             ->when(filled($filters['search'] ?? null), fn ($q) => $q->where(fn ($s) => $s->where('name', 'like', '%'.$filters['search'].'%')->orWhere('code', 'like', '%'.$filters['search'].'%')->orWhereHas('unit', fn ($u) => $u->where('unit_no', 'like', '%'.$filters['search'].'%'))))
             ->orderBy('name')->paginate(10)->withQueryString();
         $nextBills = [];
+        $billingRows = $workflow->forTenants($tenants->getCollection(), $this->divisionId());
         foreach ($tenants as $tenant) {
-            $unpaid = $workflow->rows($tenant, $this->divisionId())->filter(fn ($row) => !$row['paid'])->values();
+            $unpaid = $billingRows[$tenant->id]->filter(fn ($row) => !$row['paid'])->values();
             $current = $unpaid->first();
             $nextBills[$tenant->id] = $current && $current['invoice']?->finalized_at ? $unpaid->get(1) : $current;
         }

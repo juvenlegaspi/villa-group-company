@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\HaruhayPublicRoomResource;
 use App\Models\Division;
+use App\Models\HaruhayProperty;
 use App\Models\HaruhayTenant;
 use App\Models\HaruhayUnit;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -25,8 +26,15 @@ class HaruhayPublicRoomController extends Controller
             ], 'capacity_slots')
             ->orderBy('id')->get();
 
+        $properties = HaruhayProperty::query()
+            ->whereIn('division_id', Division::whereRaw('LOWER(name) = ?', ['haruhay'])->select('id'))
+            ->orderBy('id')->get(['id', 'name', 'status']);
+
         return HaruhayPublicRoomResource::collection($units)->additional([
-            'meta' => ['count' => $units->count(), 'updated_at' => now()->toIso8601String()],
+            'meta' => ['count' => $units->count(), 'updated_at' => now()->toIso8601String(), 'properties' => $properties->map(fn ($property) => [
+                'id' => $property->id, 'name' => $property->name, 'status' => $property->status,
+                'can_reserve' => in_array($property->status, ['Active', 'Operational'], true),
+            ])->all()],
         ]);
     }
 }
