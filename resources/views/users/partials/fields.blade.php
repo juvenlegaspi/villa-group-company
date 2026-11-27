@@ -27,3 +27,17 @@
 </fieldset>
 @php($selectedApprovals = collect(old('approval_modules', $user?->approvalAuthorities?->where('is_active',true)->pluck('module')->all() ?? [])))
 <fieldset id="approvalAuthorityFields" class="hidden sm:col-span-2 lg:col-span-3 rounded-2xl border border-violet-200 bg-violet-50/70 p-5"><legend class="px-2 text-sm font-extrabold text-violet-950">Approval Authority</legend><p class="mb-4 text-xs leading-5 text-violet-700">Select only the workflows this employee is formally authorized to approve. The Company Approver access profile and a supported company workflow are both required.</p><div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">@foreach($approvalModules as $module => $label)<label data-approval-module="{{ $module }}" class="hidden cursor-pointer items-center gap-3 rounded-xl border border-violet-100 bg-white px-4 py-3"><input type="checkbox" name="approval_modules[]" value="{{ $module }}" class="h-4 w-4 accent-violet-700" @checked($selectedApprovals->contains($module))><span class="text-sm font-bold text-slate-700">{{ $label }}</span></label>@endforeach</div></fieldset>
+
+@php($selectedProperties = collect(old('property_ids', old('property_assignment_present') ? [] : ($user?->haruhayProperties?->where('pivot.is_active', true)->pluck('id')->all() ?? [])))->map(fn ($id) => (int) $id))
+<fieldset id="haruhayPropertyAssignmentFields" class="hidden sm:col-span-2 lg:col-span-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
+    <input type="hidden" name="property_assignment_present" value="1">
+    <legend class="px-2 text-sm font-extrabold text-emerald-950">Haruhay Property / Location Assignments</legend>
+    <p class="mb-4 text-sm leading-6 text-emerald-800">Select the locations this employee may access. Their position permissions apply only within these properties. With no assignments, no Haruhay property records are accessible. Property Managers and System Admins can access all locations.</p>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        @forelse($haruhayProperties as $property)
+            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-emerald-100 bg-white px-4 py-3"><input type="checkbox" name="property_ids[]" value="{{ $property->id }}" class="mt-1 h-4 w-4 accent-emerald-700" @checked($selectedProperties->contains((int) $property->id))><span><strong class="block text-sm text-slate-800">{{ $property->name }}</strong><span class="text-xs text-slate-500">{{ $property->location }}</span></span></label>
+        @empty
+            <p class="text-sm text-slate-600">No Haruhay properties are available. Add or connect a property in Villa Group first.</p>
+        @endforelse
+    </div>
+</fieldset>

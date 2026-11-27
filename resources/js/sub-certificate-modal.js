@@ -42,7 +42,7 @@ if (dialog) {
             save.textContent = 'Loading…';
             try {
                 const response = await fetch(button.dataset.loadUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
-                if (!response.ok) throw new Error('Unable to load');
+                if (!response.ok || response.redirected) throw new Error('Unable to load');
                 const record = await response.json();
                 Object.entries(record.fields).forEach(([name, value]) => { form.elements.namedItem(name).value = value ?? ''; });
                 if (mode === 'renew') {
@@ -80,7 +80,15 @@ if (dialog) {
         errors.hidden = true;
         try {
             const response = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' }, credentials: 'same-origin' });
-            const result = await response.json().catch(() => ({}));
+            if (response.redirected || [401, 419].includes(response.status)) {
+                showErrors(['Your session expired or the request was redirected. Reload the page and sign in again before saving.']);
+                return;
+            }
+            const result = await response.json().catch(() => null);
+            if (!result || (response.ok && typeof result.message !== 'string')) {
+                showErrors(['The server did not confirm the update. Your changes are still here. Please reload and sign in again before retrying.']);
+                return;
+            }
             if (!response.ok) {
                 showErrors(response.status === 422 ? Object.values(result.errors ?? { form: [result.message ?? 'Please check the entered details.'] }).flat() : [response.status === 419 || response.status === 401 ? 'Your session expired. Reload the page and sign in again.' : (result.message ?? 'Could not save the sub-certificate. Please try again.')]);
                 return;

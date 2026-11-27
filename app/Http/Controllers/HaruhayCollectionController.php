@@ -21,8 +21,9 @@ class HaruhayCollectionController extends Controller
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($s) => $s->where('name', 'like', '%'.$request->input('search').'%')->orWhere('code', 'like', '%'.$request->input('search').'%')->orWhereHas('unit', fn ($u) => $u->where('unit_no', 'like', '%'.$request->input('search').'%'))))
             ->orderBy('name')->paginate(10)->withQueryString();
         $summaries = [];
+        $billingRows = $workflow->forTenants($tenants->getCollection(), $this->divisionId());
         foreach ($tenants as $tenant) {
-            $unpaid = $workflow->rows($tenant, $this->divisionId())->filter(fn ($row) => !$row['paid'])->values();
+            $unpaid = $billingRows[$tenant->id]->filter(fn ($row) => !$row['paid'])->values();
             $current = $unpaid->first();
             $next = $current && $current['invoice']?->finalized_at ? $unpaid->get(1) : $current;
             $summaries[$tenant->id] = ['current' => $current, 'next' => $next, 'collected' => $tenant->collections->filter(fn ($r) => !$r->voided_at && $r->paid_on->format('Y-m') === today()->format('Y-m'))->sum('amount'), 'credit' => $tenant->collections->sum('unapplied_cents'), 'last' => $tenant->collections->first(fn ($r) => !$r->voided_at)];

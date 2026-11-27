@@ -22,6 +22,7 @@ class HaruhayPublicRoomResource extends JsonResource
         return [
             'slug' => strtolower($this->unit_no),
             'unit_no' => $this->unit_no,
+            'property_id' => (int) $this->property_id,
             'property_name' => $this->property->name,
             'unit_type' => $this->unit_type,
             'category' => $shared ? 'shared' : 'private',

@@ -8,6 +8,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const accessRole = document.getElementById('accessRoleSelect');
     const accessHelp = document.getElementById('accessRoleHelp');
     const vesselAssignments = document.getElementById('vesselAssignmentFields');
+    const propertyAssignments = document.getElementById('haruhayPropertyAssignmentFields');
+    const syncPropertyAssignments = () => {
+        if (!propertyAssignments) return;
+        const show = division?.selectedOptions[0]?.dataset.name === 'haruhay'
+            && position?.selectedOptions[0]?.dataset.code !== 'haruhay-property-manager'
+            && !['system-administrator', 'executive-viewer'].includes(accessRole?.selectedOptions[0]?.dataset.slug);
+        propertyAssignments.classList.toggle('hidden', !show);
+        propertyAssignments.querySelectorAll('input[type=checkbox]').forEach(input => {input.disabled = !show;});
+    };
     const approvalAuthority = document.getElementById('approvalAuthorityFields');
     const approvalLabels = approvalAuthority ? [...approvalAuthority.querySelectorAll('[data-approval-module]')] : [];
     const syncApprovalAuthority = () => {
@@ -43,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
             positionOptions.forEach(option => { option.hidden = Boolean(option.value && (option.dataset.division !== division.value || option.dataset.department !== department.value)); });
             if (position.selectedOptions[0]?.hidden) position.value = '';
             syncVesselAssignments();
+            syncPropertyAssignments();
         };
         const filterDepartments = () => {
             const selected = department.value;
@@ -54,13 +64,14 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         division.addEventListener('change', filterDepartments);
         department.addEventListener('change', filterPositions);
-        position?.addEventListener('change', syncVesselAssignments);
+        position?.addEventListener('change', () => {syncVesselAssignments(); syncPropertyAssignments();});
         filterDepartments();
     }
     if (accessRole && accessHelp) {
         const syncAccessHelp = () => {
             accessHelp.textContent = accessRole.selectedOptions[0]?.dataset.description || 'Access controls are separate from the employee\'s job position.';
             syncApprovalAuthority();
+            syncPropertyAssignments();
         };
         accessRole.addEventListener('change', syncAccessHelp);
         syncAccessHelp();

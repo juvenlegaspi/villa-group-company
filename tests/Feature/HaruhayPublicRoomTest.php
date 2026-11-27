@@ -35,7 +35,7 @@ class HaruhayPublicRoomTest extends TestCase
         $response = $this->getJson(route('public.haruhay.rooms'))->assertOk()->assertJsonCount(14, 'data')->assertJsonPath('meta.count', 14)
             ->assertJsonPath('data.0.unit_no', 'DR-01')->assertJsonPath('data.13.unit_no', 'DR-14')
             ->assertJsonPath('data.0.monthly_rent', '10000.00')->assertJsonPath('data.0.availability', 'available');
-        $this->assertSame(['slug', 'unit_no', 'property_name', 'unit_type', 'category', 'floor', 'area', 'capacity', 'rent_basis', 'monthly_rent', 'shared_rate', 'room_condition', 'available_slots', 'availability', 'reservation_scope', 'can_reserve'], array_keys($response->json('data.0')));
+        $this->assertSame(['slug', 'unit_no', 'property_id', 'property_name', 'unit_type', 'category', 'floor', 'area', 'capacity', 'rent_basis', 'monthly_rent', 'shared_rate', 'room_condition', 'available_slots', 'availability', 'reservation_scope', 'can_reserve'], array_keys($response->json('data.0')));
         foreach (['PRIVATE OWNER', 'PRIVATE ADDRESS', 'PRIVATE OCCUPANT', 'PRIVATE REMARKS', 'PRIVATE PRICING NOTES', 'FOREIGN ROOM'] as $private) {
             $this->assertStringNotContainsString($private, $response->getContent());
         }
@@ -70,4 +70,23 @@ class HaruhayPublicRoomTest extends TestCase
         $this->postJson(route('public.haruhay.rooms'), ['unit_type' => 'Altered'])->assertMethodNotAllowed();
         $this->assertDatabaseCount('haruhay_units', 0);
     }
+    public function test_catalogue_includes_empty_haruhay_properties_and_room_property_ids(): void
+    {
+        $cebu = $this->property();
+        $unit = $this->unit($cebu);
+        $dumaguete = $this->property();
+        $dumaguete->update(['name' => 'Haruhay Dumaguete']);
+        $inactive = $this->property('Haruhay', 'Under Construction');
+        $this->property('Foreign Company');
+
+        $this->getJson(route('public.haruhay.rooms'))->assertOk()
+            ->assertJsonCount(3, 'meta.properties')
+            ->assertJsonPath('data.0.property_id', $cebu->id)
+            ->assertJsonPath('meta.properties.1.id', $dumaguete->id)
+            ->assertJsonPath('meta.properties.1.name', 'Haruhay Dumaguete')
+            ->assertJsonPath('meta.properties.1.can_reserve', true)
+            ->assertJsonPath('meta.properties.2.id', $inactive->id)
+            ->assertJsonPath('meta.properties.2.can_reserve', false);
+    }
+
 }

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayReservation extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     use \App\Models\Concerns\InvalidatesHaruhayReservationDirectory;
     protected $table = 'haruhay_online_reservations';
 

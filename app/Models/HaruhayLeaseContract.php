@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayLeaseContract extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     public function billings() { return $this->hasMany(HaruhayBilling::class, 'contract_id'); }
     protected $guarded = ['id'];
     protected function casts(): array

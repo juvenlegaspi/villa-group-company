@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayDueReminder extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     protected $guarded = ['id'];
 
     protected function casts(): array

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayProperty extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     use \App\Models\Concerns\InvalidatesHaruhayReservationDirectory;
     protected $guarded = ['id'];
 

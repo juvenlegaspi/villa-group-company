@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayBilling extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     protected $guarded = ['id'];
     protected function casts(): array
     {
@@ -21,7 +23,7 @@ class HaruhayBilling extends Model
     public function creator() { return $this->belongsTo(User::class, 'created_by'); }
     public function deliveries() { return $this->hasMany(HaruhayBillingDelivery::class, 'billing_id'); }
     public function dueReminders() { return $this->hasMany(HaruhayDueReminder::class, 'billing_id'); }
-    public function getPaidCentsAttribute(): int { return (int) round((float) ($this->payments_sum_amount ?? $this->payments()->sum('amount')) * 100); }
+    public function getPaidCentsAttribute(): int { return (int) round((float) (array_key_exists('payments_sum_amount', $this->attributes) ? ($this->payments_sum_amount ?? 0) : $this->payments()->sum('amount')) * 100); }
     public function getBalanceCentsAttribute(): int { return max(0, (int) round((float) $this->total * 100) - $this->paid_cents); }
     public function getStatusAttribute(): string
     {

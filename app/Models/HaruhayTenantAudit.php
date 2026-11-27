@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayTenantAudit extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     public $timestamps = false;
     protected $guarded = ['id'];
     protected function casts(): array { return ['before' => 'array', 'after' => 'array', 'created_at' => 'datetime']; }

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayReservationPayment extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     protected $guarded = ['id'];
 
     protected $hidden = ['proof_path', 'submission_token'];

@@ -423,4 +423,20 @@ class HaruhayReservationTest extends TestCase
         $this->assertDatabaseCount('haruhay_online_reservations', 0);
         $this->assertDatabaseCount('haruhay_tracking_sms', 0);
     }
+    public function test_public_request_rejects_a_room_from_another_selected_property(): void
+    {
+        [, $unit] = $this->room();
+        $this->postJson(route('public.haruhay.reservations.store'), $this->payload($unit, ['property_id' => $unit->property_id + 100]))
+            ->assertUnprocessable()->assertJsonValidationErrors('property_id');
+        $this->assertSame(0, HaruhayReservation::count());
+    }
+
+    public function test_public_request_accepts_matching_property_and_preserves_room_link(): void
+    {
+        [, $unit] = $this->room();
+        $reservation = $this->submit($this->payload($unit, ['property_id' => $unit->property_id]));
+        $this->assertSame($unit->id, $reservation->unit_id);
+        $this->assertSame($unit->property_id, $reservation->unit->property_id);
+    }
+
 }

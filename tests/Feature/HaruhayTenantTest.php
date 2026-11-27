@@ -239,7 +239,9 @@ class HaruhayTenantTest extends TestCase
         $this->actingAs($other)->get(route('haruhay.tenants.index'))->assertForbidden();
         $this->get(route('haruhay.tenants.show', $tenant))->assertForbidden();
         foreach (['staff', 'owner'] as $role) {
-            $this->actingAs($this->actor($role))->get(route('haruhay.tenants.index'))->assertOk()->assertDontSee('Add Tenant');
+            $viewer = $this->actor($role);
+            $viewer->haruhayProperties()->syncWithoutDetaching([$room->property_id => ['is_active' => true]]);
+            $this->actingAs($viewer)->get(route('haruhay.tenants.index'))->assertOk()->assertDontSee('Add Tenant');
             $this->post(route('haruhay.tenants.store'), $this->data($room))->assertForbidden();
             $this->put(route('haruhay.tenants.update', $tenant), $this->data($room))->assertForbidden();
         }

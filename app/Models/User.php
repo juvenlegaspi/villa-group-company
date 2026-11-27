@@ -67,6 +67,22 @@ class User extends Authenticatable
     public function accessRole() { return $this->belongsTo(AccessRole::class); }
     public function companyAssignments() { return $this->hasMany(CompanyUserAssignment::class); }
     public function approvalAuthorities() { return $this->hasMany(ApprovalAuthority::class); }
+    public function haruhayProperties()
+    {
+        return $this->belongsToMany(HaruhayProperty::class, 'haruhay_property_user', 'user_id', 'property_id')
+            ->withPivot(['assigned_by', 'is_active'])->withTimestamps();
+    }
+
+    public function visibleNotifications()
+    {
+        return app(\App\Services\HaruhayPropertyAccess::class)->filterNotifications($this->notifications(), $this);
+    }
+
+    public function visibleUnreadNotifications()
+    {
+        return app(\App\Services\HaruhayPropertyAccess::class)->filterNotifications($this->unreadNotifications(), $this);
+    }
+
     public function vesselAssignments() { return $this->hasMany(UserVesselAssignment::class); }
     public function assignedVessels() { return $this->belongsToMany(Vessel::class, 'user_vessel_assignments')->withPivot(['assigned_by', 'is_primary', 'is_active', 'effective_from', 'effective_until'])->withTimestamps(); }
 

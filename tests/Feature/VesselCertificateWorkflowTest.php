@@ -211,6 +211,28 @@ class VesselCertificateWorkflowTest extends TestCase
         $this->assertFalse(VesselCertificate::effective()->whereKey($child->id)->exists());
     }
 
+    public function test_sub_certificate_edit_with_empty_upload_updates_details_and_keeps_document(): void
+    {
+        Storage::fake('local');
+        $manager = $this->user('Operations Manager', 'operations-manager', ['shipping.certificates.access', 'certificates.manage']);
+        $parent = VesselCertificate::create(['vessel_id' => $this->vessel->id, 'certificate_name' => 'Safety', 'issue_date' => today(), 'expiry_date' => today()->addYears(5), 'workflow_status' => 'active']);
+        $child = VesselCertificate::create(['vessel_id' => $this->vessel->id, 'parent_certificate_id' => $parent->id, 'certificate_name' => 'Annual Audit', 'issue_date' => today(), 'expiry_date' => today()->addYear(), 'workflow_status' => 'active', 'document' => 'certificates/original.pdf']);
+
+        $this->actingAs($manager)->postJson(route('vessel-certificates.update', $child), [
+            'vessel_id' => $this->vessel->id,
+            'certificate_name' => 'Updated Annual Audit',
+            'issue_date' => today()->toDateString(),
+            'expiry_date' => today()->addMonths(10)->toDateString(),
+            'remarks' => 'Edited without replacing the attachment',
+            'document' => null,
+        ])->assertOk();
+
+        $this->assertSame('Updated Annual Audit', $child->fresh()->certificate_name);
+        $this->assertSame('certificates/original.pdf', $child->fresh()->document);
+        $this->assertSame($parent->id, $child->fresh()->parent_certificate_id);
+        $this->assertSame(today()->addYears(5)->toDateString(), $parent->fresh()->expiry_date->toDateString());
+    }
+
     public function test_sub_certificate_renewal_preserves_parent_and_history(): void
     {
         Storage::fake('local');

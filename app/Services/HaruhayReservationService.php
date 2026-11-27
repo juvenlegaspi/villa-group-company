@@ -32,6 +32,10 @@ class HaruhayReservationService
                 return $existing;
             }
             $unit = $this->room($data['room']);
+            if (isset($data['property_id']) && (int) $data['property_id'] !== (int) $unit->property_id) {
+                $this->invalid('property_id', 'The selected room does not belong to this location. Choose a room from your selected property.');
+            }
+            unset($data['property_id']);
             $requiredSlots = (int) $data['occupant_count'];
             if ($data['occupant_count'] > ($unit->capacity ?? 1) || $unit->room_condition !== 'Ready' || ! in_array($unit->property->status, ['Active', 'Operational'], true) || $unit->available_slots < $requiredSlots) {
                 $this->invalid('room', 'The room does not currently have enough ready slots. Choose another room or contact the team.');

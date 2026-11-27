@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class HaruhayTenant extends Model
 {
+    use \App\Models\Concerns\ScopesHaruhayProperties;
+
     public function billings() { return $this->hasMany(HaruhayBilling::class, 'tenant_id'); }
     public function collections() { return $this->hasMany(HaruhayCollection::class, 'tenant_id'); }
     public function depositEntries() { return $this->hasMany(HaruhayDepositEntry::class, 'tenant_id'); }

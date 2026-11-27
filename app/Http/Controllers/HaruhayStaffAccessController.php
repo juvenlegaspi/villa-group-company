@@ -17,7 +17,7 @@ class HaruhayStaffAccessController extends Controller
 
         $audits = DB::table('haruhay_access_audits as a')->join('users as target', 'target.id', '=', 'a.user_id')->leftJoin('users as actor', 'actor.id', '=', 'a.actor_id')->leftJoin('positions as old_position', 'old_position.id', '=', 'a.old_position_id')->leftJoin('positions as new_position', 'new_position.id', '=', 'a.new_position_id')->where('target.division_id', $this->divisionId())->select('a.*', 'target.name as target_name', 'actor.name as actor_name', 'old_position.name as old_name', 'new_position.name as new_name')->orderByDesc('a.id')->limit(20)->get();
 
-        return view('haruhay.access.index', ['users' => User::where('division_id', $this->divisionId())->with('position')->orderBy('name')->paginate(10), 'positions' => $this->positions()->get(), 'presets' => HaruhayAccessService::PRESETS, 'audits' => $audits]);
+        return view('haruhay.access.index', ['users' => User::where('division_id', $this->divisionId())->with(['position', 'haruhayProperties'])->orderBy('name')->paginate(10), 'positions' => $this->positions()->get(), 'presets' => HaruhayAccessService::PRESETS, 'audits' => $audits]);
     }
 
     public function update(Request $request, User $user)

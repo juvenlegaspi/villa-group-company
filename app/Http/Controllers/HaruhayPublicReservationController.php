@@ -14,6 +14,7 @@ class HaruhayPublicReservationController extends Controller
     {
         $data = $request->validate([
             'submission_token' => 'required|uuid', 'tracking_token' => 'required|string|size:64|alpha_num:ascii',
+            'property_id' => 'sometimes|required|integer|min:1',
             'room' => 'required|string|regex:/^dr-\d+$/', 'name' => 'required|string|min:2|max:255',
             'email' => 'required|email|max:255', 'phone' => ['required', 'string', 'max:50', function ($attribute, $value, $fail) {
                 if (! app(\App\Services\SemaphoreSmsService::class)->normalizePhilippineNumber($value)) {
